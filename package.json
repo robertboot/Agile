@@ -17,16 +17,18 @@
     "supabase:reset": "supabase db reset",
     "supabase:types": "supabase gen types typescript --local > packages/supabase-client/src/database.types.ts",
     "supabase:lint": "supabase db lint",
-    "migrate:reps": "tsx scripts/migrate/import-reps.ts",
-    "migrate:providers": "tsx scripts/migrate/import-providers.ts",
-    "migrate:assignments": "tsx scripts/migrate/import-rep-provider-assignments.ts",
+    "migrate:reps": "tsx --env-file=.env scripts/migrate/import-reps.ts",
+    "migrate:providers": "tsx --env-file=.env scripts/migrate/import-providers.ts",
+    "migrate:assignments": "tsx --env-file=.env scripts/migrate/import-rep-provider-assignments.ts",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "@types/node": "^20.14.0",
     "tsx": "^4.16.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "xlsx": "^0.18.5"
   }
 }

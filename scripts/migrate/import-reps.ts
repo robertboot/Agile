@@ -1,47 +1,50 @@
-// Import sales reps from the historic-data spreadsheet.
+// Import sales reps from the legacy Reps List.csv.
+// Columns: Name, Cell, Agile Email, Date completed FDA training
 // Idempotent: matches by email. Sends a magic-link invite for new reps.
-// Run: pnpm migrate:reps -- --file data/agile-historic.xlsx [--commit]
+// Run: pnpm migrate:reps [-- --file 'data/Reps List.csv' --commit]
 
 import {
+    DEFAULT_FILES,
     getServiceClient,
     loadSheet,
+    looksLikeTestData,
     newReport,
     normalizeEmail,
+    normalizePhone,
+    parseLegacyDate,
     parseMigrateArgs,
     printReport,
 } from "./_util.js";
 
-// Adjust this to match the actual sheet name once the spreadsheet is in /data/.
-const DEFAULT_SHEET = "Reps";
-
 interface RepRow {
-    Name?: string;
-    Email?: string;
-    Phone?: string;
-    "Commission %"?: number | string;
-    "Commission $/cm²"?: number | string;
+    Name?: string | null;
+    Cell?: string | null;
+    "Agile Email"?: string | null;
+    "Date completed FDA training"?: string | null;
 }
 
 async function main() {
-    const opts = parseMigrateArgs();
-    const sheet = opts.sheet ?? DEFAULT_SHEET;
-    const rows = loadSheet<RepRow>(opts.file, sheet);
+    const opts = parseMigrateArgs(DEFAULT_FILES.reps);
+    const rows = loadSheet<RepRow>(opts.file);
     const report = newReport("import-reps");
     const svc = getServiceClient();
 
     for (const [i, row] of rows.entries()) {
-        const email = normalizeEmail(row.Email);
-        const name = row.Name?.trim();
+        const email = normalizeEmail(row["Agile Email"]);
+        const name = row.Name?.toString().trim();
+
         if (!email || !name) {
-            report.failed++;
-            report.failures.push({ row: i + 2, reason: "missing email or name", data: row });
+            report.skipped++;
+            continue;
+        }
+        if (looksLikeTestData(name, email)) {
+            report.skipped++;
             continue;
         }
 
-        // Check existing.
         const { data: existing } = await svc
             .from("profiles")
-            .select("id, email, role")
+            .select("id, role")
             .eq("email", email)
             .maybeSingle();
 
@@ -59,11 +62,10 @@ async function main() {
         }
 
         if (!opts.commit) {
-            report.inserted++; // counts as "would insert"
+            report.inserted++;
             continue;
         }
 
-        // Create auth user via invite (sends magic link).
         const { data: invited, error: inviteErr } = await svc.auth.admin.inviteUserByEmail(email);
         if (inviteErr || !invited.user) {
             report.failed++;
@@ -77,7 +79,8 @@ async function main() {
             status: "pending",
             display_name: name,
             email,
-            phone: row.Phone?.toString().trim() ?? null,
+            phone: normalizePhone(row.Cell),
+            fda_training_completed_at: parseLegacyDate(row["Date completed FDA training"]),
         });
         if (profileErr) {
             report.failed++;

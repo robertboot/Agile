@@ -2,7 +2,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { extname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import * as XLSX from "xlsx";
 
@@ -12,7 +12,16 @@ export interface MigrateOptions {
     commit: boolean;
 }
 
-export function parseMigrateArgs(): MigrateOptions {
+/** Default file locations matching the legacy CSV exports. */
+export const DEFAULT_FILES = {
+    reps: "data/Reps List.csv",
+    providers: "data/Registered Providers.csv",
+    orders: "data/All Orders.csv",
+    products: "data/Product_Pricing Report.csv",
+    commissions: "data/Commission_Tracker Report.csv",
+} as const;
+
+export function parseMigrateArgs(defaultFile: string): MigrateOptions {
     const { values } = parseArgs({
         options: {
             file: { type: "string", short: "f" },
@@ -21,11 +30,9 @@ export function parseMigrateArgs(): MigrateOptions {
             "dry-run": { type: "boolean", default: false },
         },
     });
-    if (!values.file) {
-        throw new Error("Missing --file. Example: --file data/agile-historic.xlsx");
-    }
+    const file = values.file ?? defaultFile;
     return {
-        file: resolve(values.file),
+        file: resolve(file),
         sheet: values.sheet,
         commit: Boolean(values.commit) && !values["dry-run"],
     };
@@ -33,17 +40,17 @@ export function parseMigrateArgs(): MigrateOptions {
 
 export function loadSheet<T = Record<string, unknown>>(file: string, sheet?: string): T[] {
     const buf = readFileSync(file);
-    const wb = XLSX.read(buf, { type: "buffer" });
+    const ext = extname(file).toLowerCase();
+    const readType = ext === ".csv" ? "string" : "buffer";
+    const wb = XLSX.read(readType === "string" ? buf.toString("utf8") : buf, {
+        type: readType,
+        raw: false, // let xlsx parse dates / numbers
+    });
     const sheetName = sheet ?? wb.SheetNames[0];
     if (!sheetName || !wb.Sheets[sheetName]) {
         throw new Error(`Sheet "${sheetName}" not found. Available: ${wb.SheetNames.join(", ")}`);
     }
-    return XLSX.utils.sheet_to_json<T>(wb.Sheets[sheetName]);
-}
-
-export function listSheets(file: string): string[] {
-    const buf = readFileSync(file);
-    return XLSX.read(buf, { type: "buffer" }).SheetNames;
+    return XLSX.utils.sheet_to_json<T>(wb.Sheets[sheetName], { defval: null });
 }
 
 export function getServiceClient(): SupabaseClient {
@@ -88,4 +95,51 @@ export function normalizeEmail(s: unknown): string | null {
     if (typeof s !== "string") return null;
     const trimmed = s.trim().toLowerCase();
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null;
+}
+
+/** Normalize phone numbers to a consistent shape. Returns null for missing/invalid. */
+export function normalizePhone(s: unknown): string | null {
+    if (s == null) return null;
+    const str = String(s).trim();
+    if (!str || str === "-") return null;
+    const digits = str.replace(/\D/g, "");
+    if (digits.length < 7) return null;
+    // US numbers: prefix with +1 if 10 digits, keep as-is if already 11 starting with 1.
+    if (digits.length === 10) return `+1${digits}`;
+    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+    return `+${digits}`;
+}
+
+/** Parse "17-Sep-2025" → ISO date string "2025-09-17". Returns null on failure. */
+export function parseLegacyDate(s: unknown): string | null {
+    if (!s) return null;
+    const str = String(s).trim();
+    if (!str) return null;
+    const months: Record<string, string> = {
+        jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+        jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+    };
+    const m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(str);
+    if (m) {
+        const month = months[m[2].toLowerCase()];
+        if (!month) return null;
+        return `${m[3]}-${month}-${m[1].padStart(2, "0")}`;
+    }
+    // Fallback: let Date parse it.
+    const d = new Date(str);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10);
+}
+
+/** Map legacy approval label to our user_status enum. */
+export function mapApprovalToStatus(approve: unknown): "pending" | "active" | "suspended" {
+    const s = String(approve ?? "").trim().toLowerCase();
+    if (s === "approved") return "active";
+    if (s === "rejected") return "suspended";
+    return "pending";
+}
+
+export function looksLikeTestData(...fields: Array<unknown>): boolean {
+    const joined = fields.map((f) => String(f ?? "").toLowerCase()).join(" ");
+    return /\btest\b|placeholder|\bjlh\b|55{4,}/i.test(joined);
 }

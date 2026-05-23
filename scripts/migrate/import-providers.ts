@@ -1,42 +1,71 @@
-// Import providers from the historic-data spreadsheet.
-// Idempotent: matches by email. Providers are created with status='pending'
-// and become active when they sign in (Apple/Google/email) and either redeem
-// an invite code or have an admin-seeded assignment via import-rep-provider-assignments.
-// Run: pnpm migrate:providers -- --file data/agile-historic.xlsx [--commit]
+// Import providers from the legacy Registered Providers.csv.
+// Columns: Contact Name, Contact Email, Contact Phone Number, Practice Name,
+//          Practice Provider, Location Address, Signature, Approve/Reject
+//
+// Notes on the data model mapping:
+//   - "Practice Provider" is the actual provider/physician → display_name.
+//   - "Contact Name" is the office contact who handled registration →
+//     stored separately in profiles.office_contact_name.
+//   - Address is a single line; we don't parse street/city/state/zip in v1.
+//   - "Approve/Reject" maps to profiles.status (Approved → active,
+//     Rejected → suspended) AND is preserved in legacy_approval_status.
+//
+// Idempotent: matches by email.
+// Run: pnpm migrate:providers [-- --file 'data/Registered Providers.csv' --commit]
 
 import {
+    DEFAULT_FILES,
     getServiceClient,
     loadSheet,
+    looksLikeTestData,
+    mapApprovalToStatus,
     newReport,
     normalizeEmail,
+    normalizePhone,
     parseMigrateArgs,
     printReport,
 } from "./_util.js";
 
-const DEFAULT_SHEET = "Providers";
-
 interface ProviderRow {
-    Name?: string;
-    Email?: string;
-    Phone?: string;
-    NPI?: string;
-    Practice?: string;
-    "Assigned Rep Email"?: string;
+    "Contact Name"?: string | null;
+    "Contact Email"?: string | null;
+    "Contact Phone Number"?: string | null;
+    "Practice Name"?: string | null;
+    "Practice Provider"?: string | null;
+    "Location Address"?: string | null;
+    Signature?: string | null;
+    "Approve/Reject"?: string | null;
 }
 
 async function main() {
-    const opts = parseMigrateArgs();
-    const sheet = opts.sheet ?? DEFAULT_SHEET;
-    const rows = loadSheet<ProviderRow>(opts.file, sheet);
+    const opts = parseMigrateArgs(DEFAULT_FILES.providers);
+    const rows = loadSheet<ProviderRow>(opts.file);
     const report = newReport("import-providers");
     const svc = getServiceClient();
 
     for (const [i, row] of rows.entries()) {
-        const email = normalizeEmail(row.Email);
-        const name = row.Name?.trim();
-        if (!email || !name) {
+        const email = normalizeEmail(row["Contact Email"]);
+        const practiceProvider = row["Practice Provider"]?.toString().trim();
+        const practiceName = row["Practice Name"]?.toString().trim();
+        const officeContact = row["Contact Name"]?.toString().trim() || null;
+
+        if (!email) {
+            report.skipped++;
+            continue;
+        }
+        // The display_name is the practitioner. Fall back to office contact if missing.
+        const displayName = practiceProvider || officeContact;
+        if (!displayName) {
             report.failed++;
-            report.failures.push({ row: i + 2, reason: "missing email or name", data: row });
+            report.failures.push({
+                row: i + 2,
+                reason: "row has no Practice Provider and no Contact Name",
+                data: row,
+            });
+            continue;
+        }
+        if (looksLikeTestData(displayName, email, practiceName)) {
+            report.skipped++;
             continue;
         }
 
@@ -71,15 +100,20 @@ async function main() {
             continue;
         }
 
+        const approval = row["Approve/Reject"]?.toString().trim() || null;
         const { error: profileErr } = await svc.from("profiles").insert({
             id: invited.user.id,
             role: "provider",
-            status: "pending",
-            display_name: name,
+            status: mapApprovalToStatus(approval),
+            display_name: displayName,
             email,
-            phone: row.Phone?.toString().trim() ?? null,
-            npi: row.NPI?.toString().trim() ?? null,
-            practice_name: row.Practice?.toString().trim() ?? null,
+            phone: normalizePhone(row["Contact Phone Number"]),
+            practice_name: practiceName ?? null,
+            office_contact_name: officeContact,
+            practice_address: row["Location Address"]?.toString().trim() || null,
+            signature_path: row.Signature?.toString().trim() || null,
+            legacy_approval_status:
+                approval === "Approved" ? "Approved" : approval === "Rejected" ? "Rejected" : null,
         });
         if (profileErr) {
             report.failed++;
