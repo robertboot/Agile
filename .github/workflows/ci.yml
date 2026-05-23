@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "claude/**"]
+
+jobs:
+  typecheck-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  supabase-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase db lint --schema public,storage --linter-level error
+
+  no-data-in-git:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure /data does not contain anything besides README
+        run: |
+          set -e
+          forbidden=$(find data -type f ! -name 'README.md' ! -name '.gitkeep' 2>/dev/null || true)
+          if [ -n "$forbidden" ]; then
+            echo "ERROR: /data may only contain README.md or .gitkeep. Found:"
+            echo "$forbidden"
+            exit 1
+          fi

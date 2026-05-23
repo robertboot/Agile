@@ -1,0 +1,32 @@
+{
+  "name": "agile-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Agile wound-care platform — mobile app + Supabase backend + (Phase 2) Next.js portal",
+  "packageManager": "pnpm@9.7.0",
+  "engines": {
+    "node": ">=20.10.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev:mobile": "pnpm --filter @agile/mobile start",
+    "build:mobile:ios": "pnpm --filter @agile/mobile eas:build:ios",
+    "build:mobile:android": "pnpm --filter @agile/mobile eas:build:android",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "supabase:types": "supabase gen types typescript --local > packages/supabase-client/src/database.types.ts",
+    "supabase:lint": "supabase db lint",
+    "migrate:reps": "tsx scripts/migrate/import-reps.ts",
+    "migrate:providers": "tsx scripts/migrate/import-providers.ts",
+    "migrate:assignments": "tsx scripts/migrate/import-rep-provider-assignments.ts",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}
