@@ -7,14 +7,8 @@ const config: ExpoConfig = {
     slug: "agile-mobile",
     version: "0.1.0",
     orientation: "portrait",
-    icon: "./assets/icon.png",
     scheme: "agile",
     userInterfaceStyle: "automatic",
-    splash: {
-        image: "./assets/splash.png",
-        resizeMode: "contain",
-        backgroundColor: "#ffffff",
-    },
     ios: {
         supportsTablet: true,
         bundleIdentifier: IS_DEV ? "com.agile.woundcare.dev" : "com.agile.woundcare",
@@ -59,10 +53,6 @@ const config: ExpoConfig = {
     },
     android: {
         package: IS_DEV ? "com.agile.woundcare.dev" : "com.agile.woundcare",
-        adaptiveIcon: {
-            foregroundImage: "./assets/adaptive-icon.png",
-            backgroundColor: "#ffffff",
-        },
         permissions: ["CAMERA", "USE_BIOMETRIC", "USE_FINGERPRINT"],
         allowBackup: false,
         config: {

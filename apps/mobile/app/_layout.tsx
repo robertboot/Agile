@@ -18,8 +18,8 @@ export default function RootLayout() {
             <QueryClientProvider client={queryClient}>
                 <StatusBar style="auto" />
                 <Stack>
-                    <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                    <Stack.Screen name="(app)" options={{ headerShown: false }} />
+                    <Stack.Screen name="index" options={{ title: "Agile" }} />
+                    <Stack.Screen name="measurement-result" options={{ title: "Measurement" }} />
                 </Stack>
             </QueryClientProvider>
         </SafeAreaProvider>
