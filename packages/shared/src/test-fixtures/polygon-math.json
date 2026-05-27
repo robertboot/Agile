@@ -1,0 +1,161 @@
+{
+  "$schema": "polygon-math-fixtures",
+  "description": "Shared test fixtures for PolygonMath. Swift (iOS) and Kotlin (Android) implementations must produce identical results on these inputs. Units are millimeters. Coordinates are 3D; the 'plane' field is the best-fit plane the implementation should use (normal + point on plane).",
+  "tolerance_mm2": 0.01,
+  "tolerance_mm": 0.01,
+  "cases": [
+    {
+      "name": "unit_square_xy",
+      "description": "10mm × 10mm square in the z=0 plane.",
+      "polygon": [
+        { "x": 0,  "y": 0,  "z": 0 },
+        { "x": 10, "y": 0,  "z": 0 },
+        { "x": 10, "y": 10, "z": 0 },
+        { "x": 0,  "y": 10, "z": 0 }
+      ],
+      "plane": {
+        "normal": { "x": 0, "y": 0, "z": 1 },
+        "pointOnPlane": { "x": 0, "y": 0, "z": 0 }
+      },
+      "expected": {
+        "areaMm2": 100,
+        "perimeterMm": 40,
+        "lengthMm": 10,
+        "widthMm": 10
+      }
+    },
+    {
+      "name": "5cm_square_xy",
+      "description": "50mm × 50mm square (5cm side) in the z=0 plane.",
+      "polygon": [
+        { "x": 0,  "y": 0,  "z": 0 },
+        { "x": 50, "y": 0,  "z": 0 },
+        { "x": 50, "y": 50, "z": 0 },
+        { "x": 0,  "y": 50, "z": 0 }
+      ],
+      "plane": {
+        "normal": { "x": 0, "y": 0, "z": 1 },
+        "pointOnPlane": { "x": 0, "y": 0, "z": 0 }
+      },
+      "expected": {
+        "areaMm2": 2500,
+        "perimeterMm": 200,
+        "lengthMm": 50,
+        "widthMm": 50
+      }
+    },
+    {
+      "name": "rectangle_3x2cm_xy",
+      "description": "30mm × 20mm rectangle in the z=0 plane. Length > width.",
+      "polygon": [
+        { "x": 0,  "y": 0,  "z": 0 },
+        { "x": 30, "y": 0,  "z": 0 },
+        { "x": 30, "y": 20, "z": 0 },
+        { "x": 0,  "y": 20, "z": 0 }
+      ],
+      "plane": {
+        "normal": { "x": 0, "y": 0, "z": 1 },
+        "pointOnPlane": { "x": 0, "y": 0, "z": 0 }
+      },
+      "expected": {
+        "areaMm2": 600,
+        "perimeterMm": 100,
+        "lengthMm": 30,
+        "widthMm": 20
+      }
+    },
+    {
+      "name": "diamond_xy",
+      "description": "Square rotated 45° in the z=0 plane. Diagonals 20mm; side √200 ≈ 14.142.",
+      "polygon": [
+        { "x": 10, "y": 0,  "z": 0 },
+        { "x": 20, "y": 10, "z": 0 },
+        { "x": 10, "y": 20, "z": 0 },
+        { "x": 0,  "y": 10, "z": 0 }
+      ],
+      "plane": {
+        "normal": { "x": 0, "y": 0, "z": 1 },
+        "pointOnPlane": { "x": 0, "y": 0, "z": 0 }
+      },
+      "expected": {
+        "areaMm2": 200,
+        "perimeterMm": 56.5685425,
+        "lengthMm": 20,
+        "widthMm": 20
+      },
+      "tolerances": { "areaMm2": 0.1, "perimeterMm": 0.001, "lengthMm": 0.001, "widthMm": 0.001 }
+    },
+    {
+      "name": "tilted_square_xz_plane",
+      "description": "10×10 square in the y=0 plane. Tests plane projection handles non-z-up planes.",
+      "polygon": [
+        { "x": 0,  "y": 0, "z": 0 },
+        { "x": 10, "y": 0, "z": 0 },
+        { "x": 10, "y": 0, "z": 10 },
+        { "x": 0,  "y": 0, "z": 10 }
+      ],
+      "plane": {
+        "normal": { "x": 0, "y": 1, "z": 0 },
+        "pointOnPlane": { "x": 0, "y": 0, "z": 0 }
+      },
+      "expected": {
+        "areaMm2": 100,
+        "perimeterMm": 40,
+        "lengthMm": 10,
+        "widthMm": 10
+      }
+    },
+    {
+      "name": "circle_16gon_r10",
+      "description": "Regular 16-gon inscribed in a circle of radius 10mm in the z=0 plane. Area = 8 sin(π/8) r² ≈ 306.147.",
+      "polygon": [
+        { "x":  10.0000,    "y":   0.0000,    "z": 0 },
+        { "x":   9.2388,    "y":   3.8268,    "z": 0 },
+        { "x":   7.0711,    "y":   7.0711,    "z": 0 },
+        { "x":   3.8268,    "y":   9.2388,    "z": 0 },
+        { "x":   0.0000,    "y":  10.0000,    "z": 0 },
+        { "x":  -3.8268,    "y":   9.2388,    "z": 0 },
+        { "x":  -7.0711,    "y":   7.0711,    "z": 0 },
+        { "x":  -9.2388,    "y":   3.8268,    "z": 0 },
+        { "x": -10.0000,    "y":   0.0000,    "z": 0 },
+        { "x":  -9.2388,    "y":  -3.8268,    "z": 0 },
+        { "x":  -7.0711,    "y":  -7.0711,    "z": 0 },
+        { "x":  -3.8268,    "y":  -9.2388,    "z": 0 },
+        { "x":   0.0000,    "y": -10.0000,    "z": 0 },
+        { "x":   3.8268,    "y":  -9.2388,    "z": 0 },
+        { "x":   7.0711,    "y":  -7.0711,    "z": 0 },
+        { "x":   9.2388,    "y":  -3.8268,    "z": 0 }
+      ],
+      "plane": {
+        "normal": { "x": 0, "y": 0, "z": 1 },
+        "pointOnPlane": { "x": 0, "y": 0, "z": 0 }
+      },
+      "expected": {
+        "areaMm2": 306.147,
+        "perimeterMm": 62.4869,
+        "lengthMm": 20,
+        "widthMm": 19.6157
+      },
+      "tolerances": { "areaMm2": 0.05, "perimeterMm": 0.01, "lengthMm": 0.001, "widthMm": 0.001 }
+    },
+    {
+      "name": "triangle_3_4_5",
+      "description": "Right triangle with legs 30mm, 40mm. Area = 600mm², hypotenuse = 50mm.",
+      "polygon": [
+        { "x": 0,  "y": 0,  "z": 0 },
+        { "x": 30, "y": 0,  "z": 0 },
+        { "x": 0,  "y": 40, "z": 0 }
+      ],
+      "plane": {
+        "normal": { "x": 0, "y": 0, "z": 1 },
+        "pointOnPlane": { "x": 0, "y": 0, "z": 0 }
+      },
+      "expected": {
+        "areaMm2": 600,
+        "perimeterMm": 120,
+        "lengthMm": 40,
+        "widthMm": 30
+      }
+    }
+  ]
+}

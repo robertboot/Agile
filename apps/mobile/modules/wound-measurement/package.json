@@ -1,0 +1,8 @@
+{
+  "name": "wound-measurement",
+  "version": "0.0.0",
+  "description": "Native ARKit + ARCore wound measurement bridge for the Agile mobile app.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true
+}
