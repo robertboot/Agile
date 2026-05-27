@@ -9,7 +9,7 @@ import UIKit
 ///   - isDepthSupported(): bool                     - any depth API available?
 ///   - hasDedicatedDepthSensor(): bool              - LiDAR present?
 public class WoundMeasurementModule: Module {
-    private weak var pendingPromise: Promise?
+    private var pendingPromise: Promise?
 
     public func definition() -> ModuleDefinition {
         Name("WoundMeasurementModule")

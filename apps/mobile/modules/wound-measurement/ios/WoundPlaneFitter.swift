@@ -10,11 +10,12 @@ import simd
 /// projected onto it for area / length / width math.
 public enum WoundPlaneFitter {
 
-    public struct FitResult: Equatable {
+    public struct FitResult {
         public let plane: Plane3D
         /// Eigenvalues, largest first. Ratio between smallest and second-smallest
         /// is a quality signal: if the plane is well-defined the smallest
-        /// eigenvalue is dwarfed by the others.
+        /// eigenvalue is dwarfed by the others. Stored as a tuple, which is why
+        /// this struct can't synthesize Equatable — implement manually if needed.
         public let eigenvalues: (Float, Float, Float)
         public let planarityScore: Float
     }
