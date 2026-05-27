@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "./database.types.js";
+import type { Database } from "./database.types";
 
 export interface SupabaseConfig {
     url: string;
@@ -28,5 +28,5 @@ export function createAgileSupabaseClient(config: SupabaseConfig): SupabaseClien
     });
 }
 
-export type { Database } from "./database.types.js";
+export type { Database } from "./database.types";
 export type AgileSupabase = SupabaseClient<Database>;
