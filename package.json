@@ -3,15 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "description": "Agile wound-care platform — mobile app + Supabase backend + (Phase 2) Next.js portal",
-  "packageManager": "pnpm@9.7.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
-    "node": ">=20.10.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=20.10.0"
   },
   "scripts": {
-    "dev:mobile": "pnpm --filter @agile/mobile start",
-    "build:mobile:ios": "pnpm --filter @agile/mobile eas:build:ios",
-    "build:mobile:android": "pnpm --filter @agile/mobile eas:build:android",
+    "dev:mobile": "npm start --workspace=@agile/mobile",
+    "build:mobile:ios": "npm run eas:build:ios --workspace=@agile/mobile",
+    "build:mobile:android": "npm run eas:build:android --workspace=@agile/mobile",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
@@ -20,9 +22,9 @@
     "migrate:reps": "tsx --env-file=.env scripts/migrate/import-reps.ts",
     "migrate:providers": "tsx --env-file=.env scripts/migrate/import-providers.ts",
     "migrate:assignments": "tsx --env-file=.env scripts/migrate/import-rep-provider-assignments.ts",
-    "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint"
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.45.0",
