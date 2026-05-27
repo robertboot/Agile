@@ -62,8 +62,6 @@ const config: ExpoConfig = {
     plugins: [
         "expo-router",
         "expo-secure-store",
-        "expo-local-authentication",
-        "expo-camera",
         [
             "expo-build-properties",
             {
