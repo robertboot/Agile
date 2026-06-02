@@ -1,6 +1,24 @@
 import Foundation
 import ARKit
 import simd
+import UIKit
+
+/// Snapshot of an ARFrame at the moment the user tapped the shutter.
+///
+/// We deep-copy the depth + confidence pixel buffers because ARKit reclaims
+/// them as new frames arrive. With this in hand the view controller can keep
+/// unprojecting screen taps on the still image to world coordinates without
+/// the live AR session.
+struct FrozenFrame {
+    let image: UIImage
+    let depthMap: CVPixelBuffer
+    let confidenceMap: CVPixelBuffer?
+    let intrinsics: simd_float3x3
+    let cameraTransform: simd_float4x4
+    let imageResolution: CGSize
+    let captureViewport: CGSize
+    let trackingState: String
+}
 
 /// Wraps the ARSession lifecycle and provides depth-aware unprojection used by
 /// the view controller. Owned by `ARMeasurementViewController`.
@@ -166,6 +184,140 @@ final class ARMeasurementSession: NSObject, ARSessionDelegate {
             }
         }
         return count > 0 ? total / Float(count) : 0
+    }
+
+    // MARK: - Frozen-frame capture
+
+    /// Capture the latest ARFrame's depth, confidence, intrinsics, and pose,
+    /// pairing them with a UIImage rendered from the same frame. The depth and
+    /// confidence pixel buffers are deep-copied so the live session is free to
+    /// reuse its own pool.
+    ///
+    /// `captureViewport` is the pixel size of the view the user composed the
+    /// shot through — we need it to map screen taps on the still photo back
+    /// to AR camera image coordinates exactly like we did during the live
+    /// capture phase.
+    func freezeCurrentFrame(captureViewport: CGSize) -> FrozenFrame? {
+        guard let frame = lastFrame else { return nil }
+        guard let depth = frame.smoothedSceneDepth ?? frame.sceneDepth else { return nil }
+        guard let depthCopy = Self.copyPixelBuffer(depth.depthMap) else { return nil }
+        let confidenceCopy = depth.confidenceMap.flatMap { Self.copyPixelBuffer($0) }
+
+        let ciImage = CIImage(cvPixelBuffer: frame.capturedImage)
+        // The captured image is in landscape sensor orientation; rotate to
+        // match a portrait-held device. ARKit cameras are landscape-right,
+        // so we rotate 90° clockwise (`right`) into portrait.
+        let oriented = ciImage.oriented(.right)
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(oriented, from: oriented.extent) else { return nil }
+        let uiImage = UIImage(cgImage: cgImage)
+
+        return FrozenFrame(
+            image: uiImage,
+            depthMap: depthCopy,
+            confidenceMap: confidenceCopy,
+            intrinsics: frame.camera.intrinsics,
+            cameraTransform: frame.camera.transform,
+            imageResolution: frame.camera.imageResolution,
+            captureViewport: captureViewport,
+            trackingState: trackingStateString()
+        )
+    }
+
+    /// Unproject a screen point on the *frozen* still image to a world-space
+    /// point. Uses the frozen frame's depth + intrinsics + pose.
+    static func worldPoint(
+        forScreenPoint screenPoint: CGPoint,
+        in viewportSize: CGSize,
+        using frame: FrozenFrame
+    ) -> SIMD3<Float>? {
+        let depthMap = frame.depthMap
+        let depthWidth = CVPixelBufferGetWidth(depthMap)
+        let depthHeight = CVPixelBufferGetHeight(depthMap)
+        guard viewportSize.width > 0, viewportSize.height > 0 else { return nil }
+
+        let u = Int((screenPoint.x / viewportSize.width) * CGFloat(depthWidth))
+        let v = Int((screenPoint.y / viewportSize.height) * CGFloat(depthHeight))
+        guard u >= 0, u < depthWidth, v >= 0, v < depthHeight else { return nil }
+
+        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(depthMap, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(depthMap) else { return nil }
+        let rowBytes = CVPixelBufferGetBytesPerRow(depthMap)
+        let depthMeters = base
+            .advanced(by: v * rowBytes + u * MemoryLayout<Float32>.size)
+            .assumingMemoryBound(to: Float32.self)
+            .pointee
+
+        guard depthMeters.isFinite, depthMeters > 0.05, depthMeters < 5.0 else { return nil }
+
+        let intrinsics = frame.intrinsics
+        let imageRes = frame.imageResolution
+        let pixelX = Float(screenPoint.x / viewportSize.width) * Float(imageRes.width)
+        let pixelY = Float(screenPoint.y / viewportSize.height) * Float(imageRes.height)
+        let x = (pixelX - intrinsics[2, 0]) * depthMeters / intrinsics[0, 0]
+        let y = (pixelY - intrinsics[2, 1]) * depthMeters / intrinsics[1, 1]
+        let cameraSpace = SIMD4<Float>(x, y, -depthMeters, 1)
+        let worldSpace = frame.cameraTransform * cameraSpace
+        return SIMD3<Float>(worldSpace.x, worldSpace.y, worldSpace.z)
+    }
+
+    /// Mean confidence (0..1) of all polygon samples in the frozen frame.
+    static func meanConfidence(
+        screenPoints: [CGPoint],
+        in viewportSize: CGSize,
+        using frame: FrozenFrame
+    ) -> Float {
+        guard let confidenceMap = frame.confidenceMap else { return 0 }
+        let width = CVPixelBufferGetWidth(confidenceMap)
+        let height = CVPixelBufferGetHeight(confidenceMap)
+        CVPixelBufferLockBaseAddress(confidenceMap, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(confidenceMap, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(confidenceMap) else { return 0 }
+        let rowBytes = CVPixelBufferGetBytesPerRow(confidenceMap)
+
+        var total: Float = 0
+        var count: Int = 0
+        for p in screenPoints {
+            let x = Int((p.x / viewportSize.width) * CGFloat(width))
+            let y = Int((p.y / viewportSize.height) * CGFloat(height))
+            guard x >= 0, x < width, y >= 0, y < height else { continue }
+            let value = base
+                .advanced(by: y * rowBytes + x)
+                .assumingMemoryBound(to: UInt8.self)
+                .pointee
+            total += Float(value) / 2
+            count += 1
+        }
+        return count > 0 ? total / Float(count) : 0
+    }
+
+    private static func copyPixelBuffer(_ source: CVPixelBuffer) -> CVPixelBuffer? {
+        let width = CVPixelBufferGetWidth(source)
+        let height = CVPixelBufferGetHeight(source)
+        let format = CVPixelBufferGetPixelFormatType(source)
+        var copy: CVPixelBuffer?
+        let attrs: [CFString: Any] = [kCVPixelBufferIOSurfacePropertiesKey: [:]]
+        CVPixelBufferCreate(kCFAllocatorDefault, width, height, format, attrs as CFDictionary, &copy)
+        guard let dst = copy else { return nil }
+
+        CVPixelBufferLockBaseAddress(source, .readOnly)
+        CVPixelBufferLockBaseAddress(dst, [])
+        defer {
+            CVPixelBufferUnlockBaseAddress(source, .readOnly)
+            CVPixelBufferUnlockBaseAddress(dst, [])
+        }
+        guard let srcAddr = CVPixelBufferGetBaseAddress(source),
+              let dstAddr = CVPixelBufferGetBaseAddress(dst) else { return nil }
+        let srcRow = CVPixelBufferGetBytesPerRow(source)
+        let dstRow = CVPixelBufferGetBytesPerRow(dst)
+        let copyBytes = min(srcRow, dstRow)
+        for row in 0..<height {
+            memcpy(dstAddr.advanced(by: row * dstRow),
+                   srcAddr.advanced(by: row * srcRow),
+                   copyBytes)
+        }
+        return dst
     }
 
     // MARK: - ARSessionDelegate
