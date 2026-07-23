@@ -24,7 +24,10 @@
     "migrate:assignments": "tsx --env-file=.env scripts/migrate/import-rep-provider-assignments.ts",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "dev:web": "npm run dev --workspace=@agile/web",
+    "build:web": "npm run build --workspace=@agile/web",
+    "postinstall": "node scripts/ensure-web-styled-jsx.cjs"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.45.0",

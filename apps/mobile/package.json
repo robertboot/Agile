@@ -17,8 +17,8 @@
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
-    "@agile/shared": "workspace:*",
-    "@agile/supabase-client": "workspace:*",
+    "@agile/shared": "*",
+    "@agile/supabase-client": "*",
     "@supabase/supabase-js": "^2.45.0",
     "@tanstack/react-query": "^5.51.0",
     "expo": "~51.0.0",

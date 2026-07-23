@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand palette — extracted from the Agile trifold brochure + logo mark.
+     Flat colors only; no gradients (brand guideline). */
+  --color-brand-blue: #1878b8;      /* primary — brochure panel blue */
+  --color-brand-blue-dark: #12628f; /* hover/pressed */
+  --color-brand-cyan: #18a8e0;      /* bright cyan-blue from the mark */
+  --color-brand-teal: #48c0c8;      /* brochure accent pills */
+  --color-brand-violet: #5868b0;    /* violet corner of the mark */
+  --color-brand-gray: #707078;      /* logo wordmark gray */
+  --color-navy-950: #14577f;        /* deep header/hero blue */
+  --color-navy-900: #1d3d5c;        /* headings on light backgrounds */
+  --color-navy-800: #24496b;
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    @apply text-slate-800 bg-white antialiased;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Flat primary button background (replaces the old gradient). */
+@utility btn-brand {
+  @apply bg-brand-blue text-white hover:bg-brand-blue-dark transition-colors;
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  @apply text-[11px] uppercase tracking-widest;
+}
