@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { createRepInvite } from "@/app/portal/admin/actions";
-import { outlookComposeUrl } from "@/lib/outlook";
+import { copyFormattedAndCompose } from "@/lib/invite-email";
 
 export function InviteRep() {
   const [open, setOpen] = useState(false);
@@ -23,13 +23,15 @@ export function InviteRep() {
     });
   }
 
-  const mailto = link
-    ? outlookComposeUrl({
-        to: email,
-        subject: "Welcome to Agile Medical Group — your rep agreement & account setup",
-        body: `Hi ${name || "there"},\n\nWelcome aboard! Here's your secure signup link:\n\n${link}\n\nIt walks you through your Sales Representative Agreement (including the compensation model in Exhibit A), collects your electronic signature, and sets up your portal login — takes about ten minutes.\n\nThe link expires in 14 days. Reach out with any questions before you sign.\n\nWelcome to the team!`,
-      })
-    : "";
+  function openInOutlook() {
+    if (!link) return;
+    void copyFormattedAndCompose({
+      to: email,
+      subject: "Welcome to Agile Medical Group — your rep agreement & account setup",
+      html: `<p>Hi ${name || "there"},</p><p>Welcome aboard! Your secure signup walks you through your Sales Representative Agreement (including the compensation model in Exhibit A), collects your electronic signature, and sets up your portal login — it takes about ten minutes.</p><p><a href="${link}"><strong>Sign your agreement &amp; set up your account →</strong></a></p><p>The link expires in 14 days. Reach out with any questions before you sign.</p><p>Welcome to the team!</p>`,
+      text: `Hi ${name || "there"},\n\nWelcome aboard! Your secure signup walks you through your Sales Representative Agreement (including Exhibit A), collects your electronic signature, and sets up your portal login.\n\nSign & set up your account: ${link}\n\nThe link expires in 14 days.\n\nWelcome to the team!`,
+    });
+  }
 
   return (
     <div className="relative">
@@ -88,12 +90,13 @@ export function InviteRep() {
                 {link}
               </p>
               <div className="mt-3 flex gap-2">
-                <a
-                  href={mailto}
+                <button
+                  type="button"
+                  onClick={openInOutlook}
                   className="btn-brand flex-1 rounded-lg px-4 py-2 text-center text-sm font-semibold text-white"
                 >
                   Open in Outlook
-                </a>
+                </button>
                 <button
                   type="button"
                   onClick={async () => {
@@ -106,6 +109,10 @@ export function InviteRep() {
                   {copied ? "Copied ✓" : "Copy link"}
                 </button>
               </div>
+              <p className="mt-2 text-xs text-slate-400">
+                Opens a draft with the recipient filled in; the formatted invitation (link
+                embedded, no raw URL) is on your clipboard — just paste (⌘V) into the body.
+              </p>
               <button
                 type="button"
                 onClick={() => {

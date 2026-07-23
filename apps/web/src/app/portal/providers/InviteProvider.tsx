@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { createProviderInvite } from "@/app/portal/actions";
-import { outlookComposeUrl } from "@/lib/outlook";
+import { copyFormattedAndCompose } from "@/lib/invite-email";
 
 export function InviteProvider() {
   const [open, setOpen] = useState(false);
@@ -22,13 +22,15 @@ export function InviteProvider() {
     });
   }
 
-  const mailto = link
-    ? outlookComposeUrl({
-        to: email,
-        subject: "Provider registration — Agile Medical Group",
-        body: `Hello,\n\nHere is your secure registration link for Agile Medical Group:\n\n${link}\n\nThe form covers your clinic and rendering-provider details and includes our Business Associate Agreement (BAA). It takes about five minutes, and everything comes straight to our team for verification.\n\nI'm happy to help if any field is unclear — just reply here.\n\nThank you!`,
-      })
-    : "";
+  function openInOutlook() {
+    if (!link) return;
+    void copyFormattedAndCompose({
+      to: email,
+      subject: "Provider registration — Agile Medical Group",
+      html: `<p>Hello,</p><p>You've been invited to register with Agile Medical Group. The secure form covers your clinic and rendering-provider details and includes our Business Associate Agreement (BAA) — it takes about five minutes, and everything comes straight to our team for verification.</p><p><a href="${link}"><strong>Complete your registration →</strong></a></p><p>I'm happy to help if any field is unclear — just reply here.</p><p>Thank you!</p>`,
+      text: `Hello,\n\nYou've been invited to register with Agile Medical Group. The secure form covers your clinic and rendering-provider details and includes our Business Associate Agreement (BAA) — it takes about five minutes.\n\nComplete your registration: ${link}\n\nI'm happy to help if any field is unclear — just reply here.\n\nThank you!`,
+    });
+  }
 
   return (
     <div>
@@ -81,12 +83,13 @@ export function InviteProvider() {
                 {link}
               </p>
               <div className="mt-3 flex gap-2">
-                <a
-                  href={mailto}
+                <button
+                  type="button"
+                  onClick={openInOutlook}
                   className="btn-brand flex-1 rounded-lg px-4 py-2 text-center text-sm font-semibold text-white"
                 >
                   Open in Outlook
-                </a>
+                </button>
                 <button
                   type="button"
                   onClick={async () => {
@@ -99,6 +102,10 @@ export function InviteProvider() {
                   {copied ? "Copied ✓" : "Copy link"}
                 </button>
               </div>
+              <p className="mt-2 text-xs text-slate-400">
+                Opens a draft with the recipient filled in; the formatted invitation (link
+                embedded, no raw URL) is on your clipboard — just paste (⌘V) into the body.
+              </p>
               <button
                 type="button"
                 onClick={() => {
