@@ -72,3 +72,9 @@ coverage/
 *.log
 .cache/
 .turbo/
+.env.production.notes
+.supabase-prod-db-password.txt
+.supabase-prod-db-password.txt
+.vercel
+.env*
+.prod-admin-temp-password.txt
