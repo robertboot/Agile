@@ -16,16 +16,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getIvrSubmission, registerProvider, submitIvr } from "@/lib/integrations/mednecessity";
 import { notifySlack, sendSlackMessage } from "@/lib/integrations/slack";
+import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
+
+export type { QuoteItemInput };
 
 // ---------------------------------------------------------------------------
 // Pricing quotes
 // ---------------------------------------------------------------------------
-
-export interface QuoteItemInput {
-  productCode: string;
-  sku: string;
-  qty: number;
-}
 
 /**
  * Prices an order server-side. Product costs stay server-only; the caller gets
@@ -36,60 +33,6 @@ export async function quoteOrder(items: QuoteItemInput[], tier: DiscountTier) {
   if (items.length === 0) return null;
   const { lineInputs, reimbursement, cogsMultiplier } = await resolveLineInputs(items);
   return toRepView(priceOrder(lineInputs, reimbursement, tier, cogsMultiplier));
-}
-
-export async function resolveLineInputs(items: QuoteItemInput[]) {
-  const admin = createAdminClient();
-  const today = new Date().toISOString().slice(0, 10);
-  const [{ data: sizes }, { data: costs }, { data: pricing }] = await Promise.all([
-    admin.from("product_sizes").select("sku, product_code, label, cm2, active"),
-    admin.from("product_costs").select("product_code, cost_per_cm2_cents, cogs_per_cm2_cents"),
-    admin
-      .from("pricing_versions")
-      .select("id, reimbursement_per_cm2_cents, cogs_multiplier, effective_from")
-      .lte("effective_from", today)
-      .or(`effective_to.is.null,effective_to.gte.${today}`)
-      .order("effective_from", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(1),
-  ]);
-  const version = pricing?.[0];
-  if (!version) throw new Error("No pricing version in effect");
-
-  const costByProduct = new Map(
-    (costs ?? []).map((c) => [
-      c.product_code as string,
-      { cost: c.cost_per_cm2_cents as number, cogs: c.cogs_per_cm2_cents as number | null },
-    ]),
-  );
-  const sizeBySku = new Map((sizes ?? []).map((s) => [s.sku as string, s]));
-
-  const lineInputs: (LineItemInput & { sizeLabel: string })[] = items.map((item) => {
-    const size = sizeBySku.get(item.sku);
-    if (!size || !size.active) throw new Error(`Unknown SKU: ${item.sku}`);
-    if (size.product_code !== item.productCode) throw new Error(`SKU/product mismatch: ${item.sku}`);
-    const costRow = costByProduct.get(item.productCode);
-    if (!costRow) throw new Error(`No cost on file for ${item.productCode}`);
-    if (!Number.isInteger(item.qty) || item.qty < 1 || item.qty > 500) {
-      throw new Error(`Invalid quantity for ${item.sku}`);
-    }
-    return {
-      productCode: item.productCode,
-      sku: item.sku,
-      sizeLabel: size.label as string,
-      cm2: Number(size.cm2),
-      qty: item.qty,
-      costPerCm2Cents: costRow.cost,
-      ...(costRow.cogs != null ? { cogsPerCm2Cents: costRow.cogs } : {}),
-    };
-  });
-
-  return {
-    lineInputs,
-    reimbursement: version.reimbursement_per_cm2_cents as number,
-    cogsMultiplier: Number(version.cogs_multiplier ?? 2),
-    pricingVersionId: version.id as string,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +266,10 @@ export async function createOrder(
     .single();
   if (error) return { ok: false, error: error.message };
 
-  const { error: itemsError } = await supabase.from("order_items").insert(
+  // Items + snapshot are written server-side (reps have no direct insert on
+  // order_items — audit H1); on failure the orphan order row is removed.
+  const db = createAdminClient();
+  const { error: itemsError } = await db.from("order_items").insert(
     econ.lines.map((line, i) => ({
       order_id: order.id,
       product_code: line.productCode,
@@ -336,13 +282,21 @@ export async function createOrder(
       provider_keeps_cents: line.providerKeepsCents,
     })),
   );
-  if (itemsError) return { ok: false, error: itemsError.message };
+  if (itemsError) {
+    await db.from("orders").delete().eq("id", order.id);
+    return { ok: false, error: itemsError.message };
+  }
 
   // Snapshot internal economics so later GO LIVE cost changes never rewrite
-  // this order's history (admin-only table).
-  await createAdminClient()
+  // this order's history (admin-only table). A failed snapshot fails the order.
+  const { error: internalsError } = await db
     .from("order_internals")
     .insert({ order_id: order.id, cogs_cents: econ.cogsCents, agile_net_cents: econ.agileNetCents });
+  if (internalsError) {
+    await db.from("order_items").delete().eq("order_id", order.id);
+    await db.from("orders").delete().eq("id", order.id);
+    return { ok: false, error: `Order not created (economics snapshot failed): ${internalsError.message}` };
+  }
 
   revalidatePath("/portal/orders");
   redirect(`/portal/orders/${order.id}`);
@@ -526,36 +480,25 @@ export async function sendTeamMessage(
 }
 
 /**
- * Admin records a commission payout handed off to Gusto. Owed = commission
- * ledger balance minus payouts; a payout may never exceed what's owed.
+ * Admin records a commission payout handed off to Gusto. Atomic in the DB:
+ * per-rep advisory lock + SQL-aggregate owed balance (immune to row caps),
+ * guard and insert in one transaction (audit C3).
  */
 export async function recordGustoPayout(
   repId: string,
   amountCents: number,
   note?: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     return { ok: false, error: "Amount must be a positive number" };
   }
 
-  const db = createAdminClient();
-  const [{ data: ledger }, { data: payouts }] = await Promise.all([
-    db.from("commissions").select("amount_cents").eq("rep_id", repId),
-    db.from("commission_payouts").select("amount_cents").eq("rep_id", repId),
-  ]);
-  const owed =
-    (ledger ?? []).reduce((a, c) => a + Number(c.amount_cents), 0) -
-    (payouts ?? []).reduce((a, p) => a + Number(p.amount_cents), 0);
-  if (amountCents > owed) {
-    return { ok: false, error: `Payout exceeds owed balance (${formatCents(owed)})` };
-  }
-
-  const { error } = await db.from("commission_payouts").insert({
-    rep_id: repId,
-    amount_cents: amountCents,
-    note: note ?? null,
-    recorded_by: admin.id,
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_record_payout", {
+    p_rep_id: repId,
+    p_amount_cents: amountCents,
+    p_note: note ?? null,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -564,69 +507,26 @@ export async function recordGustoPayout(
 }
 
 /**
- * Admin records a collection (or refund, negative amount). Commission accrues
- * only on gross collected dollars, scales with partial collection, and
- * refunds reverse it (spec §6).
+ * Admin records a collection (or refund, negative amount). Atomic in the DB:
+ * row lock on the order, telescoping accrual, collection + commission +
+ * order update in one transaction (audit C3).
  */
 export async function recordCollection(
   orderId: string,
   amountCents: number,
   note?: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  await requireAdmin();
   if (!Number.isInteger(amountCents) || amountCents === 0) {
     return { ok: false, error: "Amount must be a non-zero integer number of cents" };
   }
 
-  const db = createAdminClient();
-  const { data: order } = await db
-    .from("orders")
-    .select("id, status, rep_id, gross_collected_cents, order_items(billed_cents, rep_commission_cents)")
-    .eq("id", orderId)
-    .single();
-  if (!order) return { ok: false, error: "Order not found" };
-  if (!["invoiced", "paid"].includes(order.status)) {
-    return { ok: false, error: "Collections can only be recorded after invoicing" };
-  }
-
-  const items = order.order_items as { billed_cents: number; rep_commission_cents: number }[];
-  const billed = items.reduce((a, i) => a + i.billed_cents, 0);
-  const fullCommission = items.reduce((a, i) => a + i.rep_commission_cents, 0);
-
-  const before = Number(order.gross_collected_cents);
-  const after = before + amountCents;
-  if (after < 0) return { ok: false, error: "Refund exceeds collected total" };
-
-  // Incremental accrual: commission delta between the running totals.
-  const delta =
-    commissionOnCollection(fullCommission, billed, after) -
-    commissionOnCollection(fullCommission, billed, before);
-
-  const { data: collection, error: collectionError } = await db
-    .from("order_collections")
-    .insert({ order_id: orderId, amount_cents: amountCents, note: note ?? null, recorded_by: admin.id })
-    .select("id")
-    .single();
-  if (collectionError) return { ok: false, error: collectionError.message };
-
-  if (delta !== 0) {
-    const { error: commissionError } = await db.from("commissions").insert({
-      order_id: orderId,
-      rep_id: order.rep_id,
-      collection_id: collection.id,
-      amount_cents: delta,
-      basis: "gross_collected",
-      status: delta > 0 ? "accrued" : "reversed",
-    });
-    if (commissionError) return { ok: false, error: commissionError.message };
-  }
-
-  const update: Record<string, unknown> = { gross_collected_cents: after };
-  if (order.status === "invoiced" && amountCents > 0) {
-    update.status = "paid";
-    update.collected_at = new Date().toISOString();
-  }
-  const { error } = await db.from("orders").update(update).eq("id", orderId);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_record_collection", {
+    p_order_id: orderId,
+    p_amount_cents: amountCents,
+    p_note: note ?? null,
+  });
   if (error) return { ok: false, error: error.message };
 
   await notifySlack({ kind: "payment_recorded", orderId, amount: formatCents(amountCents) });

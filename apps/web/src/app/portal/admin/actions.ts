@@ -4,11 +4,12 @@
 // with GO LIVE, provider edits, rep invites, and the contract template.
 
 import { revalidatePath } from "next/cache";
-import { priceOrder, type DiscountTier } from "@agile/shared";
+import { isValidNpi, priceOrder, type DiscountTier } from "@agile/shared";
 import { requireAdmin, requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveLineInputs, type ActionResult, type QuoteItemInput } from "@/app/portal/actions";
+import type { ActionResult } from "@/app/portal/actions";
+import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 
 // ---------------------------------------------------------------------------
 // Admin calculator — FULL economics (COGS + Agile net). Admin-only.
@@ -218,6 +219,18 @@ export async function updateProvider(
 ): Promise<ActionResult> {
   await requirePortalUser();
   const f = (k: string) => (formData.get(k) as string | null)?.trim() || null;
+
+  // Mirror createProvider's validation — edits must not bypass it (audit H5).
+  for (const k of ["practice_name", "address_line1", "city", "state", "zip", "provider_first", "provider_last", "individual_npi"]) {
+    if (!f(k)) return { ok: false, error: `Missing required field: ${k.replaceAll("_", " ")}` };
+  }
+  if (!isValidNpi(f("individual_npi")!)) {
+    return { ok: false, error: "Individual NPI failed check-digit validation" };
+  }
+  const orgNpi = f("organization_npi");
+  if (orgNpi && !isValidNpi(orgNpi)) {
+    return { ok: false, error: "Organization NPI failed check-digit validation" };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
