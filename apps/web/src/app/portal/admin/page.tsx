@@ -8,27 +8,38 @@ export default async function AdminPage() {
   await requireAdmin();
   const supabase = await createClient();
 
-  const [{ data: pendingProviders }, { data: allProviders }, { data: reps }, { data: repDetails }] =
-    await Promise.all([
-      supabase
-        .from("providers")
-        .select("id, practice_name, city, state, provider_first, provider_last, individual_npi, created_at, baa_accepted_at, baa_document_path, profiles:rep_id(display_name)")
-        .eq("approved", false)
-        .is("deleted_at", null)
-        .order("created_at"),
-      supabase
-        .from("providers")
-        .select("id, practice_name, rep_id, mednecessity_status")
-        .is("deleted_at", null)
-        .order("practice_name"),
-      supabase
-        .from("profiles")
-        .select("id, display_name, email, status")
-        .eq("role", "rep")
-        .is("deleted_at", null)
-        .order("display_name"),
-      supabase.from("rep_details").select("profile_id, territory, gusto_payee_status"),
-    ]);
+  const [
+    { data: pendingProviders },
+    { data: allProviders },
+    { data: reps },
+    { data: repDetails },
+    { data: messages },
+  ] = await Promise.all([
+    supabase
+      .from("providers")
+      .select("id, practice_name, city, state, provider_first, provider_last, individual_npi, created_at, baa_accepted_at, baa_document_path, profiles:rep_id(display_name)")
+      .eq("approved", false)
+      .is("deleted_at", null)
+      .order("created_at"),
+    supabase
+      .from("providers")
+      .select("id, practice_name, rep_id, mednecessity_status")
+      .is("deleted_at", null)
+      .order("practice_name"),
+    supabase
+      .from("profiles")
+      .select("id, display_name, email, status")
+      .eq("role", "rep")
+      .is("deleted_at", null)
+      .order("display_name"),
+    supabase.from("rep_details").select("profile_id, territory, gusto_payee_status"),
+    supabase
+      .from("contact_messages")
+      .select("id, name, email, message, created_at")
+      .eq("handled", false)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
 
   const detailByRep = new Map((repDetails ?? []).map((d) => [d.profile_id, d]));
   const repOptions = (reps ?? []).map((r) => ({ id: r.id, display_name: r.display_name }));
@@ -45,6 +56,30 @@ export default async function AdminPage() {
           <TeamMessageForm />
         </div>
       </section>
+
+      {(messages ?? []).length > 0 && (
+        <section>
+          <h2 className="label-mono mb-3 text-slate-500">
+            New contact messages ({(messages ?? []).length})
+          </h2>
+          <div className="space-y-3">
+            {(messages ?? []).map((m) => (
+              <div key={m.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <div className="font-medium text-navy-900">
+                    {m.name}{" "}
+                    <a href={`mailto:${m.email}`} className="text-sm font-normal text-brand-blue hover:underline">
+                      {m.email}
+                    </a>
+                  </div>
+                  <span className="text-xs text-slate-400">{formatDate(m.created_at)}</span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{m.message}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="label-mono mb-3 text-slate-500">

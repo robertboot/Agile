@@ -4,15 +4,29 @@ import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 
-export default async function OrdersPage() {
+const PAGE_SIZE = 50;
+
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const user = await requirePortalUser();
   const supabase = await createClient();
+  const page = Math.max(1, Number((await searchParams).page ?? "1") || 1);
+  const from = (page - 1) * PAGE_SIZE;
 
-  const { data: orders } = await supabase
+  const { data: orders, count } = await supabase
     .from("orders")
-    .select("id, status, created_at, discount_tier, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)")
+    .select(
+      "id, status, created_at, discount_tier, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
+      { count: "exact" },
+    )
     .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(from, from + PAGE_SIZE - 1);
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -86,6 +100,32 @@ export default async function OrdersPage() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-500">
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link
+                href={`/portal/orders?page=${page - 1}`}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
+              >
+                ← Previous
+              </Link>
+            )}
+            {page < totalPages && (
+              <Link
+                href={`/portal/orders?page=${page + 1}`}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
+              >
+                Next →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

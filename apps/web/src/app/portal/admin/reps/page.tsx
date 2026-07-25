@@ -25,45 +25,33 @@ export default async function RepsCenterPage() {
   await requireAdmin();
   const db = createAdminClient();
 
-  const [
-    { data: reps },
-    { data: details },
-    { data: providers },
-    { data: orders },
-    { data: ledger },
-    { data: payouts },
-  ] = await Promise.all([
-    db
-      .from("profiles")
-      .select("id, display_name, email, status")
-      .eq("role", "rep")
-      .is("deleted_at", null)
-      .order("display_name"),
-    db.from("rep_details").select("profile_id, territory, gusto_payee_status"),
-    db.from("providers").select("id, rep_id").is("deleted_at", null),
-    db
-      .from("orders")
-      .select("id, rep_id, status, gross_collected_cents, order_items(billed_cents)")
-      .is("deleted_at", null),
-    db.from("commissions").select("rep_id, amount_cents"),
-    db.from("commission_payouts").select("rep_id, amount_cents"),
-  ]);
+  // Money totals come from SQL aggregate views — immune to the PostgREST
+  // 1000-row cap that would silently truncate a JS sum (audit H4).
+  const [{ data: reps }, { data: details }, { data: providers }, { data: balances }, { data: production }] =
+    await Promise.all([
+      db
+        .from("profiles")
+        .select("id, display_name, email, status")
+        .eq("role", "rep")
+        .is("deleted_at", null)
+        .order("display_name"),
+      db.from("rep_details").select("profile_id, territory, gusto_payee_status"),
+      db.from("providers").select("id, rep_id").is("deleted_at", null),
+      db.from("rep_balances").select("rep_id, commission_net_cents, paid_out_cents, owed_cents"),
+      db.from("rep_production").select("rep_id, order_count, open_order_count, billed_cents, collected_cents"),
+    ]);
 
   const detailByRep = new Map((details ?? []).map((d) => [d.profile_id, d]));
+  const balanceByRep = new Map((balances ?? []).map((b) => [b.rep_id, b]));
+  const productionByRep = new Map((production ?? []).map((p) => [p.rep_id, p]));
+  const providerCountByRep = new Map<string, number>();
+  for (const p of providers ?? [])
+    providerCountByRep.set(p.rep_id, (providerCountByRep.get(p.rep_id) ?? 0) + 1);
+
   const rows: RepRow[] = (reps ?? []).map((rep) => {
-    const repOrders = (orders ?? []).filter((o) => o.rep_id === rep.id);
-    const billedCents = repOrders.reduce(
-      (a, o) =>
-        a + (o.order_items as { billed_cents: number }[]).reduce((b, i) => b + i.billed_cents, 0),
-      0,
-    );
-    const commissionCents = (ledger ?? [])
-      .filter((c) => c.rep_id === rep.id)
-      .reduce((a, c) => a + Number(c.amount_cents), 0);
-    const paidOutCents = (payouts ?? [])
-      .filter((p) => p.rep_id === rep.id)
-      .reduce((a, p) => a + Number(p.amount_cents), 0);
     const d = detailByRep.get(rep.id);
+    const bal = balanceByRep.get(rep.id);
+    const prod = productionByRep.get(rep.id);
     return {
       id: rep.id,
       name: rep.display_name,
@@ -71,14 +59,14 @@ export default async function RepsCenterPage() {
       status: rep.status,
       territory: d?.territory ?? null,
       gusto: d?.gusto_payee_status ?? "pending",
-      providerCount: (providers ?? []).filter((p) => p.rep_id === rep.id).length,
-      orderCount: repOrders.length,
-      openOrderCount: repOrders.filter((o) => !["paid", "cancelled"].includes(o.status)).length,
-      billedCents,
-      collectedCents: repOrders.reduce((a, o) => a + Number(o.gross_collected_cents), 0),
-      commissionCents,
-      paidOutCents,
-      owedCents: commissionCents - paidOutCents,
+      providerCount: providerCountByRep.get(rep.id) ?? 0,
+      orderCount: Number(prod?.order_count ?? 0),
+      openOrderCount: Number(prod?.open_order_count ?? 0),
+      billedCents: Number(prod?.billed_cents ?? 0),
+      collectedCents: Number(prod?.collected_cents ?? 0),
+      commissionCents: Number(bal?.commission_net_cents ?? 0),
+      paidOutCents: Number(bal?.paid_out_cents ?? 0),
+      owedCents: Number(bal?.owed_cents ?? 0),
     };
   });
 

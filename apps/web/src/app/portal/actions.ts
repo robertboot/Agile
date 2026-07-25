@@ -251,27 +251,15 @@ export async function createOrder(
   }
   const econ = priceOrder(resolved.lineInputs, resolved.reimbursement, tier, resolved.cogsMultiplier);
 
-  // RLS enforces: rep can only order for their own providers; the DB trigger
-  // enforces the provider is approved + onboarded.
+  // One atomic transaction: order + items + economics snapshot (audit H3).
+  // The DB function re-checks provider ownership + onboarding.
+  void user; // authorization is re-verified inside fn_create_order via auth.uid()
   const supabase = await createClient();
-  const { data: order, error } = await supabase
-    .from("orders")
-    .insert({
-      provider_id: providerId,
-      rep_id: user.id,
-      discount_tier: tier,
-      pricing_version_id: resolved.pricingVersionId,
-    })
-    .select("id")
-    .single();
-  if (error) return { ok: false, error: error.message };
-
-  // Items + snapshot are written server-side (reps have no direct insert on
-  // order_items — audit H1); on failure the orphan order row is removed.
-  const db = createAdminClient();
-  const { error: itemsError } = await db.from("order_items").insert(
-    econ.lines.map((line, i) => ({
-      order_id: order.id,
+  const { data: orderId, error } = await supabase.rpc("fn_create_order", {
+    p_provider_id: providerId,
+    p_discount_tier: tier,
+    p_pricing_version_id: resolved.pricingVersionId,
+    p_items: econ.lines.map((line, i) => ({
       product_code: line.productCode,
       sku: line.sku,
       size_label: resolved.lineInputs[i]!.sizeLabel,
@@ -281,25 +269,13 @@ export async function createOrder(
       rep_commission_cents: line.repCommissionCents,
       provider_keeps_cents: line.providerKeepsCents,
     })),
-  );
-  if (itemsError) {
-    await db.from("orders").delete().eq("id", order.id);
-    return { ok: false, error: itemsError.message };
-  }
-
-  // Snapshot internal economics so later GO LIVE cost changes never rewrite
-  // this order's history (admin-only table). A failed snapshot fails the order.
-  const { error: internalsError } = await db
-    .from("order_internals")
-    .insert({ order_id: order.id, cogs_cents: econ.cogsCents, agile_net_cents: econ.agileNetCents });
-  if (internalsError) {
-    await db.from("order_items").delete().eq("order_id", order.id);
-    await db.from("orders").delete().eq("id", order.id);
-    return { ok: false, error: `Order not created (economics snapshot failed): ${internalsError.message}` };
-  }
+    p_cogs_cents: econ.cogsCents,
+    p_agile_net_cents: econ.agileNetCents,
+  });
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/portal/orders");
-  redirect(`/portal/orders/${order.id}`);
+  redirect(`/portal/orders/${orderId as string}`);
 }
 
 /** Rep submits the IVR to MedNecessity (spec §5, New → IVR_SUBMITTED). */

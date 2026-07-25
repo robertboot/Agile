@@ -17,7 +17,7 @@ export default async function DashboardPage() {
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(50),
-      supabase.from("commissions").select("amount_cents"),
+      supabase.from("rep_balances").select("commission_net_cents"),
       supabase.from("providers").select("id, approved, mednecessity_status").is("deleted_at", null),
       supabase.from("products").select("code, name").eq("active", true).order("code"),
       supabase.from("product_sizes").select("sku, product_code, label, cm2").eq("active", true),
@@ -25,7 +25,11 @@ export default async function DashboardPage() {
 
   const pipeline: Record<string, number> = {};
   for (const o of orders ?? []) pipeline[o.status] = (pipeline[o.status] ?? 0) + 1;
-  const commissionTotal = (commissions ?? []).reduce((a, c) => a + Number(c.amount_cents), 0);
+  // Money total from the aggregate view — never row-capped (audit H4).
+  const commissionTotal = (commissions ?? []).reduce(
+    (a, c) => a + Number((c as { commission_net_cents: number }).commission_net_cents),
+    0,
+  );
   const onboarded = (providers ?? []).filter(
     (p) => p.approved && p.mednecessity_status === "onboarded",
   ).length;

@@ -4,22 +4,38 @@ import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 
-export default async function CommissionsPage() {
+const PAGE_SIZE = 50;
+
+export default async function CommissionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const user = await requirePortalUser();
   const supabase = await createClient();
+  const page = Math.max(1, Number((await searchParams).page ?? "1") || 1);
+  const from = (page - 1) * PAGE_SIZE;
 
-  const { data: entries } = await supabase
-    .from("commissions")
-    .select("id, order_id, amount_cents, status, created_at, profiles:rep_id(display_name)")
-    .order("created_at", { ascending: false });
+  // Stat cards from the SQL aggregate view (immune to the 1000-row cap — audit
+  // H4); the ledger table is paginated. RLS scopes both to the rep's own rows.
+  const [{ data: balances }, { data: entries, count }] = await Promise.all([
+    supabase.from("rep_balances").select("accrued_cents, reversed_cents, commission_net_cents"),
+    supabase
+      .from("commissions")
+      .select("id, order_id, amount_cents, status, created_at, profiles:rep_id(display_name)", {
+        count: "exact",
+      })
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1),
+  ]);
 
-  const total = (entries ?? []).reduce((a, e) => a + Number(e.amount_cents), 0);
-  const accrued = (entries ?? [])
-    .filter((e) => e.status === "accrued")
-    .reduce((a, e) => a + Number(e.amount_cents), 0);
-  const reversed = (entries ?? [])
-    .filter((e) => e.status === "reversed")
-    .reduce((a, e) => a + Number(e.amount_cents), 0);
+  const sum = (f: (b: { accrued_cents: number; reversed_cents: number; commission_net_cents: number }) => number) =>
+    (balances ?? []).reduce((a, b) => a + Number(f(b)), 0);
+  const total = sum((b) => b.commission_net_cents);
+  const accrued = sum((b) => b.accrued_cents);
+  const reversed = sum((b) => b.reversed_cents);
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -31,7 +47,7 @@ export default async function CommissionsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="text-2xl font-bold text-brand-blue">{formatCents(total)}</div>
           <div className="mt-1 text-xs text-slate-500">Net balance</div>
@@ -95,6 +111,32 @@ export default async function CommissionsPage() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-500">
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link
+                href={`/portal/commissions?page=${page - 1}`}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
+              >
+                ← Previous
+              </Link>
+            )}
+            {page < totalPages && (
+              <Link
+                href={`/portal/commissions?page=${page + 1}`}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
+              >
+                Next →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
