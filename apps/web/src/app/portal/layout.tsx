@@ -45,7 +45,12 @@ export default async function PortalLayout({ children }: { children: React.React
             <span className="label-mono rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
               {user.role}
             </span>
-            <span className="hidden text-sm text-slate-600 sm:inline">{user.displayName}</span>
+            <Link
+              href="/portal/account"
+              className="hidden text-sm text-slate-600 hover:text-brand-blue sm:inline"
+            >
+              {user.displayName}
+            </Link>
             <form action={signOut}>
               <button className="hidden text-sm text-slate-400 hover:text-slate-700 md:inline">
                 Sign out
@@ -74,9 +79,12 @@ export default async function PortalLayout({ children }: { children: React.React
                     {item.label}
                   </Link>
                 ))}
-                <div className="mt-1 border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
-                  {user.displayName}
-                </div>
+                <Link
+                  href="/portal/account"
+                  className="mt-1 block border-t border-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Account
+                </Link>
                 <form action={signOut}>
                   <button className="block w-full px-4 py-2.5 text-left text-sm font-medium text-slate-500 hover:bg-slate-50">
                     Sign out

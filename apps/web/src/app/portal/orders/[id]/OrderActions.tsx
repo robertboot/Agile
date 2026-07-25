@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from "react";
 import {
+  cancelOrder,
   invoiceOrder,
   placeOrder,
   recordCollection,
   refreshOrderIvr,
+  resetOrderForResubmit,
   shipOrder,
   submitOrderIvr,
   type ActionResult,
@@ -14,10 +16,12 @@ import {
 export function OrderActions({
   orderId,
   status,
+  ivrStatus,
   role,
 }: {
   orderId: string;
   status: string;
+  ivrStatus: string | null;
   role: "rep" | "admin";
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -48,9 +52,20 @@ export function OrderActions({
           </button>
         )}
         {status === "ivr_submitted" && (
-          <button className={secondary} disabled={pending} onClick={() => run(() => refreshOrderIvr(orderId))}>
-            Check IVR status
-          </button>
+          <>
+            <button className={secondary} disabled={pending} onClick={() => run(() => refreshOrderIvr(orderId))}>
+              Check IVR status
+            </button>
+            {(ivrStatus === "NEEDS_INFO" || ivrStatus === "DENIED") && (
+              <button
+                className={secondary}
+                disabled={pending}
+                onClick={() => run(() => resetOrderForResubmit(orderId))}
+              >
+                Fix &amp; re-submit
+              </button>
+            )}
+          </>
         )}
         {status === "good_to_order" && (
           <button className={button} disabled={pending} onClick={() => run(() => placeOrder(orderId))}>
@@ -101,6 +116,10 @@ export function OrderActions({
                   setError("Enter a positive dollar amount");
                   return;
                 }
+                const label = refund ? "refund/recovery" : "collection";
+                if (!window.confirm(`Record a ${label} of $${(cents / 100).toFixed(2)} on this order?`)) {
+                  return;
+                }
                 run(() => recordCollection(orderId, refund ? -cents : cents));
                 setAmount("");
               }}
@@ -109,6 +128,21 @@ export function OrderActions({
             </button>
           </div>
         )}
+        {/* Cancel: rep pre-shipment; admin also on placed. */}
+        {["new", "ivr_submitted", "good_to_order"].includes(status) ||
+        (role === "admin" && status === "placed") ? (
+          <button
+            className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-red-600 disabled:opacity-60"
+            disabled={pending}
+            onClick={() => {
+              if (window.confirm("Cancel this order? This can't be undone.")) {
+                run(() => cancelOrder(orderId));
+              }
+            }}
+          >
+            Cancel order
+          </button>
+        ) : null}
         {pending && <span className="text-sm text-slate-400">Working…</span>}
       </div>
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}

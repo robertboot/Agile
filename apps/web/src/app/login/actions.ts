@@ -21,7 +21,7 @@ export async function signIn(_prev: LoginState | null, formData: FormData): Prom
 
   // Throttle brute-force attempts: 5 per 15 minutes per email+IP.
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-  if (!rateLimit(`login:${email.toLowerCase()}:${ip}`, 5, 15 * 60 * 1000)) {
+  if (!(await rateLimit(`login:${email.toLowerCase()}:${ip}`, 5, 15 * 60 * 1000))) {
     return { error: "Too many sign-in attempts — try again in a few minutes." };
   }
 

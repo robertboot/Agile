@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
 import { createOrder, quoteOrder, type QuoteItemInput } from "@/app/portal/actions";
+import { useServerQuote } from "@/lib/use-server-quote";
 
 interface ProviderOption {
   id: string;
@@ -46,32 +47,25 @@ export function OrderForm({
   const [items, setItems] = useState<ItemRow[]>([
     { productCode: firstProduct, sku: firstSku, qty: 1 },
   ]);
-  const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [quoting, startQuote] = useTransition();
   const [submitting, startSubmit] = useTransition();
 
-  // Re-quote (server-side — costs never reach the browser) whenever inputs change.
-  useEffect(() => {
-    const valid = items.filter((i) => i.productCode && i.sku && i.qty > 0);
-    if (valid.length === 0) {
-      setQuote(null);
-      return;
-    }
-    const payload: QuoteItemInput[] = valid.map(({ productCode, sku, qty }) => ({
-      productCode,
-      sku,
-      qty,
-    }));
-    startQuote(async () => {
-      try {
-        setQuote(await quoteOrder(payload, tier));
-        setError(null);
-      } catch {
-        setQuote(null);
-      }
-    });
-  }, [items, tier]);
+  // Re-quote (server-side — costs never reach the browser) whenever inputs
+  // change; debounced with a latest-wins guard so a slow earlier response can't
+  // overwrite a newer quote (audit).
+  const { data: quote, pending: quoting } = useServerQuote<Quote | null>(
+    async () => {
+      const valid = items.filter((i) => i.productCode && i.sku && i.qty > 0);
+      if (valid.length === 0) return null;
+      const payload: QuoteItemInput[] = valid.map(({ productCode, sku, qty }) => ({
+        productCode,
+        sku,
+        qty,
+      }));
+      return quoteOrder(payload, tier);
+    },
+    [JSON.stringify(items), tier],
+  );
 
   function updateItem(index: number, patch: Partial<ItemRow>) {
     setItems((prev) =>

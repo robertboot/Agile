@@ -28,7 +28,7 @@ export async function submitContact(
   if (message.length > 5000) return { error: "Message is too long." };
 
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-  if (!rateLimit(`contact:${ip}`, 5, 60 * 60 * 1000)) {
+  if (!(await rateLimit(`contact:${ip}`, 5, 60 * 60 * 1000))) {
     return { error: "Too many messages — please try again later." };
   }
 

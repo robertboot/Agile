@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
 import { quoteOrder } from "@/app/portal/actions";
+import { useServerQuote } from "@/lib/use-server-quote";
 import { ProjectionBuilder } from "./ProjectionBuilder";
 
 interface ProductOption {
@@ -47,33 +48,25 @@ export function EarningsCalculator({
     setTier(40);
     setWeeks(1);
   }
-  const [perApp, setPerApp] = useState<{
-    commissionCents: number;
-    billedCents: number;
-    providerKeepsCents: number;
-  } | null>(null);
-  const [quoting, startQuote] = useTransition();
 
   const productSizes = sizes.filter((s) => s.product_code === productCode);
   const size = sizes.find((s) => s.sku === sku);
 
-  useEffect(() => {
-    if (!productCode || !sku) return;
-    startQuote(async () => {
-      try {
-        const quote = await quoteOrder([{ productCode, sku, qty: 1 }], tier);
-        if (quote) {
-          setPerApp({
+  // Debounced, latest-wins server quote (audit: no debounce/stale guard before).
+  const { data: perApp, pending: quoting } = useServerQuote(
+    async () => {
+      if (!productCode || !sku) return null;
+      const quote = await quoteOrder([{ productCode, sku, qty: 1 }], tier);
+      return quote
+        ? {
             commissionCents: quote.repCommissionCents,
             billedCents: quote.billedCents,
             providerKeepsCents: quote.providerKeepsCents,
-          });
-        }
-      } catch {
-        setPerApp(null);
-      }
-    });
-  }, [productCode, sku, tier]);
+          }
+        : null;
+    },
+    [productCode, sku, tier],
+  );
 
   function pickProduct(code: string) {
     setProductCode(code);

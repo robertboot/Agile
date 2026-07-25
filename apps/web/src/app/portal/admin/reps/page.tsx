@@ -154,7 +154,7 @@ export default async function RepsCenterPage() {
                   {formatCents(r.owedCents)}
                 </td>
                 <td className="px-4 py-3">
-                  <PayoutForm repId={r.id} owedCents={r.owedCents} />
+                  <PayoutForm repId={r.id} repName={r.name} owedCents={r.owedCents} />
                 </td>
               </tr>
             ))}

@@ -133,7 +133,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </ol>
       )}
 
-      <OrderActions orderId={order.id} status={order.status} role={user.role} />
+      <OrderActions
+        orderId={order.id}
+        status={order.status}
+        ivrStatus={order.ivr_status ?? null}
+        role={user.role}
+      />
 
       <section className="rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">

@@ -7,6 +7,7 @@
 import { isValidNpi } from "@agile/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifySlack } from "@/lib/integrations/slack";
+import { rateLimit } from "@/lib/rate-limit";
 
 export interface RegistrationResult {
   ok: boolean;
@@ -19,6 +20,9 @@ export async function submitProviderRegistration(
   formData: FormData,
 ): Promise<RegistrationResult> {
   if (!/^[0-9a-f-]{36}$/.test(token)) return { ok: false, error: "Invalid registration link." };
+  if (!(await rateLimit(`provider-reg:${token}`, 10, 15 * 60 * 1000))) {
+    return { ok: false, error: "Too many attempts — try again shortly." };
+  }
 
   const db = createAdminClient();
   const { data: invite } = await db
@@ -63,6 +67,20 @@ export async function submitProviderRegistration(
     return { ok: false, error: "Please provide the BAA signatory name and title." };
   }
 
+  // Claim the invite atomically first (audit: double-submit race). The
+  // conditional update serializes at the row; a second concurrent submit
+  // finds no pending row and stops — so only one provider is ever created.
+  const { data: claimed } = await db
+    .from("provider_invites")
+    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .eq("id", token)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (!claimed) {
+    return { ok: false, error: "This registration has already been submitted." };
+  }
+
   const { data: provider, error } = await db
     .from("providers")
     .insert({
@@ -96,15 +114,15 @@ export async function submitProviderRegistration(
     })
     .select("id, practice_name")
     .single();
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // Insert failed after claiming — release the invite so it can be retried.
+    await db.from("provider_invites").update({ status: "pending", completed_at: null }).eq("id", token);
+    return { ok: false, error: error.message };
+  }
 
   await db
     .from("provider_invites")
-    .update({
-      status: "completed",
-      completed_provider_id: provider.id,
-      completed_at: new Date().toISOString(),
-    })
+    .update({ completed_provider_id: provider.id })
     .eq("id", token);
 
   const repName =

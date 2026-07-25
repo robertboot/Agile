@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
-import { ApproveButton, ReassignSelect } from "./AdminControls";
+import { ApproveButton, ReassignSelect, RetryRegistrationButton } from "./AdminControls";
 import { TeamMessageForm } from "./TeamMessageForm";
 
 export default async function AdminPage() {
@@ -41,6 +41,16 @@ export default async function AdminPage() {
       .limit(50),
   ]);
 
+  // Providers approved but stuck before MedNecessity onboarding (registration
+  // failed) — surface a retry so they don't silently vanish from the queue.
+  const { data: stuck } = await supabase
+    .from("providers")
+    .select("id, practice_name, provider_first, provider_last")
+    .eq("approved", true)
+    .eq("mednecessity_status", "sent")
+    .is("deleted_at", null)
+    .order("created_at");
+
   const detailByRep = new Map((repDetails ?? []).map((d) => [d.profile_id, d]));
   const repOptions = (reps ?? []).map((r) => ({ id: r.id, display_name: r.display_name }));
 
@@ -56,6 +66,30 @@ export default async function AdminPage() {
           <TeamMessageForm />
         </div>
       </section>
+
+      {(stuck ?? []).length > 0 && (
+        <section>
+          <h2 className="label-mono mb-3 text-amber-600">
+            MedNecessity registration needs retry ({(stuck ?? []).length})
+          </h2>
+          <div className="space-y-2">
+            {(stuck ?? []).map((s) => (
+              <div
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3"
+              >
+                <span className="text-sm font-medium text-navy-900">
+                  {s.practice_name}{" "}
+                  <span className="text-slate-400">
+                    · {s.provider_first} {s.provider_last}
+                  </span>
+                </span>
+                <RetryRegistrationButton providerId={s.id} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {(messages ?? []).length > 0 && (
         <section>

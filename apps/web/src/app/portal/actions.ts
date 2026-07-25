@@ -147,25 +147,13 @@ export async function createProviderInvite(
   return { ok: true, url: `/register/${data.id}` };
 }
 
-/** Admin approves a provider → registers with MedNecessity, stores IDs (spec §4.3–4.5). */
-export async function approveProvider(providerId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
-  const db = createAdminClient();
-
+/** Registers an approved provider with MedNecessity and stores the returned IDs. */
+async function registerWithMedNecessity(
+  db: ReturnType<typeof createAdminClient>,
+  providerId: string,
+): Promise<ActionResult> {
   const { data: p } = await db.from("providers").select("*").eq("id", providerId).single();
   if (!p) return { ok: false, error: "Provider not found" };
-  if (p.approved && p.mednecessity_status === "onboarded") return { ok: true };
-
-  await db
-    .from("providers")
-    .update({
-      approved: true,
-      approved_by: admin.id,
-      approved_at: new Date().toISOString(),
-      mednecessity_status: "sent",
-    })
-    .eq("id", providerId);
-
   try {
     const ids = await registerProvider(
       {
@@ -203,11 +191,57 @@ export async function approveProvider(providerId: string): Promise<ActionResult>
         mednecessity_provider_id: ids.providerId,
       })
       .eq("id", providerId);
+    return { ok: true };
   } catch (err) {
-    return { ok: false, error: `Approved, but MedNecessity registration failed: ${String(err)}` };
+    return { ok: false, error: `MedNecessity registration failed: ${String(err)}` };
+  }
+}
+
+/** Admin approves a provider → registers with MedNecessity, stores IDs (spec §4.3–4.5). */
+export async function approveProvider(providerId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const db = createAdminClient();
+
+  const { data: p } = await db.from("providers").select("approved, mednecessity_status, practice_name").eq("id", providerId).single();
+  if (!p) return { ok: false, error: "Provider not found" };
+  if (p.approved && p.mednecessity_status === "onboarded") return { ok: true };
+
+  await db
+    .from("providers")
+    .update({
+      approved: true,
+      approved_by: admin.id,
+      approved_at: new Date().toISOString(),
+      mednecessity_status: "sent",
+    })
+    .eq("id", providerId);
+
+  const result = await registerWithMedNecessity(db, providerId);
+  if (!result.ok) {
+    return { ok: false, error: `Approved, but ${result.error} — retry from the Admin page.` };
   }
 
   await notifySlack({ kind: "provider_approved", practice: p.practice_name });
+  revalidatePath("/portal/providers");
+  revalidatePath("/portal/admin");
+  return { ok: true };
+}
+
+/** Retry MedNecessity registration for a provider stuck in 'sent' (admin). */
+export async function retryProviderRegistration(providerId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { data: p } = await db
+    .from("providers")
+    .select("approved, mednecessity_status")
+    .eq("id", providerId)
+    .single();
+  if (!p) return { ok: false, error: "Provider not found" };
+  if (!p.approved || p.mednecessity_status === "onboarded") {
+    return { ok: false, error: "Provider is not awaiting MedNecessity registration" };
+  }
+  const result = await registerWithMedNecessity(db, providerId);
+  if (!result.ok) return result;
   revalidatePath("/portal/providers");
   revalidatePath("/portal/admin");
   return { ok: true };
@@ -364,6 +398,47 @@ export async function refreshOrderIvr(orderId: string): Promise<ActionResult> {
     await notifySlack({ kind: "good_to_order", orderId, practice });
   }
   revalidatePath(`/portal/orders/${orderId}`);
+  return { ok: true };
+}
+
+/**
+ * Reset a stuck order back to New so the rep can fix and re-submit the IVR
+ * (e.g. after MedNecessity returns NEEDS_INFO or DENIED). Legal transition
+ * ivr_submitted → new; clears the prior IVR result.
+ */
+export async function resetOrderForResubmit(orderId: string): Promise<ActionResult> {
+  await requirePortalUser();
+  const supabase = await createClient();
+  const { data: order } = await supabase.from("orders").select("id, status").eq("id", orderId).single();
+  if (!order) return { ok: false, error: "Order not found" };
+  if (order.status !== "ivr_submitted") {
+    return { ok: false, error: "Only an order awaiting IVR can be reset" };
+  }
+  const { error } = await supabase
+    .from("orders")
+    .update({
+      status: "new",
+      ivr_submission_id: null,
+      ivr_status: null,
+      ivr_eligibility: null,
+      ivr_results_pdf_url: null,
+    })
+    .eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/orders/${orderId}`);
+  return { ok: true };
+}
+
+/** Cancel an order before it ships (rep: pre-shipment; admin: also placed). */
+export async function cancelOrder(orderId: string): Promise<ActionResult> {
+  await requirePortalUser();
+  const supabase = await createClient();
+  const { data: order } = await supabase.from("orders").select("id, status").eq("id", orderId).single();
+  if (!order) return { ok: false, error: "Order not found" };
+  const { error } = await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath("/portal/orders");
   return { ok: true };
 }
 

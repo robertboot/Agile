@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
 import { quoteOrder } from "@/app/portal/actions";
+import { useServerQuote } from "@/lib/use-server-quote";
 
 interface ProductOption {
   code: string;
@@ -72,9 +73,6 @@ export function ProjectionBuilder({
     setTier(40);
     setBlocks([{ count: 1, patients: [defaultPatient()] }]);
   }
-  const [econByCombo, setEconByCombo] = useState<Map<string, ComboEcon>>(new Map());
-  const [quoting, startQuote] = useTransition();
-
   // One quote call for all unique product/size combos in the projection.
   const combos = useMemo(() => {
     const seen = new Map<string, { productCode: string; sku: string }>();
@@ -85,33 +83,27 @@ export function ProjectionBuilder({
     return [...seen.values()];
   }, [blocks]);
 
-  useEffect(() => {
-    if (combos.length === 0) return;
-    startQuote(async () => {
-      try {
-        const quote = await quoteOrder(
-          combos.map((c) => ({ ...c, qty: 1 })),
-          tier,
-        );
-        if (!quote) return;
-        setEconByCombo(
-          new Map(
-            quote.lines.map((line) => [
-              comboKey(line),
-              {
-                commissionCents: line.repCommissionCents,
-                billedCents: line.billedCents,
-                providerKeepsCents: line.providerKeepsCents,
-                cm2: line.cm2,
-              },
-            ]),
-          ),
-        );
-      } catch {
-        // keep last good quote
-      }
-    });
-  }, [combos, tier]);
+  // Debounced, latest-wins quote (audit).
+  const { data: econByCombo, pending: quoting } = useServerQuote<Map<string, ComboEcon>>(
+    async () => {
+      if (combos.length === 0) return new Map();
+      const quote = await quoteOrder(combos.map((c) => ({ ...c, qty: 1 })), tier);
+      if (!quote) return new Map();
+      return new Map(
+        quote.lines.map((line) => [
+          comboKey(line),
+          {
+            commissionCents: line.repCommissionCents,
+            billedCents: line.billedCents,
+            providerKeepsCents: line.providerKeepsCents,
+            cm2: line.cm2,
+          },
+        ]),
+      );
+    },
+    [JSON.stringify(combos), tier],
+  );
+  const econMap = econByCombo ?? new Map<string, ComboEcon>();
 
   function updateBlock(bi: number, patch: Partial<ProviderBlock>) {
     setBlocks((prev) => prev.map((b, i) => (i === bi ? { ...b, ...patch } : b)));
@@ -137,7 +129,7 @@ export function ProjectionBuilder({
   }
 
   const patientTotal = (p: PatientRow) => {
-    const econ = econByCombo.get(comboKey(p));
+    const econ = econMap.get(comboKey(p));
     if (!econ) return null;
     return {
       commissionCents: econ.commissionCents * p.weeks,
@@ -368,7 +360,7 @@ export function ProjectionBuilder({
         rate. Commission accrues on gross collected dollars.{quoting && " Updating…"}
       </p>
 
-      <RunRate blocks={blocks} econByCombo={econByCombo} />
+      <RunRate blocks={blocks} econByCombo={econMap} />
     </section>
   );
 }

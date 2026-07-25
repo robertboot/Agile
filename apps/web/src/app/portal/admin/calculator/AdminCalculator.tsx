@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { formatCents, DISCOUNT_TIERS, type DiscountTier, type OrderEconomics } from "@agile/shared";
+import { useState } from "react";
+import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
 import { adminQuote } from "@/app/portal/admin/actions";
+import { useServerQuote } from "@/lib/use-server-quote";
 
 interface ProductOption {
   code: string;
@@ -29,21 +30,13 @@ export function AdminCalculator({
   const [sku, setSku] = useState(sizes.find((s) => s.product_code === firstProduct)?.sku ?? "");
   const [tier, setTier] = useState<DiscountTier>(40);
   const [weeks, setWeeks] = useState(10);
-  const [econ, setEcon] = useState<OrderEconomics | null>(null);
-  const [quoting, startQuote] = useTransition();
 
   const productSizes = sizes.filter((s) => s.product_code === productCode);
 
-  useEffect(() => {
-    if (!productCode || !sku) return;
-    startQuote(async () => {
-      try {
-        setEcon(await adminQuote([{ productCode, sku, qty: 1 }], tier));
-      } catch {
-        setEcon(null);
-      }
-    });
-  }, [productCode, sku, tier]);
+  const { data: econ, pending: quoting } = useServerQuote(
+    () => (productCode && sku ? adminQuote([{ productCode, sku, qty: 1 }], tier) : Promise.resolve(null)),
+    [productCode, sku, tier],
+  );
 
   const line = econ?.lines[0] ?? null;
   const x = (cents: number) => formatCents(cents * weeks);

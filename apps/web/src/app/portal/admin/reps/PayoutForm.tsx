@@ -3,7 +3,15 @@
 import { useState, useTransition } from "react";
 import { recordGustoPayout } from "@/app/portal/actions";
 
-export function PayoutForm({ repId, owedCents }: { repId: string; owedCents: number }) {
+export function PayoutForm({
+  repId,
+  repName,
+  owedCents,
+}: {
+  repId: string;
+  repName: string;
+  owedCents: number;
+}) {
   const [amount, setAmount] = useState(owedCents > 0 ? (owedCents / 100).toFixed(2) : "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -28,6 +36,9 @@ export function PayoutForm({ repId, owedCents }: { repId: string; owedCents: num
             const cents = Math.round(Number(amount) * 100);
             if (!Number.isFinite(cents) || cents <= 0) {
               setError("Enter a positive amount");
+              return;
+            }
+            if (!window.confirm(`Record a Gusto payout of $${(cents / 100).toFixed(2)} to ${repName}?`)) {
               return;
             }
             setError(null);
