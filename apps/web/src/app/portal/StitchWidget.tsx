@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { askStitch, getStitchAnswers } from "./stitch-actions";
+import { askStitch, getStitchAnswers, getUnseenAnswerCount } from "./stitch-actions";
 import { TUTORIALS } from "@/lib/stitch/knowledge";
 
 interface Msg {
@@ -22,24 +22,39 @@ export function StitchWidget() {
   const [input, setInput] = useState("");
   const [pending, start] = useTransition();
   const [loadedAnswers, setLoadedAnswers] = useState(false);
+  const [unseen, setUnseen] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // On first open, surface any questions admins have since answered.
+  // Poll for admin answers the rep hasn't seen — drives the launcher badge.
+  useEffect(() => {
+    let active = true;
+    const check = () => getUnseenAnswerCount().then((n) => active && setUnseen(n)).catch(() => {});
+    check();
+    const id = setInterval(check, 45_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // On first open, surface any admin answers and clear the badge.
   useEffect(() => {
     if (!open || loadedAnswers) return;
     setLoadedAnswers(true);
     getStitchAnswers().then((answers) => {
-      if (answers.length === 0) return;
+      setUnseen(0);
+      const fresh = answers.filter((a) => a.fresh);
+      if (fresh.length === 0) return;
       setMsgs((prev) => [
         ...prev,
         {
           from: "stitch",
           text:
-            answers.length === 1
+            fresh.length === 1
               ? "The team answered your question:"
-              : `The team answered ${answers.length} of your questions:`,
+              : `The team answered ${fresh.length} of your questions:`,
         },
-        ...answers.flatMap((a): Msg[] => [
+        ...fresh.flatMap((a): Msg[] => [
           { from: "rep", text: a.question },
           { from: "stitch", text: a.answer },
         ]),
@@ -80,10 +95,15 @@ export function StitchWidget() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Open Stitch helper"
+        aria-label={unseen > 0 ? `Open Stitch helper — ${unseen} new answer${unseen > 1 ? "s" : ""}` : "Open Stitch helper"}
         className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue text-2xl text-white shadow-lg transition hover:scale-105"
       >
         {open ? "✕" : "🧵"}
+        {!open && unseen > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-xs font-bold text-white">
+            {unseen > 9 ? "9+" : unseen}
+          </span>
+        )}
       </button>
 
       {open && (

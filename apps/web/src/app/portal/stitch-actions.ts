@@ -60,22 +60,53 @@ export async function askStitch(question: string): Promise<StitchReply> {
   };
 }
 
-/** Rep pulls their recently-answered questions so Stitch can surface replies. */
+/** Badge count: answers the rep hasn't seen yet. Cheap, polled by the launcher. */
+export async function getUnseenAnswerCount(): Promise<number> {
+  const user = await requirePortalUser();
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("rep_questions")
+    .select("id", { count: "exact", head: true })
+    .eq("rep_id", user.id)
+    .eq("status", "answered")
+    .eq("seen_by_rep", false);
+  return count ?? 0;
+}
+
+/**
+ * Rep pulls their recently-answered questions so Stitch can surface replies,
+ * and marks them seen (clears the badge). Unseen ones are flagged as `fresh`.
+ */
 export async function getStitchAnswers(): Promise<
-  { question: string; answer: string; answeredAt: string }[]
+  { question: string; answer: string; answeredAt: string; fresh: boolean }[]
 > {
   const user = await requirePortalUser();
   const supabase = await createClient();
   const { data } = await supabase
     .from("rep_questions")
-    .select("question, answer, answered_at")
+    .select("question, answer, answered_at, seen_by_rep")
     .eq("rep_id", user.id)
     .eq("status", "answered")
     .order("answered_at", { ascending: false })
     .limit(10);
+
+  // Mark unseen answers as seen (service role — reps have no UPDATE policy).
+  const admin = createAdminClient();
+  await admin
+    .from("rep_questions")
+    .update({ seen_by_rep: true })
+    .eq("rep_id", user.id)
+    .eq("status", "answered")
+    .eq("seen_by_rep", false);
+
   return (data ?? [])
     .filter((r) => r.answer)
-    .map((r) => ({ question: r.question, answer: r.answer as string, answeredAt: r.answered_at as string }));
+    .map((r) => ({
+      question: r.question,
+      answer: r.answer as string,
+      answeredAt: r.answered_at as string,
+      fresh: r.seen_by_rep === false,
+    }));
 }
 
 /** Admin answers a pending rep question; the reply shows in the rep's widget. */
