@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import { ApproveButton, ReassignSelect, RetryRegistrationButton } from "./AdminControls";
 import { TeamMessageForm } from "./TeamMessageForm";
+import { RepQuestionAnswer } from "./RepQuestionAnswer";
 
 export default async function AdminPage() {
   await requireAdmin();
@@ -15,6 +16,7 @@ export default async function AdminPage() {
     { data: reps },
     { data: repDetails },
     { data: messages },
+    { data: repQuestions },
   ] = await Promise.all([
     supabase
       .from("providers")
@@ -38,6 +40,12 @@ export default async function AdminPage() {
       .from("contact_messages")
       .select("id, name, email, message, created_at")
       .eq("handled", false)
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("rep_questions")
+      .select("id, question, created_at, profiles:rep_id(display_name)")
+      .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
@@ -75,6 +83,28 @@ export default async function AdminPage() {
           <TeamMessageForm />
         </div>
       </section>
+
+      {(repQuestions ?? []).length > 0 && (
+        <section>
+          <h2 className="label-mono mb-3 flex items-center gap-2 text-amber-600">
+            <span>🧵</span> Stitch — rep questions ({(repQuestions ?? []).length})
+          </h2>
+          <div className="space-y-3">
+            {(repQuestions ?? []).map((qn) => (
+              <div key={qn.id} className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-sm font-medium text-navy-900">
+                    {(qn.profiles as unknown as { display_name: string })?.display_name ?? "A rep"}
+                  </span>
+                  <span className="text-xs text-slate-400">{formatDate(qn.created_at)}</span>
+                </div>
+                <p className="mt-1 text-sm text-slate-700">“{qn.question}”</p>
+                <RepQuestionAnswer questionId={qn.id} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {(stuck ?? []).length > 0 && (
         <section>

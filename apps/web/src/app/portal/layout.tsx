@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth";
 import { signOut } from "@/app/login/actions";
+import { StitchWidget } from "./StitchWidget";
 
 const NAV = [
   { href: "/portal", label: "Dashboard" },
@@ -96,6 +97,9 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+
+      {/* Stitch helper — available to reps and admins */}
+      <StitchWidget />
     </div>
   );
 }
