@@ -66,21 +66,14 @@ export async function POST(req: Request) {
     const db = createAdminClient();
     const { data: q } = await db
       .from("rep_questions")
-      .select("id, status")
+      .select("id")
       .eq("slack_ts", e.thread_ts)
       .maybeSingle();
 
-    if (q && q.status === "pending") {
-      await db
-        .from("rep_questions")
-        .update({
-          answer: e.text.trim(),
-          status: "answered",
-          answered_at: new Date().toISOString(),
-          seen_by_rep: false,
-        })
-        .eq("id", q.id);
-      // Confirm back in-thread so the admin sees it registered.
+    if (q) {
+      // Append every human reply as a message — admins can send several.
+      await db.from("stitch_messages").insert({ question_id: q.id, body: e.text.trim() });
+      await db.from("rep_questions").update({ status: "answered" }).eq("id", q.id);
       await postToThread("✅ Sent to the rep in Stitch.", e.thread_ts);
     }
   }

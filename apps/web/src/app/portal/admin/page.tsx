@@ -44,10 +44,9 @@ export default async function AdminPage() {
       .limit(50),
     supabase
       .from("rep_questions")
-      .select("id, question, created_at, profiles:rep_id(display_name)")
-      .eq("status", "pending")
+      .select("id, question, status, created_at, profiles:rep_id(display_name), stitch_messages(body, created_at)")
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(25),
   ]);
 
   // Providers approved but stuck before MedNecessity onboarding (registration
@@ -86,22 +85,56 @@ export default async function AdminPage() {
 
       {(repQuestions ?? []).length > 0 && (
         <section>
-          <h2 className="label-mono mb-3 flex items-center gap-2 text-amber-600">
-            <span>🧵</span> Stitch — rep questions ({(repQuestions ?? []).length})
-          </h2>
+          {(() => {
+            const pending = (repQuestions ?? []).filter((q) => q.status === "pending").length;
+            return (
+              <h2 className="label-mono mb-3 flex items-center gap-2 text-amber-600">
+                <span>🧵</span> Stitch — rep questions{pending > 0 ? ` (${pending} new)` : ""}
+              </h2>
+            );
+          })()}
+          <p className="mb-3 text-xs text-slate-400">
+            Reply here or in the agile-admins Slack thread — send as many messages as you like; the
+            rep sees them live in Stitch.
+          </p>
           <div className="space-y-3">
-            {(repQuestions ?? []).map((qn) => (
-              <div key={qn.id} className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-sm font-medium text-navy-900">
-                    {(qn.profiles as unknown as { display_name: string })?.display_name ?? "A rep"}
-                  </span>
-                  <span className="text-xs text-slate-400">{formatDate(qn.created_at)}</span>
+            {(repQuestions ?? []).map((qn) => {
+              const replies = ((qn.stitch_messages as unknown as { body: string; created_at: string }[]) ?? []).sort(
+                (a, b) => a.created_at.localeCompare(b.created_at),
+              );
+              const answered = qn.status === "answered";
+              return (
+                <div
+                  key={qn.id}
+                  className={`rounded-lg border p-4 ${
+                    answered ? "border-slate-200 bg-white" : "border-amber-200 bg-amber-50/60"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-sm font-medium text-navy-900">
+                      {(qn.profiles as unknown as { display_name: string })?.display_name ?? "A rep"}
+                      {!answered && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                          new
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-slate-400">{formatDate(qn.created_at)}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-700">“{qn.question}”</p>
+                  {replies.length > 0 && (
+                    <div className="mt-2 space-y-1 border-l-2 border-emerald-200 pl-3">
+                      {replies.map((m, i) => (
+                        <p key={i} className="text-sm text-emerald-800">
+                          {m.body}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <RepQuestionAnswer questionId={qn.id} />
                 </div>
-                <p className="mt-1 text-sm text-slate-700">“{qn.question}”</p>
-                <RepQuestionAnswer questionId={qn.id} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

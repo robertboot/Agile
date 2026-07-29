@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { askStitch, getStitchAnswers, getUnseenAnswerCount } from "./stitch-actions";
+import { askStitch, getStitchThreads, getStitchUpdates, getUnseenAnswerCount } from "./stitch-actions";
 import { TUTORIALS } from "@/lib/stitch/knowledge";
 
 interface Msg {
@@ -24,8 +24,9 @@ export function StitchWidget() {
   const [loadedAnswers, setLoadedAnswers] = useState(false);
   const [unseen, setUnseen] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastPollRef = useRef<string>(new Date().toISOString());
 
-  // Poll for admin answers the rep hasn't seen — drives the launcher badge.
+  // Poll for admin replies the rep hasn't seen — drives the launcher badge.
   useEffect(() => {
     let active = true;
     const check = () => getUnseenAnswerCount().then((n) => active && setUnseen(n)).catch(() => {});
@@ -37,30 +38,48 @@ export function StitchWidget() {
     };
   }, []);
 
-  // On first open, surface any admin answers and clear the badge.
+  // On first open, surface all prior admin replies and clear the badge.
   useEffect(() => {
     if (!open || loadedAnswers) return;
     setLoadedAnswers(true);
-    getStitchAnswers().then((answers) => {
+    getStitchThreads().then((threads) => {
       setUnseen(0);
-      const fresh = answers.filter((a) => a.fresh);
-      if (fresh.length === 0) return;
-      setMsgs((prev) => [
-        ...prev,
-        {
-          from: "stitch",
-          text:
-            fresh.length === 1
-              ? "The team answered your question:"
-              : `The team answered ${fresh.length} of your questions:`,
-        },
-        ...fresh.flatMap((a): Msg[] => [
-          { from: "rep", text: a.question },
-          { from: "stitch", text: a.answer },
-        ]),
-      ]);
+      lastPollRef.current = new Date().toISOString();
+      if (threads.length === 0) return;
+      const replayed: Msg[] = [
+        { from: "stitch", text: "Here's what the team has answered:" },
+      ];
+      for (const t of threads) {
+        replayed.push({ from: "rep", text: t.question });
+        for (const m of t.messages) replayed.push({ from: "stitch", text: m.body });
+      }
+      setMsgs((prev) => [...prev, ...replayed]);
     });
   }, [open, loadedAnswers]);
+
+  // While open, live-poll for new admin replies and append them (no refresh).
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    const id = setInterval(async () => {
+      try {
+        const updates = await getStitchUpdates(lastPollRef.current);
+        if (!active || updates.length === 0) return;
+        lastPollRef.current = new Date().toISOString();
+        setUnseen(0);
+        setMsgs((prev) => [
+          ...prev,
+          ...updates.map((u): Msg => ({ from: "stitch", text: u.body })),
+        ]);
+      } catch {
+        /* ignore transient errors */
+      }
+    }, 8_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [open]);
 
   function push(m: Msg) {
     setMsgs((prev) => [...prev, m]);

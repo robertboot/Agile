@@ -73,76 +73,109 @@ export async function askStitch(question: string): Promise<StitchReply> {
   };
 }
 
-/** Badge count: answers the rep hasn't seen yet. Cheap, polled by the launcher. */
+export interface StitchAdminMessage {
+  id: string;
+  body: string;
+  createdAt: string;
+}
+
+/** Badge count: admin replies the rep hasn't seen yet. Polled by the launcher. */
 export async function getUnseenAnswerCount(): Promise<number> {
   const user = await requirePortalUser();
   const supabase = await createClient();
+  // RLS scopes stitch_messages to this rep's own questions.
   const { count } = await supabase
-    .from("rep_questions")
+    .from("stitch_messages")
     .select("id", { count: "exact", head: true })
-    .eq("rep_id", user.id)
-    .eq("status", "answered")
     .eq("seen_by_rep", false);
   return count ?? 0;
 }
 
 /**
- * Rep pulls their recently-answered questions so Stitch can surface replies,
- * and marks them seen (clears the badge). Unseen ones are flagged as `fresh`.
+ * Full thread load for the widget: every answered question with all its admin
+ * messages, newest question first. Marks everything seen (clears the badge).
  */
-export async function getStitchAnswers(): Promise<
-  { question: string; answer: string; answeredAt: string; fresh: boolean }[]
+export async function getStitchThreads(): Promise<
+  { questionId: string; question: string; messages: StitchAdminMessage[] }[]
 > {
   const user = await requirePortalUser();
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data: questions } = await supabase
     .from("rep_questions")
-    .select("question, answer, answered_at, seen_by_rep")
+    .select("id, question, created_at, stitch_messages(id, body, created_at)")
     .eq("rep_id", user.id)
-    .eq("status", "answered")
-    .order("answered_at", { ascending: false })
-    .limit(10);
+    .order("created_at", { ascending: false })
+    .limit(15);
 
-  // Mark unseen answers as seen (service role — reps have no UPDATE policy).
-  const admin = createAdminClient();
-  await admin
-    .from("rep_questions")
-    .update({ seen_by_rep: true })
-    .eq("rep_id", user.id)
-    .eq("status", "answered")
-    .eq("seen_by_rep", false);
+  const threads = (questions ?? [])
+    .map((q) => ({
+      questionId: q.id as string,
+      question: q.question as string,
+      messages: ((q.stitch_messages as unknown as { id: string; body: string; created_at: string }[]) ?? [])
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map((m) => ({ id: m.id, body: m.body, createdAt: m.created_at })),
+    }))
+    .filter((t) => t.messages.length > 0)
+    .reverse(); // oldest thread first for chat order
 
-  return (data ?? [])
-    .filter((r) => r.answer)
-    .map((r) => ({
-      question: r.question,
-      answer: r.answer as string,
-      answeredAt: r.answered_at as string,
-      fresh: r.seen_by_rep === false,
-    }));
+  await markSeen(user.id);
+  return threads;
 }
 
-/** Admin answers a pending rep question; the reply shows in the rep's widget. */
+/** Live poll: admin messages newer than `sinceIso`, so the open widget updates. */
+export async function getStitchUpdates(
+  sinceIso: string,
+): Promise<{ question: string; body: string; createdAt: string }[]> {
+  const user = await requirePortalUser();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("stitch_messages")
+    .select("body, created_at, rep_questions!inner(question, rep_id)")
+    .eq("rep_questions.rep_id", user.id)
+    .gt("created_at", sinceIso)
+    .order("created_at", { ascending: true })
+    .limit(20);
+
+  const rows = (data ?? []).map((m) => ({
+    question: (m.rep_questions as unknown as { question: string }).question,
+    body: m.body as string,
+    createdAt: m.created_at as string,
+  }));
+  if (rows.length > 0) await markSeen(user.id);
+  return rows;
+}
+
+async function markSeen(repId: string): Promise<void> {
+  // Service role — reps have no UPDATE policy on stitch_messages.
+  const admin = createAdminClient();
+  const { data: qs } = await admin.from("rep_questions").select("id").eq("rep_id", repId);
+  const ids = (qs ?? []).map((q) => q.id);
+  if (ids.length === 0) return;
+  await admin
+    .from("stitch_messages")
+    .update({ seen_by_rep: true })
+    .in("question_id", ids)
+    .eq("seen_by_rep", false);
+}
+
+/**
+ * Admin replies to a rep question — appends a message (repeatable), so an admin
+ * can send several. Shows in the rep's Stitch widget live. Works from the
+ * console; the Slack thread path appends the same way.
+ */
 export async function answerRepQuestion(
   questionId: string,
   _prev: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
-  const answer = (formData.get("answer") as string | null)?.trim();
-  if (!answer) return { ok: false, error: "Write an answer first." };
+  await requireAdmin();
+  const body = (formData.get("answer") as string | null)?.trim();
+  if (!body) return { ok: false, error: "Write a reply first." };
 
   const db = createAdminClient();
-  const { error } = await db
-    .from("rep_questions")
-    .update({
-      answer,
-      status: "answered",
-      answered_at: new Date().toISOString(),
-      answered_by: admin.id,
-    })
-    .eq("id", questionId);
+  const { error } = await db.from("stitch_messages").insert({ question_id: questionId, body });
   if (error) return { ok: false, error: error.message };
+  await db.from("rep_questions").update({ status: "answered" }).eq("id", questionId);
   revalidatePath("/portal/admin");
   return { ok: true };
 }

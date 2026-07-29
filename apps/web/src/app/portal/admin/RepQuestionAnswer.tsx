@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { answerRepQuestion } from "@/app/portal/stitch-actions";
 import type { ActionResult } from "@/app/portal/actions";
 
@@ -9,14 +9,19 @@ export function RepQuestionAnswer({ questionId }: { questionId: string }) {
     answerRepQuestion.bind(null, questionId),
     null,
   );
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (state?.ok) formRef.current?.reset();
+  }, [state]);
 
   return (
-    <form action={action} className="mt-2 flex items-end gap-2">
+    <form ref={formRef} action={action} className="mt-2 flex items-end gap-2">
       <textarea
         name="answer"
         rows={2}
         required
-        placeholder="Answer — this shows up for the rep in Stitch."
+        placeholder="Reply — the rep sees it live in Stitch. Send as many as you need."
         className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-blue"
       />
       <button
@@ -24,7 +29,7 @@ export function RepQuestionAnswer({ questionId }: { questionId: string }) {
         disabled={pending}
         className="btn-brand rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
       >
-        {pending ? "Sending…" : "Answer"}
+        {pending ? "Sending…" : "Send"}
       </button>
       {state && !state.ok && state.error && (
         <span className="text-xs text-red-600">{state.error}</span>
