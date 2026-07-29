@@ -15,7 +15,7 @@ import { requireAdmin, requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getIvrSubmission, registerProvider, submitIvr } from "@/lib/integrations/mednecessity";
-import { notifySlack, sendSlackMessage } from "@/lib/integrations/slack";
+import { notifySlack, sendSlackMessage, GENERAL_CHANNEL_ID } from "@/lib/integrations/slack";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 
 export type { QuoteItemInput };
@@ -553,7 +553,9 @@ export async function sendTeamMessage(
   );
 
   const body = text ? `📣 *${admin.displayName}:* ${text}` : `📣 *${admin.displayName}* shared a file:`;
-  return sendSlackMessage(body, files.length > 0 ? files : undefined);
+  // Team broadcasts go to #general (safe for all reps); escalations/onboarding
+  // stay in the private admin channel.
+  return sendSlackMessage(body, files.length > 0 ? files : undefined, GENERAL_CHANNEL_ID);
 }
 
 /**

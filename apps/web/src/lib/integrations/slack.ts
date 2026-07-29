@@ -13,7 +13,10 @@ import "server-only";
 
 const WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 const BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
+// Default (private admin) channel: escalations, onboarding, notifications.
 const CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
+// Team-wide channel (#general): only the "Message the team" broadcast posts here.
+export const GENERAL_CHANNEL_ID = process.env.SLACK_GENERAL_CHANNEL_ID;
 
 export interface SlackUpload {
   filename: string;
@@ -56,20 +59,22 @@ function render(e: SlackEvent): string {
 export async function sendSlackMessage(
   text: string,
   files?: SlackUpload[],
+  channelId?: string,
 ): Promise<{ ok: boolean; error?: string; ts?: string; channel?: string }> {
+  const channel = channelId ?? CHANNEL_ID;
   if (files && files.length > 0) {
-    if (!BOT_TOKEN || !CHANNEL_ID) {
+    if (!BOT_TOKEN || !channel) {
       return {
         ok: false,
         error:
-          "Attachments need a Slack bot token — set SLACK_BOT_TOKEN and SLACK_CHANNEL_ID. Text-only messages still send.",
+          "Attachments need a Slack bot token — set SLACK_BOT_TOKEN and the channel id. Text-only messages still send.",
       };
     }
-    return postWithFiles(text, files);
+    return postWithFiles(text, files, channel);
   }
 
   // Text-only: prefer the bot API when available, else the webhook.
-  if (BOT_TOKEN && CHANNEL_ID) return chatPostMessage(text);
+  if (BOT_TOKEN && channel) return chatPostMessage(text, channel);
   if (WEBHOOK_URL) return postWebhook(WEBHOOK_URL, text);
   return {
     ok: false,
@@ -91,7 +96,10 @@ async function postWebhook(url: string, text: string): Promise<{ ok: boolean; er
   }
 }
 
-async function chatPostMessage(text: string): Promise<{ ok: boolean; error?: string; ts?: string; channel?: string }> {
+async function chatPostMessage(
+  text: string,
+  channel: string,
+): Promise<{ ok: boolean; error?: string; ts?: string; channel?: string }> {
   try {
     const res = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
@@ -99,11 +107,11 @@ async function chatPostMessage(text: string): Promise<{ ok: boolean; error?: str
         Authorization: `Bearer ${BOT_TOKEN}`,
         "Content-Type": "application/json; charset=utf-8",
       },
-      body: JSON.stringify({ channel: CHANNEL_ID, text }),
+      body: JSON.stringify({ channel, text }),
     });
     const json = (await res.json()) as { ok: boolean; error?: string; ts?: string; channel?: string };
     return json.ok
-      ? { ok: true, ts: json.ts, channel: json.channel ?? CHANNEL_ID }
+      ? { ok: true, ts: json.ts, channel: json.channel ?? channel }
       : { ok: false, error: `Slack: ${json.error ?? "unknown error"}` };
   } catch (err) {
     return { ok: false, error: `Slack request failed: ${String(err)}` };
@@ -141,6 +149,7 @@ export async function postToThread(
 async function postWithFiles(
   text: string,
   files: SlackUpload[],
+  channel: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const uploaded: { id: string; title: string }[] = [];
@@ -172,7 +181,7 @@ async function postWithFiles(
         Authorization: `Bearer ${BOT_TOKEN}`,
         "Content-Type": "application/json; charset=utf-8",
       },
-      body: JSON.stringify({ files: uploaded, channel_id: CHANNEL_ID, initial_comment: text }),
+      body: JSON.stringify({ files: uploaded, channel_id: channel, initial_comment: text }),
     });
     const completeJson = (await complete.json()) as { ok: boolean; error?: string };
     return completeJson.ok
