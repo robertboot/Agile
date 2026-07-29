@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
@@ -61,7 +62,15 @@ export default async function AdminPage() {
       </p>
 
       <section>
-        <h2 className="label-mono mb-3 text-slate-500">Message the team</h2>
+        <h2 className="label-mono mb-3 flex items-center gap-2 text-slate-500">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#E01E5A" d="M5.04 15.12a2.52 2.52 0 1 1-2.52-2.52h2.52v2.52Zm1.26 0a2.52 2.52 0 0 1 5.04 0v6.3a2.52 2.52 0 0 1-5.04 0v-6.3Z" />
+            <path fill="#36C5F0" d="M8.82 5.04A2.52 2.52 0 1 1 11.34 2.52v2.52H8.82Zm0 1.26a2.52 2.52 0 0 1 0 5.04h-6.3a2.52 2.52 0 0 1 0-5.04h6.3Z" />
+            <path fill="#2EB67D" d="M18.96 8.82a2.52 2.52 0 1 1 2.52 2.52h-2.52V8.82Zm-1.26 0a2.52 2.52 0 0 1-5.04 0v-6.3a2.52 2.52 0 0 1 5.04 0v6.3Z" />
+            <path fill="#ECB22E" d="M15.18 18.96a2.52 2.52 0 1 1-2.52 2.52v-2.52h2.52Zm0-1.26a2.52 2.52 0 0 1 0-5.04h6.3a2.52 2.52 0 0 1 0 5.04h-6.3Z" />
+          </svg>
+          Message the team
+        </h2>
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <TeamMessageForm />
         </div>
@@ -225,10 +234,29 @@ export default async function AdminPage() {
                 const d = detailByRep.get(r.id);
                 return (
                   <tr key={r.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-2.5 font-medium text-navy-900">{r.display_name}</td>
+                    <td className="px-4 py-2.5 font-medium">
+                      <Link
+                        href={`/portal/admin/reps/${r.id}`}
+                        className="text-brand-blue hover:underline"
+                      >
+                        {r.display_name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2.5">{r.email}</td>
                     <td className="px-4 py-2.5">{d?.territory ?? "—"}</td>
-                    <td className="px-4 py-2.5 capitalize">{r.status}</td>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                          r.status === "active"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : r.status === "suspended"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${

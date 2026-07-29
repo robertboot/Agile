@@ -518,16 +518,42 @@ export async function invoiceOrder(orderId: string): Promise<ActionResult> {
 }
 
 /** Admin broadcasts a message to the company Slack (spec §9 notification center). */
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 MB each
+
 export async function sendTeamMessage(
   _prev: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
   const admin = await requireAdmin();
   const text = (formData.get("message") as string | null)?.trim();
-  if (!text) return { ok: false, error: "Write a message first." };
-  if (text.length > 2000) return { ok: false, error: "Keep it under 2,000 characters." };
 
-  return sendSlackMessage(`📣 *${admin.displayName}:* ${text}`);
+  const rawFiles = formData
+    .getAll("attachments")
+    .filter((v): v is File => v instanceof File && v.size > 0);
+  if (!text && rawFiles.length === 0) {
+    return { ok: false, error: "Write a message or attach a file first." };
+  }
+  if (text && text.length > 2000) return { ok: false, error: "Keep it under 2,000 characters." };
+  if (rawFiles.length > MAX_ATTACHMENTS) {
+    return { ok: false, error: `At most ${MAX_ATTACHMENTS} attachments.` };
+  }
+  for (const file of rawFiles) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      return { ok: false, error: `"${file.name}" is over 20 MB.` };
+    }
+  }
+
+  const files = await Promise.all(
+    rawFiles.map(async (file) => ({
+      filename: file.name,
+      bytes: await file.arrayBuffer(),
+      contentType: file.type || undefined,
+    })),
+  );
+
+  const body = text ? `📣 *${admin.displayName}:* ${text}` : `📣 *${admin.displayName}* shared a file:`;
+  return sendSlackMessage(body, files.length > 0 ? files : undefined);
 }
 
 /**

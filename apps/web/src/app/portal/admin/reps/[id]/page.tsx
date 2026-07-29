@@ -28,7 +28,9 @@ export default async function RepDetailPage({
     await Promise.all([
       db
         .from("rep_details")
-        .select("territory, gusto_payee_status, contract_accepted_at, contract_signatory")
+        .select(
+          "territory, gusto_payee_status, contract_accepted_at, contract_signatory, signed_contract_body, signed_contract_version_at",
+        )
         .eq("profile_id", id)
         .maybeSingle(),
       db
@@ -106,11 +108,6 @@ export default async function RepDetailPage({
               <span className="text-amber-700">not signed</span>
             )}
           </Row>
-          <Row label="Contract template">
-            <Link href="/portal/admin/contract" className="text-brand-blue hover:underline">
-              View / edit template →
-            </Link>
-          </Row>
           <Row label="Commission earned">{formatCents(Number(balance?.commission_net_cents ?? 0))}</Row>
           <Row label="Paid out (Gusto)">{formatCents(Number(balance?.paid_out_cents ?? 0))}</Row>
           <Row label="Gusto payee status">
@@ -125,6 +122,32 @@ export default async function RepDetailPage({
             </span>
           </Row>
         </dl>
+
+        {/* The agreement THIS rep signed — frozen at signing, not the live
+            template (which admins may have edited since). */}
+        {contractSigned && (
+          <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50">
+            <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-navy-900">
+              View signed agreement
+              <span className="ml-2 font-normal text-slate-400">
+                as signed {formatDate(contractSigned)}
+              </span>
+            </summary>
+            {detail?.signed_contract_body ? (
+              <pre className="max-h-96 overflow-auto whitespace-pre-wrap border-t border-slate-200 px-4 py-3 font-sans text-sm text-slate-700">
+                {detail.signed_contract_body}
+              </pre>
+            ) : (
+              <p className="border-t border-slate-200 px-4 py-3 text-sm text-slate-500">
+                No frozen copy on file for this signature. The{" "}
+                <Link href="/portal/admin/contract" className="text-brand-blue hover:underline">
+                  current template
+                </Link>{" "}
+                is the closest reference.
+              </p>
+            )}
+          </details>
+        )}
       </section>
 
       {/* Editable rep info + status */}

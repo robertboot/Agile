@@ -2,12 +2,25 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-native",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "moduleResolution": "Bundler",
-    "types": ["jest"],
+    "types": [
+      "jest"
+    ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
-  "include": ["src/**/*", "app/**/*", "app.config.ts"]
+  "include": [
+    "src/**/*",
+    "app/**/*",
+    "app.config.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
 }

@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "agile-platform",
+    "slug": "agile-platform",
+    "version": "0.0.0",
+    "description": "Agile wound-care platform — mobile app + Supabase backend + (Phase 2) Next.js portal",
+    "sdkVersion": "51.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ]
+  }
+}

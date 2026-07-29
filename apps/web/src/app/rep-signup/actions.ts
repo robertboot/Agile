@@ -4,7 +4,7 @@
 // Agreement, set a password, and the rep account is created active.
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { notifySlack } from "@/lib/integrations/slack";
+import { inviteRepToSlack } from "@/lib/integrations/slack";
 import { rateLimit } from "@/lib/rate-limit";
 
 export interface RepSignupResult {
@@ -99,11 +99,21 @@ export async function submitRepSignup(
     return { ok: false, error: profileError.message };
   }
 
+  // Snapshot the exact contract body the rep is signing right now, so their
+  // agreement is preserved verbatim even after the template is later edited.
+  const { data: template } = await db
+    .from("contract_templates")
+    .select("body, updated_at")
+    .limit(1)
+    .maybeSingle();
+
   const { error: detailsError } = await db.from("rep_details").insert({
     profile_id: created.user.id,
     territory: invite.territory,
     contract_accepted_at: now,
     contract_signatory: signature,
+    signed_contract_body: template?.body ?? null,
+    signed_contract_version_at: template?.updated_at ?? null,
   });
   if (detailsError) {
     await db.from("profiles").delete().eq("id", created.user.id);
@@ -117,11 +127,9 @@ export async function submitRepSignup(
     .update({ completed_profile_id: created.user.id })
     .eq("id", token);
 
-  await notifySlack({
-    kind: "provider_registered", // reuse channel; message text below
-    practice: `New rep signed: ${displayName} (${invite.territory ?? "no territory"})`,
-    rep: "rep onboarding",
-  });
+  // Onboarding: add the new rep to Slack (real invite with an Enterprise admin
+  // token, otherwise a channel prompt to add them). Best-effort — never blocks.
+  await inviteRepToSlack(invite.email, displayName, invite.territory);
 
   return { ok: true };
 }

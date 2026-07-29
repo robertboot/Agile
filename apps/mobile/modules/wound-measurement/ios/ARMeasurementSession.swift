@@ -15,9 +15,17 @@ struct FrozenFrame {
     let confidenceMap: CVPixelBuffer?
     let intrinsics: simd_float3x3
     let cameraTransform: simd_float4x4
+    /// Landscape sensor resolution from ARKit, e.g. 1920×1440. Depth + intrinsics
+    /// share this coordinate system.
     let imageResolution: CGSize
     let captureViewport: CGSize
     let trackingState: String
+    /// Top-left of the displayed crop expressed in the *rotated portrait*
+    /// sensor frame (size = imageResolution.swapped). Used to round-trip a
+    /// screen tap on the still image back to sensor pixels.
+    let cropOriginInPortrait: CGPoint
+    /// Size of the displayed crop in portrait sensor pixels.
+    let croppedSizeInPortrait: CGSize
 }
 
 /// Wraps the ARSession lifecycle and provides depth-aware unprojection used by
@@ -203,14 +211,19 @@ final class ARMeasurementSession: NSObject, ARSessionDelegate {
         guard let depthCopy = Self.copyPixelBuffer(depth.depthMap) else { return nil }
         let confidenceCopy = depth.confidenceMap.flatMap { Self.copyPixelBuffer($0) }
 
-        let ciImage = CIImage(cvPixelBuffer: frame.capturedImage)
-        // The captured image is in landscape sensor orientation; rotate to
-        // match a portrait-held device. ARKit cameras are landscape-right,
-        // so we rotate 90° clockwise (`right`) into portrait.
-        let oriented = ciImage.oriented(.right)
+        // ARKit captures in landscape sensor orientation. `.oriented(.right)`
+        // is the documented way to flip it into portrait for a portrait-held
+        // device. We render the full rotated frame — no crop — so the trace
+        // surface matches whatever ARKit captured.
+        let ciImage = CIImage(cvPixelBuffer: frame.capturedImage).oriented(.right)
         let context = CIContext(options: [.useSoftwareRenderer: false])
-        guard let cgImage = context.createCGImage(oriented, from: oriented.extent) else { return nil }
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
         let uiImage = UIImage(cgImage: cgImage)
+
+        // Express the displayed image's size in "rotated portrait sensor
+        // pixels" — used by sensorPixel() to round-trip a tap back into the
+        // landscape sensor frame for depth/intrinsic math.
+        let portraitSize = ciImage.extent.size
 
         return FrozenFrame(
             image: uiImage,
@@ -220,8 +233,38 @@ final class ARMeasurementSession: NSObject, ARSessionDelegate {
             cameraTransform: frame.camera.transform,
             imageResolution: frame.camera.imageResolution,
             captureViewport: captureViewport,
-            trackingState: trackingStateString()
+            trackingState: trackingStateString(),
+            cropOriginInPortrait: .zero,
+            croppedSizeInPortrait: portraitSize
         )
+    }
+
+    /// Convert a tap on the displayed (cropped, portrait) photo back to a
+    /// landscape-sensor pixel coordinate. The frozen frame's depth map and
+    /// intrinsics both live in landscape sensor space, so every downstream
+    /// math operation has to do this round-trip.
+    private static func sensorPixel(
+        forScreenPoint p: CGPoint,
+        in viewportSize: CGSize,
+        using frame: FrozenFrame
+    ) -> (sx: Float, sy: Float)? {
+        guard viewportSize.width > 0, viewportSize.height > 0 else { return nil }
+        let cropped = frame.croppedSizeInPortrait
+        let offset = frame.cropOriginInPortrait
+        // Step 1: viewport coords → cropped portrait pixels.
+        let cropPxX = (p.x / viewportSize.width) * cropped.width
+        let cropPxY = (p.y / viewportSize.height) * cropped.height
+        // Step 2: cropped portrait → full rotated portrait pixels.
+        let portX = cropPxX + offset.x
+        let portY = cropPxY + offset.y
+        // Step 3: portrait → landscape sensor. The image was produced by
+        // CIImage.oriented(.right) = 90° CW rotation, so the inverse maps:
+        //   sensor.x = portrait.y
+        //   sensor.y = sensorHeight - portrait.x
+        let sensorH = frame.imageResolution.height
+        let sx = Float(portY)
+        let sy = Float(sensorH - portX)
+        return (sx, sy)
     }
 
     /// Unproject a screen point on the *frozen* still image to a world-space
@@ -231,13 +274,16 @@ final class ARMeasurementSession: NSObject, ARSessionDelegate {
         in viewportSize: CGSize,
         using frame: FrozenFrame
     ) -> SIMD3<Float>? {
+        guard let (sx, sy) = sensorPixel(forScreenPoint: screenPoint,
+                                         in: viewportSize, using: frame) else { return nil }
+
         let depthMap = frame.depthMap
         let depthWidth = CVPixelBufferGetWidth(depthMap)
         let depthHeight = CVPixelBufferGetHeight(depthMap)
-        guard viewportSize.width > 0, viewportSize.height > 0 else { return nil }
-
-        let u = Int((screenPoint.x / viewportSize.width) * CGFloat(depthWidth))
-        let v = Int((screenPoint.y / viewportSize.height) * CGFloat(depthHeight))
+        let sensorW = Float(frame.imageResolution.width)
+        let sensorH = Float(frame.imageResolution.height)
+        let u = Int((sx / sensorW) * Float(depthWidth))
+        let v = Int((sy / sensorH) * Float(depthHeight))
         guard u >= 0, u < depthWidth, v >= 0, v < depthHeight else { return nil }
 
         CVPixelBufferLockBaseAddress(depthMap, .readOnly)
@@ -252,11 +298,8 @@ final class ARMeasurementSession: NSObject, ARSessionDelegate {
         guard depthMeters.isFinite, depthMeters > 0.05, depthMeters < 5.0 else { return nil }
 
         let intrinsics = frame.intrinsics
-        let imageRes = frame.imageResolution
-        let pixelX = Float(screenPoint.x / viewportSize.width) * Float(imageRes.width)
-        let pixelY = Float(screenPoint.y / viewportSize.height) * Float(imageRes.height)
-        let x = (pixelX - intrinsics[2, 0]) * depthMeters / intrinsics[0, 0]
-        let y = (pixelY - intrinsics[2, 1]) * depthMeters / intrinsics[1, 1]
+        let x = (sx - intrinsics[2, 0]) * depthMeters / intrinsics[0, 0]
+        let y = (sy - intrinsics[2, 1]) * depthMeters / intrinsics[1, 1]
         let cameraSpace = SIMD4<Float>(x, y, -depthMeters, 1)
         let worldSpace = frame.cameraTransform * cameraSpace
         return SIMD3<Float>(worldSpace.x, worldSpace.y, worldSpace.z)
@@ -271,6 +314,8 @@ final class ARMeasurementSession: NSObject, ARSessionDelegate {
         guard let confidenceMap = frame.confidenceMap else { return 0 }
         let width = CVPixelBufferGetWidth(confidenceMap)
         let height = CVPixelBufferGetHeight(confidenceMap)
+        let sensorW = Float(frame.imageResolution.width)
+        let sensorH = Float(frame.imageResolution.height)
         CVPixelBufferLockBaseAddress(confidenceMap, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(confidenceMap, .readOnly) }
         guard let base = CVPixelBufferGetBaseAddress(confidenceMap) else { return 0 }
@@ -279,8 +324,10 @@ final class ARMeasurementSession: NSObject, ARSessionDelegate {
         var total: Float = 0
         var count: Int = 0
         for p in screenPoints {
-            let x = Int((p.x / viewportSize.width) * CGFloat(width))
-            let y = Int((p.y / viewportSize.height) * CGFloat(height))
+            guard let (sx, sy) = sensorPixel(forScreenPoint: p,
+                                             in: viewportSize, using: frame) else { continue }
+            let x = Int((sx / sensorW) * Float(width))
+            let y = Int((sy / sensorH) * Float(height))
             guard x >= 0, x < width, y >= 0, y < height else { continue }
             let value = base
                 .advanced(by: y * rowBytes + x)

@@ -45,6 +45,11 @@ final class ARMeasurementViewController: UIViewController {
     private var lastMeasurements: PolygonMath.Measurements?
     private var lastConfidence: Float = 0
     private var photoUris: [String] = []
+    /// Tracks which image + scroll-view-size we last sized for, so we only
+    /// re-run `sizeImageViewForContent` when something actually changed and
+    /// don't yank the user's pan/zoom back to origin on every layout pass.
+    private var lastSizedImage: UIImage?
+    private var lastSizedBounds: CGSize = .zero
 
     // MARK: Capture-mode UI
 
@@ -58,7 +63,7 @@ final class ARMeasurementViewController: UIViewController {
 
     private let reviewContainer = UIView()
     private let scrollView = UIScrollView()
-    private let photoImageView = UIImageView()
+    private let photoImageView = TraceImageView()
     private let traceLayer = CAShapeLayer()
     private let reviewInstructionLabel = PaddingLabel()
     private let summaryCard = SummaryCardView()
@@ -66,7 +71,6 @@ final class ARMeasurementViewController: UIViewController {
     private let rescanButton = UIButton(type: .system)
     private let redrawButton = UIButton(type: .system)
     private let saveButton = UIButton(type: .system)
-    private var drawPan: UIPanGestureRecognizer?
 
     // MARK: Lifecycle
 
@@ -88,6 +92,16 @@ final class ARMeasurementViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        // Re-size only when the image or scroll-view bounds *actually* change.
+        // Calling sizeImageViewForContent on every layout tick resets zoom/
+        // offset to origin and makes the image visibly jump while the user
+        // is drawing the trace.
+        if let image = photoImageView.image,
+           image !== lastSizedImage || scrollView.bounds.size != lastSizedBounds {
+            sizeImageViewForContent()
+            lastSizedImage = image
+            lastSizedBounds = scrollView.bounds.size
+        }
         // Keep the trace layer's coordinate space in sync with the image view.
         traceLayer.frame = photoImageView.bounds
         redrawTracePath()
@@ -165,13 +179,19 @@ final class ARMeasurementViewController: UIViewController {
         scrollView.minimumZoomScale = 1.0
         scrollView.maximumZoomScale = 4.0
         scrollView.bouncesZoom = false
+        scrollView.bounces = false
         scrollView.showsVerticalScrollIndicator = false
         scrollView.showsHorizontalScrollIndicator = false
-        // Two-finger pan to scroll so single-finger pans go to the draw recognizer.
+        // Two-finger pan to scroll while zoomed in; one-finger touches go to
+        // the trace handler on photoImageView (a TraceImageView).
         scrollView.panGestureRecognizer.minimumNumberOfTouches = 2
         reviewContainer.addSubview(scrollView)
 
-        photoImageView.translatesAutoresizingMaskIntoConstraints = false
+        // We manage photoImageView's frame manually inside the scrollView's
+        // content rect, so it must NOT participate in auto-layout — otherwise
+        // its frame collapses to .zero or to its intrinsicContentSize (full
+        // sensor pixels), which is what's causing the "zoomed to corner" bug.
+        photoImageView.translatesAutoresizingMaskIntoConstraints = true
         photoImageView.contentMode = .scaleAspectFit
         photoImageView.isUserInteractionEnabled = true
         photoImageView.backgroundColor = .black
@@ -184,12 +204,23 @@ final class ARMeasurementViewController: UIViewController {
         traceLayer.lineCap = .round
         photoImageView.layer.addSublayer(traceLayer)
 
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleDrawPan(_:)))
-        pan.minimumNumberOfTouches = 1
-        pan.maximumNumberOfTouches = 1
-        pan.delegate = self
-        photoImageView.addGestureRecognizer(pan)
-        drawPan = pan
+        // Direct touch handling (no gesture recognizer) — the recognizer's
+        // "Possible" state was claiming touches and blocking the scroll
+        // view's pinch from firing on two-finger touches. With this, single-
+        // finger touches drive the trace and any 2+ finger touch propagates
+        // naturally to the scrollView's pinch.
+        photoImageView.onTraceBegin = { [weak self] point in
+            self?.beginTrace(at: point)
+        }
+        photoImageView.onTraceMove = { [weak self] point in
+            self?.appendTracePoint(point)
+        }
+        photoImageView.onTraceEnd = { [weak self] in
+            self?.finalizeTrace()
+        }
+        photoImageView.onTraceCancel = { [weak self] in
+            self?.cancelTrace()
+        }
 
         configurePillLabel(reviewInstructionLabel,
                            text: "Trace the wound boundary with one finger. Pinch to zoom.",
@@ -333,6 +364,7 @@ final class ARMeasurementViewController: UIViewController {
     @objc private func handleRescan() {
         frozenFrame = nil
         photoImageView.image = nil
+        lastSizedImage = nil
         tracePointsScreen.removeAll()
         traceWorldPoints.removeAll()
         lastMeasurements = nil
@@ -383,31 +415,22 @@ final class ARMeasurementViewController: UIViewController {
 
     // MARK: Drawing
 
-    @objc private func handleDrawPan(_ gesture: UIPanGestureRecognizer) {
+    private func beginTrace(at point: CGPoint) {
         guard frozenFrame != nil else { return }
-        let point = gesture.location(in: photoImageView)
+        tracePointsScreen.removeAll()
+        traceWorldPoints.removeAll()
+        phase = .reviewTracing
+        appendTracePoint(point)
+    }
 
-        switch gesture.state {
-        case .began:
-            tracePointsScreen.removeAll()
-            traceWorldPoints.removeAll()
-            phase = .reviewTracing
-            appendTracePoint(point)
-        case .changed:
-            appendTracePoint(point)
-        case .ended:
-            finalizeTrace()
-        case .cancelled, .failed:
-            // System cancelled the pan (likely because a second finger
-            // landed and a pinch took over). Discard the partial trace and
-            // let the user start over.
-            tracePointsScreen.removeAll()
-            traceWorldPoints.removeAll()
-            redrawTracePath()
-            phase = .reviewEmpty
-        default:
-            break
-        }
+    private func cancelTrace() {
+        // Touches were cancelled by the system — typically because a second
+        // finger landed and the scroll view's pinch took over. Discard the
+        // partial trace; the user can start over once the pinch ends.
+        tracePointsScreen.removeAll()
+        traceWorldPoints.removeAll()
+        redrawTracePath()
+        phase = .reviewEmpty
     }
 
     private func appendTracePoint(_ pointInImageView: CGPoint) {
@@ -485,18 +508,21 @@ final class ARMeasurementViewController: UIViewController {
 
     private func sizeImageViewForContent() {
         guard let image = photoImageView.image else { return }
-        // We size the image view to a fitted rectangle inside the scroll
-        // view's bounds. This gives the trace layer a predictable coordinate
-        // space (matching the captured photo) regardless of zoom.
+        // Always fill the scroll view's WIDTH — height floats and the user
+        // scrolls vertically if needed. This avoids horizontal black bars for
+        // images that are narrower than the scroll view's aspect ratio.
         let bounds = scrollView.bounds
         guard bounds.width > 0, bounds.height > 0 else { return }
-        let scale = min(bounds.width / image.size.width,
-                        bounds.height / image.size.height)
+        let scale = bounds.width / image.size.width
         let fitted = CGSize(width: image.size.width * scale,
                             height: image.size.height * scale)
         photoImageView.frame = CGRect(origin: .zero, size: fitted)
         scrollView.contentSize = fitted
-        scrollView.setZoomScale(1.0, animated: false)
+        // Start a bit pre-zoomed so a typical wound has detail visible
+        // straight away. User can still pinch out to 1.0× to see the whole
+        // frame, or pinch in to 4.0× for detail tracing.
+        scrollView.setZoomScale(1.5, animated: false)
+        scrollView.contentOffset = .zero
         centerImageInScrollView()
     }
 
@@ -616,18 +642,73 @@ extension ARMeasurementViewController: UIScrollViewDelegate {
     }
 }
 
-// MARK: - UIGestureRecognizerDelegate
+// MARK: - Small reusable UI bits
 
-extension ARMeasurementViewController: UIGestureRecognizerDelegate {
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        // Let the scroll view's pinch run alongside our 1-finger draw if the
-        // user happens to start a pinch mid-draw.
-        return other === scrollView.pinchGestureRecognizer
+/// UIImageView subclass that delivers single-finger touch tracking to the view
+/// controller via closures. We avoid a UIPanGestureRecognizer here because the
+/// recognizer's "Possible" phase claims touches before deciding to fail, and
+/// that blocks the scroll view's pinch from firing on two-finger touches.
+final class TraceImageView: UIImageView {
+    var onTraceBegin: ((CGPoint) -> Void)?
+    var onTraceMove: ((CGPoint) -> Void)?
+    var onTraceEnd: (() -> Void)?
+    var onTraceCancel: (() -> Void)?
+
+    private var trackedTouch: UITouch?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = true
+        isMultipleTouchEnabled = true
+    }
+    convenience init() { self.init(frame: .zero) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        let allCount = event?.allTouches?.count ?? touches.count
+        if allCount > 1 {
+            // A second finger has landed — let the scrollView's pinch take it.
+            if trackedTouch != nil {
+                trackedTouch = nil
+                onTraceCancel?()
+            }
+            return
+        }
+        guard trackedTouch == nil, let touch = touches.first else { return }
+        trackedTouch = touch
+        onTraceBegin?(touch.location(in: self))
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesMoved(touches, with: event)
+        let allCount = event?.allTouches?.count ?? touches.count
+        if allCount > 1 {
+            if trackedTouch != nil {
+                trackedTouch = nil
+                onTraceCancel?()
+            }
+            return
+        }
+        guard let touch = trackedTouch, touches.contains(touch) else { return }
+        onTraceMove?(touch.location(in: self))
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        guard let touch = trackedTouch, touches.contains(touch) else { return }
+        trackedTouch = nil
+        onTraceEnd?()
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesCancelled(touches, with: event)
+        guard let touch = trackedTouch, touches.contains(touch) else { return }
+        trackedTouch = nil
+        onTraceCancel?()
     }
 }
 
-// MARK: - Small reusable UI bits
 
 /// UILabel with content-edge insets so the pill background has breathing room.
 final class PaddingLabel: UILabel {
