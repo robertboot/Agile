@@ -69,6 +69,44 @@ export async function submitRepSignup(
   const release = async () =>
     db.from("rep_invites").update({ status: "pending", completed_at: null }).eq("id", token);
 
+  // Existing account (rep imported from the old portal): sign in place — keep
+  // the profile and its providers, activate it, record the agreement, and set
+  // the password. Avoids a duplicate-account collision on createUser.
+  const { data: existing } = await db
+    .from("profiles")
+    .select("id")
+    .eq("email", invite.email)
+    .maybeSingle();
+
+  if (existing) {
+    const { error: pwErr } = await db.auth.admin.updateUserById(existing.id, { password });
+    if (pwErr) {
+      await release();
+      return { ok: false, error: `Couldn't set your password: ${pwErr.message}` };
+    }
+    const { data: tmpl } = await db
+      .from("contract_templates")
+      .select("body, updated_at")
+      .limit(1)
+      .maybeSingle();
+    await db
+      .from("profiles")
+      .update({ status: "active", display_name: displayName, phone })
+      .eq("id", existing.id);
+    await db.from("rep_details").upsert(
+      {
+        profile_id: existing.id,
+        contract_accepted_at: now,
+        contract_signatory: signature,
+        signed_contract_body: tmpl?.body ?? null,
+        signed_contract_version_at: tmpl?.updated_at ?? null,
+      },
+      { onConflict: "profile_id" },
+    );
+    await db.from("rep_invites").update({ completed_profile_id: existing.id }).eq("id", token);
+    return { ok: true };
+  }
+
   const { data: created, error: authError } = await db.auth.admin.createUser({
     email: invite.email,
     password,
