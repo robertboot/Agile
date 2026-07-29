@@ -267,6 +267,46 @@ export async function updateProvider(
 }
 
 // ---------------------------------------------------------------------------
+// Rep detail editing (name/email/phone/territory/status)
+// ---------------------------------------------------------------------------
+const REP_STATUSES = new Set(["pending", "active", "suspended"]);
+
+export async function updateRep(
+  repId: string,
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const f = (k: string) => (formData.get(k) as string | null)?.trim() || null;
+
+  const displayName = f("display_name");
+  if (!displayName) return { ok: false, error: "Name is required" };
+  const status = f("status") ?? "active";
+  if (!REP_STATUSES.has(status)) return { ok: false, error: "Invalid status" };
+  const email = f("email");
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { ok: false, error: "Email looks invalid" };
+  }
+
+  // Status change is gated by fn_profiles_guard, so route the whole update
+  // through the admin RPC (owner-executed, self-guards on is_admin()). Called
+  // on the RLS client so auth.uid() is the signed-in admin.
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_admin_update_rep", {
+    p_rep_id: repId,
+    p_display_name: displayName,
+    p_email: email,
+    p_phone: f("phone"),
+    p_status: status,
+    p_territory: f("territory"),
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/admin/reps/${repId}`);
+  revalidatePath("/portal/admin/reps");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Rep invites (contract e-sign flow)
 // ---------------------------------------------------------------------------
 export async function createRepInvite(

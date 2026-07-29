@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { formatCents } from "@agile/shared";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { InviteRep } from "./InviteRep";
 import { PayoutForm } from "./PayoutForm";
+import { PendingInvites, type PendingInvite } from "./PendingInvites";
 
 interface RepRow {
   id: string;
@@ -27,19 +29,31 @@ export default async function RepsCenterPage() {
 
   // Money totals come from SQL aggregate views — immune to the PostgREST
   // 1000-row cap that would silently truncate a JS sum (audit H4).
-  const [{ data: reps }, { data: details }, { data: providers }, { data: balances }, { data: production }] =
-    await Promise.all([
-      db
-        .from("profiles")
-        .select("id, display_name, email, status")
-        .eq("role", "rep")
-        .is("deleted_at", null)
-        .order("display_name"),
-      db.from("rep_details").select("profile_id, territory, gusto_payee_status"),
-      db.from("providers").select("id, rep_id").is("deleted_at", null),
-      db.from("rep_balances").select("rep_id, commission_net_cents, paid_out_cents, owed_cents"),
-      db.from("rep_production").select("rep_id, order_count, open_order_count, billed_cents, collected_cents"),
-    ]);
+  const [
+    { data: reps },
+    { data: details },
+    { data: providers },
+    { data: balances },
+    { data: production },
+    { data: invites },
+  ] = await Promise.all([
+    db
+      .from("profiles")
+      .select("id, display_name, email, status")
+      .eq("role", "rep")
+      .is("deleted_at", null)
+      .order("display_name"),
+    db.from("rep_details").select("profile_id, territory, gusto_payee_status"),
+    db.from("providers").select("id, rep_id").is("deleted_at", null),
+    db.from("rep_balances").select("rep_id, commission_net_cents, paid_out_cents, owed_cents"),
+    db.from("rep_production").select("rep_id, order_count, open_order_count, billed_cents, collected_cents"),
+    // Invited but not yet completed — surfaced so admins can chase / resend.
+    db
+      .from("rep_invites")
+      .select("id, invited_name, email, territory, status, created_at, expires_at")
+      .in("status", ["pending", "expired"])
+      .order("created_at", { ascending: false }),
+  ]);
 
   const detailByRep = new Map((details ?? []).map((d) => [d.profile_id, d]));
   const balanceByRep = new Map((balances ?? []).map((b) => [b.rep_id, b]));
@@ -70,6 +84,16 @@ export default async function RepsCenterPage() {
     };
   });
 
+  const inviteRows: PendingInvite[] = (invites ?? []).map((i) => ({
+    id: i.id,
+    name: i.invited_name ?? "",
+    email: i.email,
+    territory: i.territory ?? null,
+    status: i.status,
+    sentAt: i.created_at,
+    expiresAt: i.expires_at,
+  }));
+
   const totals = rows.reduce(
     (t, r) => ({
       billed: t.billed + r.billedCents,
@@ -98,6 +122,8 @@ export default async function RepsCenterPage() {
         <Stat label="Owed to reps" value={formatCents(totals.owed)} highlight />
       </div>
 
+      <PendingInvites invites={inviteRows} />
+
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 text-left text-slate-500">
@@ -119,13 +145,22 @@ export default async function RepsCenterPage() {
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-slate-100 align-top last:border-0">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-navy-900">{r.name}</div>
+                  <Link
+                    href={`/portal/admin/reps/${r.id}`}
+                    className="font-medium text-brand-blue hover:underline"
+                  >
+                    {r.name}
+                  </Link>
                   <div className="text-xs text-slate-400">{r.email}</div>
-                  {r.status !== "active" && (
-                    <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
-                      {r.status}
-                    </span>
-                  )}
+                  <span
+                    className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      r.status === "active"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {r.status}
+                  </span>
                 </td>
                 <td className="px-4 py-3">{r.territory ?? "—"}</td>
                 <td className="px-4 py-3">
