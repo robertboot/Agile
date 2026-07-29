@@ -56,7 +56,7 @@ function render(e: SlackEvent): string {
 export async function sendSlackMessage(
   text: string,
   files?: SlackUpload[],
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; ts?: string; channel?: string }> {
   if (files && files.length > 0) {
     if (!BOT_TOKEN || !CHANNEL_ID) {
       return {
@@ -91,7 +91,7 @@ async function postWebhook(url: string, text: string): Promise<{ ok: boolean; er
   }
 }
 
-async function chatPostMessage(text: string): Promise<{ ok: boolean; error?: string }> {
+async function chatPostMessage(text: string): Promise<{ ok: boolean; error?: string; ts?: string; channel?: string }> {
   try {
     const res = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
@@ -101,10 +101,34 @@ async function chatPostMessage(text: string): Promise<{ ok: boolean; error?: str
       },
       body: JSON.stringify({ channel: CHANNEL_ID, text }),
     });
-    const json = (await res.json()) as { ok: boolean; error?: string };
-    return json.ok ? { ok: true } : { ok: false, error: `Slack: ${json.error ?? "unknown error"}` };
+    const json = (await res.json()) as { ok: boolean; error?: string; ts?: string; channel?: string };
+    return json.ok
+      ? { ok: true, ts: json.ts, channel: json.channel ?? CHANNEL_ID }
+      : { ok: false, error: `Slack: ${json.error ?? "unknown error"}` };
   } catch (err) {
     return { ok: false, error: `Slack request failed: ${String(err)}` };
+  }
+}
+
+/** Post a Slack message to the team channel in a thread, returning its ts. */
+export async function postToThread(
+  text: string,
+  threadTs: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!BOT_TOKEN || !CHANNEL_ID) return { ok: false, error: "Slack bot token not set" };
+  try {
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${BOT_TOKEN}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify({ channel: CHANNEL_ID, text, thread_ts: threadTs }),
+    });
+    const json = (await res.json()) as { ok: boolean; error?: string };
+    return json.ok ? { ok: true } : { ok: false, error: json.error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
   }
 }
 

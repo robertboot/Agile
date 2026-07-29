@@ -47,10 +47,23 @@ export async function askStitch(question: string): Promise<StitchReply> {
   // Await the Slack post: on serverless a fire-and-forget fetch is killed when
   // the action returns, so the message never sends.
   const supabase = await createClient();
-  await supabase.from("rep_questions").insert({ rep_id: user.id, question: q });
-  await sendSlackMessage(
-    `❓ *Stitch couldn't answer* — ${user.displayName} asks: “${q}”. Reply in the portal (Admin › rep questions).`,
+  const { data: inserted } = await supabase
+    .from("rep_questions")
+    .insert({ rep_id: user.id, question: q })
+    .select("id")
+    .single();
+
+  const posted = await sendSlackMessage(
+    `❓ *${user.displayName} asked Stitch:* “${q}”\n_Reply in this thread to answer them, or use Admin › rep questions._`,
   );
+  // Remember the Slack message so an in-thread reply maps back to this question.
+  if (posted.ok && posted.ts && inserted?.id) {
+    const admin = createAdminClient();
+    await admin
+      .from("rep_questions")
+      .update({ slack_ts: posted.ts, slack_channel: posted.channel })
+      .eq("id", inserted.id);
+  }
 
   return {
     ok: true,
