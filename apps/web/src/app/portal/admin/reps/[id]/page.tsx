@@ -24,7 +24,7 @@ export default async function RepDetailPage({
     .maybeSingle();
   if (!rep) notFound();
 
-  const [{ data: detail }, { data: balance }, { data: production }, { count: providerCount }] =
+  const [{ data: detail }, { data: balance }, { data: production }, { data: providers }] =
     await Promise.all([
       db
         .from("rep_details")
@@ -43,8 +43,15 @@ export default async function RepDetailPage({
         .select("order_count, open_order_count, billed_cents, collected_cents")
         .eq("rep_id", id)
         .maybeSingle(),
-      db.from("providers").select("id", { count: "exact", head: true }).eq("rep_id", id).is("deleted_at", null),
+      db
+        .from("providers")
+        .select("id, practice_name, city, state, approved, individual_npi")
+        .eq("rep_id", id)
+        .is("deleted_at", null)
+        .order("practice_name"),
     ]);
+  const providerList = providers ?? [];
+  const providerCount = providerList.length;
 
   const record: RepRecord = {
     id: rep.id,
@@ -147,6 +154,51 @@ export default async function RepDetailPage({
               </p>
             )}
           </details>
+        )}
+      </section>
+
+      {/* This rep's providers */}
+      <section className="rounded-lg border border-slate-200 bg-white">
+        <h2 className="border-b border-slate-200 px-5 py-3 font-semibold text-navy-900">
+          Providers ({providerCount})
+        </h2>
+        {providerList.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-slate-400">No providers assigned to this rep.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {providerList.map((p) => {
+              const npiMissing = !p.individual_npi || /^0+$/.test(p.individual_npi);
+              return (
+                <li key={p.id}>
+                  <Link
+                    href={`/portal/providers/${p.id}`}
+                    className="flex items-center justify-between px-5 py-3 hover:bg-slate-50"
+                  >
+                    <span>
+                      <span className="font-medium text-navy-900">{p.practice_name}</span>
+                      <span className="ml-2 text-xs text-slate-400">
+                        {p.city}, {p.state}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {npiMissing && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                          NPI needed
+                        </span>
+                      )}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          p.approved ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {p.approved ? "approved" : "suspended"}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 
