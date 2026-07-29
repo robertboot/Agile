@@ -15,7 +15,7 @@ import { requireAdmin, requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getIvrSubmission, registerProvider, submitIvr } from "@/lib/integrations/mednecessity";
-import { notifySlack, sendSlackMessage } from "@/lib/integrations/slack";
+import { notifySlack, sendSlackMessage, GENERAL_CHANNEL_ID } from "@/lib/integrations/slack";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 
 export type { QuoteItemInput };
@@ -552,10 +552,13 @@ export async function sendTeamMessage(
     })),
   );
 
-  const body = text ? `📣 *${admin.displayName}:* ${text}` : `📣 *${admin.displayName}* shared a file:`;
-  // Everything posts to the private admin channel — Stitch never posts in
-  // #general (visible to all reps).
-  return sendSlackMessage(body, files.length > 0 ? files : undefined);
+  // Post to #general as the admin (name + icon), so it reads as a message from
+  // them — not the Stitch bot. (Needs chat:write.customize + Stitch in #general.)
+  const body = text || "shared a file:";
+  return sendSlackMessage(body, files.length > 0 ? files : undefined, GENERAL_CHANNEL_ID, {
+    username: admin.displayName,
+    iconEmoji: ":loudspeaker:",
+  });
 }
 
 /**

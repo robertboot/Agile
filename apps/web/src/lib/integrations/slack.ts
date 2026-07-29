@@ -56,10 +56,16 @@ function render(e: SlackEvent): string {
  * Admin team broadcast. Text always; files when a bot token is configured.
  * Failures surface to the caller (unlike best-effort notifySlack).
  */
+export interface SlackIdentity {
+  username?: string; // sender name override (needs chat:write.customize)
+  iconEmoji?: string;
+}
+
 export async function sendSlackMessage(
   text: string,
   files?: SlackUpload[],
   channelId?: string,
+  identity?: SlackIdentity,
 ): Promise<{ ok: boolean; error?: string; ts?: string; channel?: string }> {
   const channel = channelId ?? CHANNEL_ID;
   if (files && files.length > 0) {
@@ -74,7 +80,7 @@ export async function sendSlackMessage(
   }
 
   // Text-only: prefer the bot API when available, else the webhook.
-  if (BOT_TOKEN && channel) return chatPostMessage(text, channel);
+  if (BOT_TOKEN && channel) return chatPostMessage(text, channel, identity);
   if (WEBHOOK_URL) return postWebhook(WEBHOOK_URL, text);
   return {
     ok: false,
@@ -99,6 +105,7 @@ async function postWebhook(url: string, text: string): Promise<{ ok: boolean; er
 async function chatPostMessage(
   text: string,
   channel: string,
+  identity?: SlackIdentity,
 ): Promise<{ ok: boolean; error?: string; ts?: string; channel?: string }> {
   try {
     const res = await fetch("https://slack.com/api/chat.postMessage", {
@@ -107,7 +114,12 @@ async function chatPostMessage(
         Authorization: `Bearer ${BOT_TOKEN}`,
         "Content-Type": "application/json; charset=utf-8",
       },
-      body: JSON.stringify({ channel, text }),
+      body: JSON.stringify({
+        channel,
+        text,
+        ...(identity?.username ? { username: identity.username } : {}),
+        ...(identity?.iconEmoji ? { icon_emoji: identity.iconEmoji } : {}),
+      }),
     });
     const json = (await res.json()) as { ok: boolean; error?: string; ts?: string; channel?: string };
     return json.ok
