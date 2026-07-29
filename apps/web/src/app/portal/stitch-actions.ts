@@ -16,6 +16,15 @@ export interface StitchReply {
   error?: string;
 }
 
+function isSmallTalk(q: string): boolean {
+  const t = q.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  return [
+    "thanks", "thank you", "thankyou", "ty", "thx", "thank u", "cheers",
+    "ok", "okay", "cool", "great", "got it", "nice", "awesome", "perfect",
+    "hi", "hello", "hey", "yo", "sup", "good morning", "good afternoon",
+  ].includes(t);
+}
+
 /** Rep asks Stitch a question. Answer from the KB, else log it + ping admins. */
 export async function askStitch(question: string): Promise<StitchReply> {
   const user = await requirePortalUser();
@@ -26,13 +35,20 @@ export async function askStitch(question: string): Promise<StitchReply> {
     return { ok: false, error: "Slow down a moment — try again shortly." };
   }
 
+  // Pleasantries shouldn't escalate to admins.
+  if (isSmallTalk(q)) {
+    return { ok: true, answer: "Anytime! Ask me whenever you need a hand. 🧵" };
+  }
+
   const resolved = await answerQuestion(q);
   if (resolved.answer) return { ok: true, answer: resolved.answer };
 
   // Couldn't answer — log for admins (rep's own RLS insert) and ping Slack.
+  // Await the Slack post: on serverless a fire-and-forget fetch is killed when
+  // the action returns, so the message never sends.
   const supabase = await createClient();
   await supabase.from("rep_questions").insert({ rep_id: user.id, question: q });
-  void sendSlackMessage(
+  await sendSlackMessage(
     `❓ *Stitch couldn't answer* — ${user.displayName} asks: “${q}”. Reply in the portal (Admin › rep questions).`,
   );
 
