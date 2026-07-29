@@ -17,7 +17,7 @@ export function InviteProvider() {
     setError(null);
     start(async () => {
       const r = await createProviderInvite(email, practice);
-      if (r.ok && r.url) setLink(`${window.location.origin}${r.url}`);
+      if (r.ok && r.url) setLink(`${process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.agilemedgroup.com"}${r.url}`);
       else setError(r.error ?? "Couldn't create the invite");
     });
   }

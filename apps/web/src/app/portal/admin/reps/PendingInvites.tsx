@@ -23,7 +23,8 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
   if (invites.length === 0) return null;
 
   function linkFor(id: string) {
-    return `${window.location.origin}/rep-signup/${id}`;
+    const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.agilemedgroup.com";
+    return `${site}/rep-signup/${id}`;
   }
 
   function resend(inv: PendingInvite) {

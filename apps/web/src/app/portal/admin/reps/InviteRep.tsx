@@ -4,6 +4,10 @@ import { useState, useTransition } from "react";
 import { createRepInvite } from "@/app/portal/admin/actions";
 import { copyFormattedAndCompose } from "@/lib/invite-email";
 
+// Canonical host for shareable links — never window.location.origin, which can
+// be the apex domain (currently parked) and produce broken/harmful links.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.agilemedgroup.com";
+
 export function InviteRep() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -18,7 +22,7 @@ export function InviteRep() {
     setError(null);
     start(async () => {
       const r = await createRepInvite(name, email, territory);
-      if (r.ok && r.url) setLink(`${window.location.origin}${r.url}`);
+      if (r.ok && r.url) setLink(`${SITE_URL}${r.url}`);
       else setError(r.error ?? "Couldn't create the invite");
     });
   }
