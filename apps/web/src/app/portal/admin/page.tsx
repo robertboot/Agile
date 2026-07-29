@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import { ApproveButton, ReassignSelect, RetryRegistrationButton } from "./AdminControls";
+import { TeamMessageForm } from "./TeamMessageForm";
 import { RepQuestionAnswer } from "./RepQuestionAnswer";
 
 export default async function AdminPage() {
@@ -66,6 +67,21 @@ export default async function AdminPage() {
       <p className="text-sm text-slate-500">
         You are the gatekeeper: nothing reaches MedNecessity without approval here.
       </p>
+
+      <section>
+        <h2 className="label-mono mb-3 flex items-center gap-2 text-slate-500">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#E01E5A" d="M5.04 15.12a2.52 2.52 0 1 1-2.52-2.52h2.52v2.52Zm1.26 0a2.52 2.52 0 0 1 5.04 0v6.3a2.52 2.52 0 0 1-5.04 0v-6.3Z" />
+            <path fill="#36C5F0" d="M8.82 5.04A2.52 2.52 0 1 1 11.34 2.52v2.52H8.82Zm0 1.26a2.52 2.52 0 0 1 0 5.04h-6.3a2.52 2.52 0 0 1 0-5.04h6.3Z" />
+            <path fill="#2EB67D" d="M18.96 8.82a2.52 2.52 0 1 1 2.52 2.52h-2.52V8.82Zm-1.26 0a2.52 2.52 0 0 1-5.04 0v-6.3a2.52 2.52 0 0 1 5.04 0v6.3Z" />
+            <path fill="#ECB22E" d="M15.18 18.96a2.52 2.52 0 1 1-2.52 2.52v-2.52h2.52Zm0-1.26a2.52 2.52 0 0 1 0-5.04h6.3a2.52 2.52 0 0 1 0 5.04h-6.3Z" />
+          </svg>
+          Message the team
+        </h2>
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <TeamMessageForm />
+        </div>
+      </section>
 
       {(repQuestions ?? []).length > 0 && (
         <section>
