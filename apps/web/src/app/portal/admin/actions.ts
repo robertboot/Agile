@@ -267,6 +267,18 @@ export async function updateProvider(
 }
 
 // ---------------------------------------------------------------------------
+// Contact messages — clear / mark spam
+// ---------------------------------------------------------------------------
+export async function clearContactMessage(id: string, spam: boolean): Promise<ActionResult> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { error } = await db.from("contact_messages").update({ handled: true, spam }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/admin");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Rep detail editing (name/email/phone/territory/status)
 // ---------------------------------------------------------------------------
 const REP_STATUSES = new Set(["pending", "active", "suspended"]);

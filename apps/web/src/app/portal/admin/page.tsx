@@ -6,6 +6,7 @@ import { ApproveButton, ReassignSelect, RetryRegistrationButton } from "./AdminC
 import { TeamMessageForm } from "./TeamMessageForm";
 import { RepQuestionAnswer } from "./RepQuestionAnswer";
 import { DismissQuestion } from "./DismissQuestion";
+import { ContactMessageActions } from "./ContactMessageActions";
 
 export default async function AdminPage() {
   await requireAdmin();
@@ -183,7 +184,10 @@ export default async function AdminPage() {
                       {m.email}
                     </a>
                   </div>
-                  <span className="text-xs text-slate-400">{formatDate(m.created_at)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">{formatDate(m.created_at)}</span>
+                    <ContactMessageActions id={m.id} />
+                  </div>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{m.message}</p>
               </div>
