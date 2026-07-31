@@ -5,7 +5,7 @@
 
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { notifySlack } from "@/lib/integrations/slack";
+import { sendSlackMessage } from "@/lib/integrations/slack";
 import { rateLimit } from "@/lib/rate-limit";
 
 export interface ContactState {
@@ -38,11 +38,9 @@ export async function submitContact(
     .insert({ name, email, message });
   if (error) return { error: "Something went wrong sending your message. Please try again." };
 
-  await notifySlack({
-    kind: "provider_registered", // reuse channel; text below carries the detail
-    practice: `📨 New contact message from ${name} (${email})`,
-    rep: "public contact form",
-  });
+  await sendSlackMessage(
+    `📨 *New contact message* from ${name} (${email}) via the public site — read it in Admin › Overview.`,
+  );
 
   return { ok: true };
 }

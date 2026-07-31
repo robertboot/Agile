@@ -5,6 +5,7 @@ import { formatDate } from "@/lib/format";
 import { ApproveButton, ReassignSelect, RetryRegistrationButton } from "./AdminControls";
 import { TeamMessageForm } from "./TeamMessageForm";
 import { RepQuestionAnswer } from "./RepQuestionAnswer";
+import { DismissQuestion } from "./DismissQuestion";
 
 export default async function AdminPage() {
   await requireAdmin();
@@ -45,6 +46,7 @@ export default async function AdminPage() {
     supabase
       .from("rep_questions")
       .select("id, question, status, created_at, profiles:rep_id(display_name), stitch_messages(body, created_at)")
+      .eq("dismissed", false)
       .order("created_at", { ascending: false })
       .limit(25),
   ]);
@@ -119,7 +121,10 @@ export default async function AdminPage() {
                         </span>
                       )}
                     </span>
-                    <span className="text-xs text-slate-400">{formatDate(qn.created_at)}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-xs text-slate-400">{formatDate(qn.created_at)}</span>
+                      <DismissQuestion questionId={qn.id} />
+                    </span>
                   </div>
                   <p className="mt-1 text-sm text-slate-700">“{qn.question}”</p>
                   {replies.length > 0 && (

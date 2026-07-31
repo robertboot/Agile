@@ -158,6 +158,16 @@ async function markSeen(repId: string): Promise<void> {
     .eq("seen_by_rep", false);
 }
 
+/** Admin clears a rep question from the overview once handled. */
+export async function dismissRepQuestion(questionId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { error } = await db.from("rep_questions").update({ dismissed: true }).eq("id", questionId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/admin");
+  return { ok: true };
+}
+
 /**
  * Admin replies to a rep question — appends a message (repeatable), so an admin
  * can send several. Shows in the rep's Stitch widget live. Works from the
