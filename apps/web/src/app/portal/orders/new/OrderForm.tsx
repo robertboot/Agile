@@ -26,6 +26,7 @@ interface ItemRow {
   productCode: string;
   sku: string;
   qty: number;
+  serial: string;
 }
 
 type Quote = NonNullable<Awaited<ReturnType<typeof quoteOrder>>>;
@@ -34,18 +35,25 @@ export function OrderForm({
   providers,
   products,
   sizes,
+  initialProviderId,
 }: {
   providers: ProviderOption[];
   products: ProductOption[];
   sizes: SizeOption[];
+  initialProviderId?: string;
 }) {
   const firstProduct = products[0]?.code ?? "";
   const firstSku = sizes.find((s) => s.product_code === firstProduct)?.sku ?? "";
 
-  const [providerId, setProviderId] = useState(providers[0]?.id ?? "");
+  const [providerId, setProviderId] = useState(
+    initialProviderId && providers.some((p) => p.id === initialProviderId)
+      ? initialProviderId
+      : providers[0]?.id ?? "",
+  );
   const [tier, setTier] = useState<DiscountTier>(40);
+  const [patient, setPatient] = useState("");
   const [items, setItems] = useState<ItemRow[]>([
-    { productCode: firstProduct, sku: firstSku, qty: 1 },
+    { productCode: firstProduct, sku: firstSku, qty: 1, serial: "" },
   ]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, startSubmit] = useTransition();
@@ -86,7 +94,8 @@ export function OrderForm({
       const result = await createOrder(
         providerId,
         tier,
-        items.map(({ productCode, sku, qty }) => ({ productCode, sku, qty })),
+        items.map(({ productCode, sku, qty, serial }) => ({ productCode, sku, qty, serial })),
+        patient,
       );
       // createOrder redirects on success; a return value is always an error.
       if (result && !result.ok) setError(result.error ?? "Order creation failed");
@@ -120,6 +129,17 @@ export function OrderForm({
           </select>
         </div>
         <div>
+          <label className="label-mono text-slate-500">
+            Patient <span className="font-normal text-slate-400">(optional — can add later)</span>
+          </label>
+          <input
+            value={patient}
+            onChange={(e) => setPatient(e.target.value)}
+            placeholder="Patient name or reference"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+          />
+        </div>
+        <div className="sm:col-span-2">
           <label className="label-mono text-slate-500">Discount tier</label>
           <div className="mt-1 flex gap-2">
             {DISCOUNT_TIERS.map((t) => (
@@ -146,7 +166,7 @@ export function OrderForm({
           <button
             type="button"
             onClick={() =>
-              setItems((prev) => [...prev, { productCode: firstProduct, sku: firstSku, qty: 1 }])
+              setItems((prev) => [...prev, { productCode: firstProduct, sku: firstSku, qty: 1, serial: "" }])
             }
             className="text-sm font-medium text-brand-blue hover:underline"
           >
@@ -194,6 +214,17 @@ export function OrderForm({
                     max={500}
                     value={item.qty}
                     onChange={(e) => updateItem(i, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="min-w-36 flex-1">
+                  <label className="label-mono text-slate-500">
+                    Serial <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    value={item.serial}
+                    onChange={(e) => updateItem(i, { serial: e.target.value })}
+                    placeholder="Add later if unknown"
                     className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
                 </div>

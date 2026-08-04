@@ -2,8 +2,13 @@ import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { OrderForm } from "./OrderForm";
 
-export default async function NewOrderPage() {
+export default async function NewOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ provider?: string }>;
+}) {
   await requirePortalUser();
+  const { provider: initialProviderId } = await searchParams;
   const supabase = await createClient();
 
   const [{ data: providers }, { data: products }, { data: sizes }] = await Promise.all([
@@ -30,6 +35,7 @@ export default async function NewOrderPage() {
         providers={providers ?? []}
         products={products ?? []}
         sizes={(sizes ?? []).map((s) => ({ ...s, cm2: Number(s.cm2) }))}
+        initialProviderId={initialProviderId}
       />
     </div>
   );

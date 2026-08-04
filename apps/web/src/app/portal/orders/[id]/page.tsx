@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 import { OrderActions } from "./OrderActions";
+import { OrderFulfillment } from "./OrderFulfillment";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +32,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     billed_cents: number;
     rep_commission_cents: number;
     provider_keeps_cents: number;
+    serial_number: string | null;
   }[];
   const billed = items.reduce((a, i) => a + i.billed_cents, 0);
   const commission = items.reduce((a, i) => a + i.rep_commission_cents, 0);
@@ -103,6 +105,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <p className="mt-1 text-sm text-slate-500">
             {provider.practice_name} · {provider.provider_first} {provider.provider_last} ·{" "}
             {provider.city}, {provider.state}
+            {order.patient_name && ` · Patient: ${order.patient_name}`}
             {user.role === "admin" &&
               ` · Rep: ${(order.profiles as unknown as { display_name: string })?.display_name}`}
           </p>
@@ -133,11 +136,29 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </ol>
       )}
 
-      <OrderActions
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <OrderActions
+          orderId={order.id}
+          status={order.status}
+          ivrStatus={order.ivr_status ?? null}
+          role={user.role}
+        />
+        <Link
+          href={`/portal/orders/new?provider=${order.provider_id}`}
+          className="rounded-lg border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue hover:bg-blue-50"
+        >
+          + New order for this provider
+        </Link>
+      </div>
+
+      <OrderFulfillment
         orderId={order.id}
-        status={order.status}
-        ivrStatus={order.ivr_status ?? null}
-        role={user.role}
+        patientName={order.patient_name ?? ""}
+        items={items.map((i) => ({
+          id: i.id,
+          label: `${i.product_code} · ${i.size_label}`,
+          serial: i.serial_number ?? "",
+        }))}
       />
 
       <section className="rounded-lg border border-slate-200 bg-white">
@@ -148,6 +169,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               <th className="px-4 py-2.5 font-medium">Size</th>
               <th className="px-4 py-2.5 font-medium">cm²</th>
               <th className="px-4 py-2.5 font-medium">Qty</th>
+              <th className="px-4 py-2.5 font-medium">Serial</th>
               <th className="px-4 py-2.5 font-medium">Billed</th>
               <th className="px-4 py-2.5 font-medium">Commission</th>
             </tr>
@@ -161,6 +183,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 </td>
                 <td className="px-4 py-2.5">{Number(i.cm2)}</td>
                 <td className="px-4 py-2.5">{i.qty}</td>
+                <td className="px-4 py-2.5 font-mono text-xs">
+                  {i.serial_number ?? <span className="text-slate-300">—</span>}
+                </td>
                 <td className="px-4 py-2.5">{formatCents(i.billed_cents)}</td>
                 <td className="px-4 py-2.5">{formatCents(i.rep_commission_cents)}</td>
               </tr>

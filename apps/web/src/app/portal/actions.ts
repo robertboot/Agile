@@ -271,7 +271,8 @@ export async function reassignProvider(providerId: string, repId: string): Promi
 export async function createOrder(
   providerId: string,
   tier: DiscountTier,
-  items: QuoteItemInput[],
+  items: (QuoteItemInput & { serial?: string })[],
+  patientName?: string,
 ): Promise<ActionResult> {
   const user = await requirePortalUser();
   if (items.length === 0) return { ok: false, error: "Add at least one line item" };
@@ -302,14 +303,34 @@ export async function createOrder(
       billed_cents: line.billedCents,
       rep_commission_cents: line.repCommissionCents,
       provider_keeps_cents: line.providerKeepsCents,
+      serial_number: items[i]?.serial ?? null,
     })),
     p_cogs_cents: econ.cogsCents,
     p_agile_net_cents: econ.agileNetCents,
+    p_patient_name: patientName ?? null,
   });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/portal/orders");
   redirect(`/portal/orders/${orderId as string}`);
+}
+
+/** Fill in patient + product serial numbers after ordering (owner rep or admin). */
+export async function updateOrderFulfillment(
+  orderId: string,
+  patientName: string,
+  serials: { itemId: string; serial: string }[],
+): Promise<ActionResult> {
+  await requirePortalUser();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_update_order_fulfillment", {
+    p_order_id: orderId,
+    p_patient_name: patientName,
+    p_serials: serials.map((s) => ({ item_id: s.itemId, serial: s.serial })),
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/orders/${orderId}`);
+  return { ok: true };
 }
 
 /** Rep submits the IVR to MedNecessity (spec §5, New → IVR_SUBMITTED). */
