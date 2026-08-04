@@ -11,13 +11,16 @@ interface ItemSerial {
 export function OrderFulfillment({
   orderId,
   patientName,
+  dateApplied,
   items,
 }: {
   orderId: string;
   patientName: string;
+  dateApplied: string;
   items: (ItemSerial & { serial: string })[];
 }) {
   const [patient, setPatient] = useState(patientName);
+  const [applied, setApplied] = useState(dateApplied);
   const [serials, setSerials] = useState<Record<string, string>>(
     Object.fromEntries(items.map((i) => [i.id, i.serial])),
   );
@@ -33,6 +36,7 @@ export function OrderFulfillment({
         orderId,
         patient,
         items.map((i) => ({ itemId: i.id, serial: serials[i.id] ?? "" })),
+        applied,
       );
       if (r.ok) {
         setSaved(true);
@@ -48,14 +52,25 @@ export function OrderFulfillment({
         Fill these in when available — you can come back and update them any time.
       </p>
 
-      <div className="mt-4 max-w-md">
-        <label className="label-mono text-slate-500">Patient</label>
-        <input
-          value={patient}
-          onChange={(e) => setPatient(e.target.value)}
-          placeholder="Patient name or reference"
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-blue"
-        />
+      <div className="mt-4 grid max-w-lg gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label-mono text-slate-500">Patient</label>
+          <input
+            value={patient}
+            onChange={(e) => setPatient(e.target.value)}
+            placeholder="Patient name or reference"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-blue"
+          />
+        </div>
+        <div>
+          <label className="label-mono text-slate-500">Date applied</label>
+          <input
+            type="date"
+            value={applied}
+            onChange={(e) => setApplied(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-blue"
+          />
+        </div>
       </div>
 
       <div className="mt-4 space-y-2">

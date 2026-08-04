@@ -273,6 +273,7 @@ export async function createOrder(
   tier: DiscountTier,
   items: (QuoteItemInput & { serial?: string })[],
   patientName?: string,
+  dateApplied?: string,
 ): Promise<ActionResult> {
   const user = await requirePortalUser();
   if (items.length === 0) return { ok: false, error: "Add at least one line item" };
@@ -308,6 +309,7 @@ export async function createOrder(
     p_cogs_cents: econ.cogsCents,
     p_agile_net_cents: econ.agileNetCents,
     p_patient_name: patientName ?? null,
+    p_date_applied: dateApplied || null,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -320,6 +322,7 @@ export async function updateOrderFulfillment(
   orderId: string,
   patientName: string,
   serials: { itemId: string; serial: string }[],
+  dateApplied?: string,
 ): Promise<ActionResult> {
   await requirePortalUser();
   const supabase = await createClient();
@@ -327,6 +330,7 @@ export async function updateOrderFulfillment(
     p_order_id: orderId,
     p_patient_name: patientName,
     p_serials: serials.map((s) => ({ item_id: s.itemId, serial: s.serial })),
+    p_date_applied: dateApplied || null,
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/portal/orders/${orderId}`);

@@ -106,6 +106,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             {provider.practice_name} · {provider.provider_first} {provider.provider_last} ·{" "}
             {provider.city}, {provider.state}
             {order.patient_name && ` · Patient: ${order.patient_name}`}
+            {order.date_applied && ` · Applied: ${formatDate(order.date_applied)}`}
             {user.role === "admin" &&
               ` · Rep: ${(order.profiles as unknown as { display_name: string })?.display_name}`}
           </p>
@@ -154,6 +155,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <OrderFulfillment
         orderId={order.id}
         patientName={order.patient_name ?? ""}
+        dateApplied={order.date_applied ?? ""}
         items={items.map((i) => ({
           id: i.id,
           label: `${i.product_code} · ${i.size_label}`,

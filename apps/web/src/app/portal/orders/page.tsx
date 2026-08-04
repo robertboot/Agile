@@ -6,27 +6,42 @@ import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 
 const PAGE_SIZE = 50;
 
+const SORT_COLS: Record<string, string> = {
+  created: "created_at",
+  patient: "patient_name",
+};
+
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; sort?: string; dir?: string }>;
 }) {
   const user = await requirePortalUser();
   const supabase = await createClient();
-  const page = Math.max(1, Number((await searchParams).page ?? "1") || 1);
+  const sp = await searchParams;
+  const page = Math.max(1, Number(sp.page ?? "1") || 1);
+  const sort = sp.sort && SORT_COLS[sp.sort] ? sp.sort : "created";
+  const asc = sp.dir === "asc";
   const from = (page - 1) * PAGE_SIZE;
 
   const { data: orders, count } = await supabase
     .from("orders")
     .select(
-      "id, status, created_at, discount_tier, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
+      "id, status, created_at, patient_name, discount_tier, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
       { count: "exact" },
     )
     .is("deleted_at", null)
-    .order("created_at", { ascending: false })
+    .order(SORT_COLS[sort]!, { ascending: asc, nullsFirst: false })
     .range(from, from + PAGE_SIZE - 1);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+
+  // Clickable header: toggles direction on the active column, else sorts asc.
+  const sortHref = (key: string) => {
+    const nextDir = sort === key && asc ? "desc" : "asc";
+    return `/portal/orders?sort=${key}&dir=${nextDir}`;
+  };
+  const arrow = (key: string) => (sort === key ? (asc ? " ▲" : " ▼") : "");
 
   return (
     <div className="space-y-6">
@@ -46,8 +61,17 @@ export default async function OrdersPage({
             <tr>
               <th className="px-4 py-2.5 font-medium">Order</th>
               <th className="px-4 py-2.5 font-medium">Provider</th>
+              <th className="px-4 py-2.5 font-medium">
+                <Link href={sortHref("patient")} className="hover:text-navy-900">
+                  Patient{arrow("patient")}
+                </Link>
+              </th>
               {user.role === "admin" && <th className="px-4 py-2.5 font-medium">Rep</th>}
-              <th className="px-4 py-2.5 font-medium">Created</th>
+              <th className="px-4 py-2.5 font-medium">
+                <Link href={sortHref("created")} className="hover:text-navy-900">
+                  Date ordered{arrow("created")}
+                </Link>
+              </th>
               <th className="px-4 py-2.5 font-medium">Tier</th>
               <th className="px-4 py-2.5 font-medium">Billed</th>
               <th className="px-4 py-2.5 font-medium">Status</th>
@@ -72,6 +96,9 @@ export default async function OrdersPage({
                   <td className="px-4 py-2.5">
                     {(o.providers as unknown as { practice_name: string })?.practice_name}
                   </td>
+                  <td className="px-4 py-2.5">
+                    {o.patient_name ?? <span className="text-slate-300">—</span>}
+                  </td>
                   {user.role === "admin" && (
                     <td className="px-4 py-2.5">
                       {(o.profiles as unknown as { display_name: string })?.display_name}
@@ -92,7 +119,7 @@ export default async function OrdersPage({
             })}
             {(orders ?? []).length === 0 && (
               <tr>
-                <td colSpan={user.role === "admin" ? 7 : 6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={user.role === "admin" ? 8 : 7} className="px-4 py-8 text-center text-slate-400">
                   No orders yet.
                 </td>
               </tr>
@@ -109,7 +136,7 @@ export default async function OrdersPage({
           <div className="flex gap-2">
             {page > 1 && (
               <Link
-                href={`/portal/orders?page=${page - 1}`}
+                href={`/portal/orders?page=${page - 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
               >
                 ← Previous
@@ -117,7 +144,7 @@ export default async function OrdersPage({
             )}
             {page < totalPages && (
               <Link
-                href={`/portal/orders?page=${page + 1}`}
+                href={`/portal/orders?page=${page + 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
               >
                 Next →

@@ -52,6 +52,7 @@ export function OrderForm({
   );
   const [tier, setTier] = useState<DiscountTier>(40);
   const [patient, setPatient] = useState("");
+  const [dateApplied, setDateApplied] = useState("");
   const [items, setItems] = useState<ItemRow[]>([
     { productCode: firstProduct, sku: firstSku, qty: 1, serial: "" },
   ]);
@@ -96,6 +97,7 @@ export function OrderForm({
         tier,
         items.map(({ productCode, sku, qty, serial }) => ({ productCode, sku, qty, serial })),
         patient,
+        dateApplied,
       );
       // createOrder redirects on success; a return value is always an error.
       if (result && !result.ok) setError(result.error ?? "Order creation failed");
@@ -136,6 +138,17 @@ export function OrderForm({
             value={patient}
             onChange={(e) => setPatient(e.target.value)}
             placeholder="Patient name or reference"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="label-mono text-slate-500">
+            Date applied <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <input
+            type="date"
+            value={dateApplied}
+            onChange={(e) => setDateApplied(e.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
           />
         </div>
