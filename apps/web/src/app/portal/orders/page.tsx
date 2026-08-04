@@ -9,6 +9,7 @@ const PAGE_SIZE = 50;
 const SORT_COLS: Record<string, string> = {
   created: "created_at",
   patient: "patient_name",
+  applied: "date_applied",
 };
 
 export default async function OrdersPage({
@@ -27,7 +28,7 @@ export default async function OrdersPage({
   const { data: orders, count } = await supabase
     .from("orders")
     .select(
-      "id, status, created_at, patient_name, discount_tier, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
+      "id, status, created_at, patient_name, date_applied, discount_tier, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
       { count: "exact" },
     )
     .is("deleted_at", null)
@@ -72,6 +73,11 @@ export default async function OrdersPage({
                   Date ordered{arrow("created")}
                 </Link>
               </th>
+              <th className="px-4 py-2.5 font-medium">
+                <Link href={sortHref("applied")} className="hover:text-navy-900">
+                  Date applied{arrow("applied")}
+                </Link>
+              </th>
               <th className="px-4 py-2.5 font-medium">Tier</th>
               <th className="px-4 py-2.5 font-medium">Billed</th>
               <th className="px-4 py-2.5 font-medium">Status</th>
@@ -105,6 +111,9 @@ export default async function OrdersPage({
                     </td>
                   )}
                   <td className="px-4 py-2.5">{formatDate(o.created_at)}</td>
+                  <td className="px-4 py-2.5">
+                    {o.date_applied ? formatDate(o.date_applied) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td className="px-4 py-2.5">{o.discount_tier}%</td>
                   <td className="px-4 py-2.5">{formatCents(billed)}</td>
                   <td className="px-4 py-2.5">
@@ -119,7 +128,7 @@ export default async function OrdersPage({
             })}
             {(orders ?? []).length === 0 && (
               <tr>
-                <td colSpan={user.role === "admin" ? 8 : 7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={user.role === "admin" ? 9 : 8} className="px-4 py-8 text-center text-slate-400">
                   No orders yet.
                 </td>
               </tr>
