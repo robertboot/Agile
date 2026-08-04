@@ -13,7 +13,7 @@ interface Msg {
 
 const GREETING: Msg = {
   from: "stitch",
-  text: "Hi, I'm Stitch 🧵 — your Agile helper. Pick a tutorial below or ask me anything. If I'm stumped, I'll loop in the team.",
+  text: "Hi, I'm Stitch — your Agile helper. Pick a tutorial below or ask me anything. If I'm stumped, I'll loop in the team.",
 };
 
 export function StitchWidget() {
