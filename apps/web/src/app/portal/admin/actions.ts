@@ -266,6 +266,20 @@ export async function updateProvider(
   return { ok: true };
 }
 
+/** Soft-delete a provider (admin). Keeps the row for audit; hidden everywhere. */
+export async function deleteProvider(providerId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { error } = await db
+    .from("providers")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", providerId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/providers");
+  revalidatePath("/portal/admin");
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Provider status override (manual — MedNecessity not connected yet)
 // ---------------------------------------------------------------------------

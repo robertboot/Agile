@@ -10,7 +10,7 @@ export default async function ProvidersPage() {
 
   const { data: providers } = await supabase
     .from("providers")
-    .select("id, practice_name, city, state, provider_first, provider_last, credentials, mednecessity_status, individual_npi, rep_id, profiles:rep_id(display_name, role)")
+    .select("id, practice_name, city, state, provider_first, provider_last, credentials, mednecessity_status, approved, individual_npi, rep_id, profiles:rep_id(display_name, role)")
     .is("deleted_at", null)
     .order("practice_name");
 
@@ -26,6 +26,7 @@ export default async function ProvidersPage() {
       provider_last: p.provider_last,
       credentials: p.credentials,
       mednecessity_status: p.mednecessity_status,
+      approved: p.approved,
       rep_id: p.rep_id,
       repName: isHouse ? "House account" : (owner?.display_name ?? "—"),
       isHouse,
