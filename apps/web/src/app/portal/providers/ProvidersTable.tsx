@@ -19,7 +19,7 @@ export interface ProviderRow {
 }
 
 const MN_LABELS: Record<string, string> = {
-  awaiting: "Awaiting approval",
+  awaiting: "Awaiting MedNecessity",
   sent: "Sent to MedNecessity",
   onboarded: "Onboarded",
 };

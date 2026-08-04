@@ -176,9 +176,13 @@ export function StitchWidget() {
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
             {msgs.map((m, i) => (
-              <div key={i} className={m.from === "rep" ? "text-right" : ""}>
+              <div key={i} className={`flex items-end gap-2 ${m.from === "rep" ? "justify-end" : ""}`}>
+                {m.from === "stitch" && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/stitch.png" alt="Stitch" className="h-7 w-7 shrink-0 rounded-full" />
+                )}
                 <div
-                  className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-left text-sm ${
+                  className={`inline-block max-w-[80%] rounded-2xl px-3 py-2 text-left text-sm ${
                     m.from === "rep"
                       ? "bg-brand-blue text-white"
                       : "bg-slate-100 text-slate-800"

@@ -267,6 +267,33 @@ export async function updateProvider(
 }
 
 // ---------------------------------------------------------------------------
+// Provider status override (manual — MedNecessity not connected yet)
+// ---------------------------------------------------------------------------
+export async function overrideProviderStatus(
+  providerId: string,
+  approved: boolean,
+  onboarded: boolean,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const db = createAdminClient();
+  const { error } = await db
+    .from("providers")
+    .update({
+      approved,
+      approved_by: approved ? admin.id : null,
+      approved_at: approved ? new Date().toISOString() : null,
+      // Manual onboarding override until the real MedNecessity integration is live.
+      mednecessity_status: onboarded ? "onboarded" : "awaiting",
+    })
+    .eq("id", providerId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/providers/${providerId}`);
+  revalidatePath("/portal/providers");
+  revalidatePath("/portal/admin");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Contact messages — clear / mark spam
 // ---------------------------------------------------------------------------
 export async function clearContactMessage(id: string, spam: boolean): Promise<ActionResult> {

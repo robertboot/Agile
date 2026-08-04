@@ -4,6 +4,7 @@ import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import { EditProviderForm, type ProviderRecord } from "./EditProviderForm";
+import { ProviderAdminOverride } from "./ProviderAdminOverride";
 
 export default async function ProviderDetailPage({
   params,
@@ -60,6 +61,14 @@ export default async function ProviderDetailPage({
           Registered {formatDate(provider.created_at)} · BAA: {baaStatus}
         </p>
       </div>
+
+      {user.role === "admin" && (
+        <ProviderAdminOverride
+          providerId={provider.id}
+          approved={provider.approved}
+          onboarded={provider.mednecessity_status === "onboarded"}
+        />
+      )}
 
       <EditProviderForm provider={provider as unknown as ProviderRecord} editable={editable} />
     </div>
