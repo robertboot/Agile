@@ -3,6 +3,7 @@ import { formatCents } from "@agile/shared";
 import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
+import { SortTip } from "./SortTip";
 
 const PAGE_SIZE = 50;
 
@@ -55,6 +56,8 @@ export default async function OrdersPage({
           + New order
         </Link>
       </div>
+
+      <SortTip />
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
