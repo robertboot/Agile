@@ -23,8 +23,18 @@ export function StitchWidget() {
   const [pending, start] = useTransition();
   const [loadedAnswers, setLoadedAnswers] = useState(false);
   const [unseen, setUnseen] = useState(0);
+  const [intro, setIntro] = useState(false); // once-a-session bounce + bubble
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastPollRef = useRef<string>(new Date().toISOString());
+
+  // Bounce + "I can help" bubble once per session.
+  useEffect(() => {
+    if (sessionStorage.getItem("stitch-introduced")) return;
+    sessionStorage.setItem("stitch-introduced", "1");
+    setIntro(true);
+    const t = setTimeout(() => setIntro(false), 7000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Poll for admin replies the rep hasn't seen — drives the launcher badge.
   useEffect(() => {
@@ -110,14 +120,37 @@ export function StitchWidget() {
 
   return (
     <>
+      {/* Intro bubble — once a session */}
+      {intro && !open && (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+            setIntro(false);
+          }}
+          className="fixed bottom-24 right-5 z-30 max-w-[15rem] animate-[stitch-fade_.3s_ease-out] rounded-2xl rounded-br-sm border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-xl"
+        >
+          <span className="font-semibold text-navy-900">Hi, I&apos;m Stitch 👋</span>
+          <br />
+          Need a hand? Ask me anything or pick a quick tutorial.
+        </button>
+      )}
+
       {/* Launcher */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={unseen > 0 ? `Open Stitch helper — ${unseen} new answer${unseen > 1 ? "s" : ""}` : "Open Stitch helper"}
-        className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue text-2xl text-white shadow-lg transition hover:scale-105"
+        className={`fixed bottom-5 right-5 z-30 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-lg ring-2 ring-brand-blue/20 transition hover:scale-105 ${
+          intro && !open ? "animate-[stitch-bounce_1s_ease-in-out_3]" : ""
+        }`}
       >
-        {open ? "✕" : "🧵"}
+        {open ? (
+          <span className="text-2xl text-navy-900">✕</span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/stitch.png" alt="Stitch helper" className="h-full w-full object-cover" />
+        )}
         {!open && unseen > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-xs font-bold text-white">
             {unseen > 9 ? "9+" : unseen}
@@ -125,10 +158,16 @@ export function StitchWidget() {
         )}
       </button>
 
+      <style>{`
+        @keyframes stitch-bounce { 0%,100%{transform:translateY(0)} 25%{transform:translateY(-14px)} 50%{transform:translateY(0)} 75%{transform:translateY(-6px)} }
+        @keyframes stitch-fade { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+      `}</style>
+
       {open && (
         <div className="fixed bottom-24 right-5 z-30 flex h-[32rem] w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center gap-2 border-b border-slate-200 bg-navy-900 px-4 py-3 text-white">
-            <span className="text-xl">🧵</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/stitch.png" alt="" className="h-7 w-7 rounded-full" />
             <div>
               <div className="text-sm font-semibold">Stitch</div>
               <div className="text-[11px] text-slate-300">Agile rep helper</div>
