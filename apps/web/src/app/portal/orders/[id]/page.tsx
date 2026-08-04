@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 import { OrderActions } from "./OrderActions";
 import { OrderFulfillment } from "./OrderFulfillment";
+import { QuickBooksSync } from "./QuickBooksSync";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -151,6 +152,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           + New order for this provider
         </Link>
       </div>
+
+      {user.role === "admin" && ["shipped", "invoiced", "paid"].includes(order.status) && (
+        <QuickBooksSync
+          orderId={order.id}
+          invoiceNumber={order.qbo_invoice_number ?? null}
+          syncError={order.qbo_sync_error ?? null}
+        />
+      )}
 
       <OrderFulfillment
         orderId={order.id}

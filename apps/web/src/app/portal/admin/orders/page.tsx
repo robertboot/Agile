@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABELS } from "@/lib/format";
+import { qboConfigured, qboStatus } from "@/lib/integrations/quickbooks";
 import { OrderCard, type BoardOrder } from "./OrderCard";
 
 // Pipeline columns in flow order. Cancelled/paid shown but not advanceable.
@@ -24,9 +25,15 @@ const NEXT_LABEL: Record<string, string | null> = {
   paid: null,
 };
 
-export default async function AdminOrderBoardPage() {
+export default async function AdminOrderBoardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ qbo?: string }>;
+}) {
   await requireAdmin();
   const supabase = await createClient();
+  const qboFlash = (await searchParams).qbo;
+  const qbo = qboConfigured() ? await qboStatus() : { connected: false };
 
   const { data: orders } = await supabase
     .from("orders")
@@ -55,9 +62,38 @@ export default async function AdminOrderBoardPage() {
       <div>
         <h1 className="text-2xl font-bold text-navy-900">Order board</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Drag orders through the pipeline with one click. MedNecessity isn&apos;t connected yet, so
+          Move orders through the pipeline with one click. MedNecessity isn&apos;t connected yet, so
           steps advance manually. Record collections on the order to accrue commission.
         </p>
+      </div>
+
+      {/* QuickBooks status */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+        <span className="font-semibold text-navy-900">QuickBooks</span>
+        {!qboConfigured() ? (
+          <span className="text-slate-500">
+            Not configured — set QBO_CLIENT_ID / QBO_CLIENT_SECRET / QBO_REDIRECT_URI, then reload.
+          </span>
+        ) : qbo.connected ? (
+          <span className="flex items-center gap-2 text-emerald-700">
+            Connected ✓ <span className="text-xs text-slate-400">company {qbo.realmId}</span>
+            <a href="/api/quickbooks/connect" className="text-xs text-slate-400 hover:text-slate-700">
+              (reconnect)
+            </a>
+          </span>
+        ) : (
+          <a
+            href="/api/quickbooks/connect"
+            className="rounded-lg bg-[#2CA01C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+          >
+            Connect QuickBooks
+          </a>
+        )}
+        {qboFlash === "connected" && <span className="text-xs text-emerald-600">Just connected ✓</span>}
+        {qboFlash === "error" && <span className="text-xs text-red-600">Connection failed — try again.</span>}
+        <span className="ml-auto text-xs text-slate-400">
+          Invoices auto-create when an order reaches “Invoiced”.
+        </span>
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-4">

@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/app/portal/actions";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
+import { qboCreateInvoiceForOrder } from "@/lib/integrations/quickbooks";
 
 // ---------------------------------------------------------------------------
 // Admin calculator — FULL economics (COGS + Agile net). Admin-only.
@@ -302,9 +303,28 @@ export async function advanceOrderStatus(
 
   const { error } = await db.from("orders").update(patch).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
+
+  // On reaching "invoiced", push an invoice to QuickBooks — best-effort; a
+  // failure is recorded on the order (retry button) and never blocks the move.
+  if (next === "invoiced") {
+    try {
+      await qboCreateInvoiceForOrder(orderId);
+    } catch {
+      /* recorded on the order */
+    }
+  }
+
   revalidatePath("/portal/admin/orders");
   revalidatePath(`/portal/orders/${orderId}`);
   return { ok: true };
+}
+
+/** Manually (re)send an order's invoice to QuickBooks. */
+export async function syncOrderToQuickBooks(orderId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const r = await qboCreateInvoiceForOrder(orderId);
+  revalidatePath(`/portal/orders/${orderId}`);
+  return r.ok ? { ok: true } : { ok: false, error: r.error ?? "QuickBooks sync failed" };
 }
 
 /** Soft-delete a provider (admin). Keeps the row for audit; hidden everywhere. */
