@@ -266,6 +266,47 @@ export async function updateProvider(
   return { ok: true };
 }
 
+// ---------------------------------------------------------------------------
+// Order pipeline board — manual step advance (MedNecessity not connected)
+// ---------------------------------------------------------------------------
+const ORDER_NEXT: Record<string, string> = {
+  new: "ivr_submitted",
+  ivr_submitted: "good_to_order",
+  good_to_order: "placed",
+  placed: "shipped",
+  shipped: "invoiced",
+  invoiced: "paid",
+};
+
+/** Move an order one step forward in the pipeline (admin, manual). */
+export async function advanceOrderStatus(
+  orderId: string,
+  fedexTracking?: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { data: order } = await db.from("orders").select("status").eq("id", orderId).single();
+  if (!order) return { ok: false, error: "Order not found" };
+  const next = ORDER_NEXT[order.status];
+  if (!next) return { ok: false, error: `No next step from ${order.status}` };
+
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { status: next };
+  if (next === "placed") patch.placed_at = now;
+  if (next === "shipped") {
+    patch.shipped_at = now;
+    if (fedexTracking?.trim()) patch.fedex_tracking = fedexTracking.trim();
+  }
+  if (next === "invoiced") patch.invoiced_at = now;
+  if (next === "paid") patch.collected_at = now;
+
+  const { error } = await db.from("orders").update(patch).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/admin/orders");
+  revalidatePath(`/portal/orders/${orderId}`);
+  return { ok: true };
+}
+
 /** Soft-delete a provider (admin). Keeps the row for audit; hidden everywhere. */
 export async function deleteProvider(providerId: string): Promise<ActionResult> {
   await requireAdmin();
