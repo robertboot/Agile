@@ -38,7 +38,7 @@ export default async function AdminOrderBoardPage({
   const { data: orders } = await supabase
     .from("orders")
     .select(
-      "id, status, patient_name, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents)",
+      "id, status, patient_name, qbo_invoice_number, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents)",
     )
     .is("deleted_at", null)
     .is("archived_at", null)
@@ -55,6 +55,7 @@ export default async function AdminOrderBoardPage({
       patient: o.patient_name,
       rep: (o.profiles as unknown as { display_name: string })?.display_name ?? "—",
       billed,
+      invoiceNumber: o.qbo_invoice_number ?? null,
     });
   }
 

@@ -11,6 +11,7 @@ export interface BoardOrder {
   patient: string | null;
   rep: string;
   billed: number;
+  invoiceNumber: string | null;
 }
 
 export function OrderCard({
@@ -36,12 +37,19 @@ export function OrderCard({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-      <Link
-        href={`/portal/orders/${order.id}`}
-        className="font-mono text-xs text-brand-blue hover:underline"
-      >
-        {order.id.slice(0, 8)}
-      </Link>
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          href={`/portal/orders/${order.id}`}
+          className="font-mono text-xs text-brand-blue hover:underline"
+        >
+          {order.id.slice(0, 8)}
+        </Link>
+        {order.invoiceNumber && (
+          <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-emerald-700">
+            Inv #{order.invoiceNumber}
+          </span>
+        )}
+      </div>
       <div className="mt-0.5 text-sm font-medium text-navy-900">{order.provider}</div>
       {order.patient && <div className="text-xs text-slate-500">Patient: {order.patient}</div>}
       <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
