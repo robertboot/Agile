@@ -100,7 +100,7 @@ export default async function AdminOrderBoardPage({
       {/* Full-bleed: break out of the centered portal container to use the
           whole viewport width so all pipeline columns fit. */}
       <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen px-4 sm:px-6">
-       <div className="flex gap-3 overflow-x-auto pb-4">
+       <div className="mx-auto flex w-max max-w-full gap-3 overflow-x-auto pb-4">
         {COLUMNS.map((col) => {
           const cards = byStatus.get(col) ?? [];
           return (
