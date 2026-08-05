@@ -7,10 +7,14 @@ export function QuickBooksSync({
   orderId,
   invoiceNumber,
   syncError,
+  emailedTo,
+  emailedAt,
 }: {
   orderId: string;
   invoiceNumber: string | null;
   syncError: string | null;
+  emailedTo: string | null;
+  emailedAt: string | null;
 }) {
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(syncError);
@@ -28,7 +32,22 @@ export function QuickBooksSync({
     <div className="rounded-lg border border-slate-200 bg-white p-5">
       <h2 className="mb-2 font-semibold text-navy-900">QuickBooks</h2>
       {num ? (
-        <p className="text-sm text-emerald-700">Invoice #{num} created ✓</p>
+        <div className="space-y-1">
+          <p className="text-sm text-emerald-700">Invoice #{num} created ✓</p>
+          {emailedAt ? (
+            <p className="text-xs text-emerald-700">
+              Emailed to {emailedTo} on{" "}
+              {new Date(emailedAt).toLocaleString("en-US", {
+                month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+              })}{" "}
+              ✓
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Not emailed — add a provider contact email to send automatically.
+            </p>
+          )}
+        </div>
       ) : (
         <div className="flex items-center gap-3">
           <button

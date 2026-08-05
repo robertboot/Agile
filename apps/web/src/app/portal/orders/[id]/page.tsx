@@ -169,6 +169,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           orderId={order.id}
           invoiceNumber={order.qbo_invoice_number ?? null}
           syncError={order.qbo_sync_error ?? null}
+          emailedTo={order.qbo_invoice_email ?? null}
+          emailedAt={order.qbo_invoice_emailed_at ?? null}
         />
       )}
 

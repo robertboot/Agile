@@ -159,6 +159,31 @@ async function findOrCreateItem(): Promise<string | null> {
   return (created.json as { Item?: { Id: string } })?.Item?.Id ?? null;
 }
 
+/** Email an invoice to a recipient via QuickBooks (marks it EmailSent). The
+ *  send endpoint requires an octet-stream content type — JSON 500s server-side. */
+async function qboSendInvoice(invoiceId: string, email: string): Promise<{ ok: boolean; error?: string }> {
+  const access = await getAccess();
+  if (!access) return { ok: false, error: "QuickBooks not connected" };
+  const res = await fetch(
+    `${API_BASE}/v3/company/${access.realmId}/invoice/${invoiceId}/send?sendTo=${encodeURIComponent(email)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${access.token}`,
+        Accept: "application/json",
+        "Content-Type": "application/octet-stream",
+      },
+    },
+  );
+  if (!res.ok) {
+    const json = await res.json().catch(() => null);
+    const msg =
+      (json as { Fault?: { Error?: { Message?: string }[] } })?.Fault?.Error?.[0]?.Message ?? `HTTP ${res.status}`;
+    return { ok: false, error: msg };
+  }
+  return { ok: true };
+}
+
 /**
  * Create a QBO invoice for an order (idempotent — skips if already synced).
  * Customer = practice name; a single service line carries the billed total with
@@ -168,13 +193,16 @@ export async function qboCreateInvoiceForOrder(orderId: string): Promise<{ ok: b
   const db = createAdminClient();
   const { data: order } = await db
     .from("orders")
-    .select("id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id), order_items(product_code, size_label, qty, billed_cents)")
+    .select("id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id, contact_email), order_items(product_code, size_label, qty, billed_cents)")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found" };
   if (order.qbo_invoice_id) return { ok: true }; // already synced
 
-  const provider = order.providers as unknown as { practice_name: string; qbo_customer_id: string | null };
+  const provider = order.providers as unknown as {
+    practice_name: string; qbo_customer_id: string | null; contact_email: string | null;
+  };
+  const email = provider.contact_email?.trim() || null;
   const items = (order.order_items ?? []) as { product_code: string; size_label: string; qty: number; billed_cents: number }[];
 
   try {
@@ -197,14 +225,30 @@ export async function qboCreateInvoiceForOrder(orderId: string): Promise<{ ok: b
     const res = await qbo("/invoice", "POST", {
       CustomerRef: { value: customerId },
       Line: lines,
+      ...(email ? { BillEmail: { Address: email } } : {}),
       ...(memoBits.length ? { CustomerMemo: { value: memoBits.join(" · ") } } : {}),
     });
     if (!res.ok) return await recordError(db, orderId, res.error ?? "QuickBooks invoice failed");
 
     const inv = (res.json as { Invoice?: { Id: string; DocNumber?: string } }).Invoice!;
+    // Email the invoice to the provider (best-effort — a send failure doesn't
+    // undo the created invoice; it's recorded so it can be retried).
+    let sendErr: string | null = null;
+    let emailedAt: string | null = null;
+    if (email) {
+      const sent = await qboSendInvoice(inv.Id, email);
+      if (sent.ok) emailedAt = new Date().toISOString();
+      else sendErr = `Invoice created but email failed: ${sent.error}`;
+    }
     await db
       .from("orders")
-      .update({ qbo_invoice_id: inv.Id, qbo_invoice_number: inv.DocNumber ?? inv.Id, qbo_sync_error: null })
+      .update({
+        qbo_invoice_id: inv.Id,
+        qbo_invoice_number: inv.DocNumber ?? inv.Id,
+        qbo_sync_error: sendErr,
+        qbo_invoice_emailed_at: emailedAt,
+        qbo_invoice_email: emailedAt ? email : null,
+      })
       .eq("id", orderId);
     if (!provider.qbo_customer_id) {
       await db.from("providers").update({ qbo_customer_id: customerId }).eq("practice_name", provider.practice_name);
@@ -234,14 +278,17 @@ export async function qboUpdateInvoiceForOrder(
   const { data: order } = await db
     .from("orders")
     .select(
-      "id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id), order_items(product_code, size_label, qty, billed_cents)",
+      "id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id, contact_email), order_items(product_code, size_label, qty, billed_cents)",
     )
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found" };
   if (!order.qbo_invoice_id) return { ok: true }; // not invoiced yet — nothing to sync
 
-  const provider = order.providers as unknown as { practice_name: string; qbo_customer_id: string | null };
+  const provider = order.providers as unknown as {
+    practice_name: string; qbo_customer_id: string | null; contact_email: string | null;
+  };
+  const email = provider.contact_email?.trim() || null;
   const items = (order.order_items ?? []) as {
     product_code: string; size_label: string; qty: number; billed_cents: number;
   }[];
@@ -296,9 +343,21 @@ export async function qboUpdateInvoiceForOrder(
     if (!res.ok) return await recordError(db, orderId, res.error ?? "QuickBooks invoice update failed");
     const updated = (res.json as { Invoice?: { Id: string; DocNumber?: string } }).Invoice!;
     const num = updated.DocNumber ?? updated.Id;
+    // Re-email the corrected invoice to the provider (best-effort).
+    let sendErr: string | null = null;
+    let emailedAt: string | null = null;
+    if (email) {
+      const sent = await qboSendInvoice(updated.Id, email);
+      if (sent.ok) emailedAt = new Date().toISOString();
+      else sendErr = `Invoice updated but email failed: ${sent.error}`;
+    }
     await db
       .from("orders")
-      .update({ qbo_invoice_number: num, qbo_sync_error: null })
+      .update({
+        qbo_invoice_number: num,
+        qbo_sync_error: sendErr,
+        ...(emailedAt ? { qbo_invoice_emailed_at: emailedAt, qbo_invoice_email: email } : {}),
+      })
       .eq("id", orderId);
     return { ok: true, invoiceNumber: num, reissued: false };
   } catch (err) {
