@@ -244,13 +244,15 @@ export async function retryProviderRegistration(providerId: string): Promise<Act
 export async function reassignProvider(providerId: string, repId: string): Promise<ActionResult> {
   await requireAdmin();
   const db = createAdminClient();
+  // Target may be a rep, or an admin — assigning to an admin makes it a House
+  // account (owned internally, no rep attribution).
   const { data: rep } = await db
     .from("profiles")
     .select("id, role")
     .eq("id", repId)
-    .eq("role", "rep")
+    .in("role", ["rep", "admin"])
     .maybeSingle();
-  if (!rep) return { ok: false, error: "Target rep not found" };
+  if (!rep) return { ok: false, error: "Target owner not found" };
   const { error } = await db.from("providers").update({ rep_id: repId }).eq("id", providerId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/portal/providers");

@@ -24,15 +24,17 @@ export default async function ProviderDetailPage({
     .maybeSingle();
   if (!provider) notFound();
 
-  // Reps list for admin reassignment (any rep, incl. suspended legacy reps).
+  // Reps + admins (House account owners) for admin reassignment.
   let reps: RepOption[] = [];
+  let houseOwners: RepOption[] = [];
   if (user.role === "admin") {
     const { data } = await supabase
       .from("profiles")
-      .select("id, display_name, status")
-      .eq("role", "rep")
+      .select("id, display_name, status, role")
+      .in("role", ["rep", "admin"])
       .order("display_name");
-    reps = (data ?? []) as RepOption[];
+    reps = ((data ?? []) as (RepOption & { role: string })[]).filter((p) => p.role === "rep");
+    houseOwners = ((data ?? []) as (RepOption & { role: string })[]).filter((p) => p.role === "admin");
   }
 
   // RLS lets reps update only their own unapproved providers; admins any.
@@ -107,8 +109,13 @@ export default async function ProviderDetailPage({
         />
       )}
 
-      {user.role === "admin" && reps.length > 0 && (
-        <ReassignRep providerId={provider.id} currentRepId={provider.rep_id} reps={reps} />
+      {user.role === "admin" && (reps.length > 0 || houseOwners.length > 0) && (
+        <ReassignRep
+          providerId={provider.id}
+          currentRepId={provider.rep_id}
+          reps={reps}
+          houseOwners={houseOwners}
+        />
       )}
 
       <EditProviderForm provider={provider as unknown as ProviderRecord} editable={editable} />

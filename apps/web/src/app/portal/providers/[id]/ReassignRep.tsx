@@ -14,10 +14,12 @@ export function ReassignRep({
   providerId,
   currentRepId,
   reps,
+  houseOwners,
 }: {
   providerId: string;
   currentRepId: string;
   reps: RepOption[];
+  houseOwners: RepOption[];
 }) {
   const router = useRouter();
   const [repId, setRepId] = useState(currentRepId);
@@ -54,12 +56,23 @@ export function ReassignRep({
             onChange={(e) => setRepId(e.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
           >
-            {reps.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.display_name}
-                {r.status !== "active" ? ` (${r.status})` : ""}
-              </option>
-            ))}
+            <optgroup label="Reps">
+              {reps.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.display_name}
+                  {r.status !== "active" ? ` (${r.status})` : ""}
+                </option>
+              ))}
+            </optgroup>
+            {houseOwners.length > 0 && (
+              <optgroup label="House account">
+                {houseOwners.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    House account — {h.display_name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
         <button
