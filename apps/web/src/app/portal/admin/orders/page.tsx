@@ -20,7 +20,7 @@ const NEXT_LABEL: Record<string, string | null> = {
   ivr_submitted: "Good to order",
   good_to_order: "Placed",
   placed: "Shipped",
-  shipped: "Invoiced",
+  shipped: "Invoice",
   invoiced: "Paid",
   paid: null,
 };
@@ -41,6 +41,7 @@ export default async function AdminOrderBoardPage({
       "id, status, patient_name, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents)",
     )
     .is("deleted_at", null)
+    .is("archived_at", null)
     .neq("status", "cancelled")
     .order("created_at", { ascending: true });
 
@@ -96,7 +97,10 @@ export default async function AdminOrderBoardPage({
         </span>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      {/* Full-bleed: break out of the centered portal container to use the
+          whole viewport width so all pipeline columns fit. */}
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen px-4 sm:px-6">
+       <div className="flex gap-3 overflow-x-auto pb-4">
         {COLUMNS.map((col) => {
           const cards = byStatus.get(col) ?? [];
           return (
@@ -123,6 +127,7 @@ export default async function AdminOrderBoardPage({
             </div>
           );
         })}
+       </div>
       </div>
     </div>
   );

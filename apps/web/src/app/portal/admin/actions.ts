@@ -233,10 +233,31 @@ export async function updateProvider(
     return { ok: false, error: "Organization NPI failed check-digit validation" };
   }
 
+  // Optional signed-agreement upload (legacy paper agreements) → private
+  // bucket via service role. Only overwrite the stored path when a new file
+  // is provided, so a plain edit never wipes an existing agreement.
+  let agreementPath: string | undefined;
+  const agreementFile = formData.get("agreement_file");
+  if (agreementFile instanceof File && agreementFile.size > 0) {
+    if (agreementFile.size > 10 * 1024 * 1024) {
+      return { ok: false, error: "Agreement file is too large (max 10 MB)" };
+    }
+    const ext = agreementFile.name.split(".").pop()?.toLowerCase() ?? "pdf";
+    agreementPath = `${providerId}/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await createAdminClient()
+      .storage.from("provider-agreements")
+      .upload(agreementPath, agreementFile, {
+        contentType: agreementFile.type || "application/pdf",
+      });
+    if (uploadError) return { ok: false, error: `Agreement upload failed: ${uploadError.message}` };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("providers")
     .update({
+      ...(agreementPath ? { agreement_document_path: agreementPath } : {}),
+      agreement_signed_at: f("agreement_signed_at"),
       practice_name: f("practice_name"),
       practice_type: f("practice_type"),
       organization_npi: f("organization_npi"),
@@ -264,6 +285,58 @@ export async function updateProvider(
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/portal/providers/${providerId}`);
   revalidatePath("/portal/providers");
+  return { ok: true };
+}
+
+/** Short-lived signed URL to view a provider's uploaded signed agreement. */
+export async function getAgreementUrl(
+  providerId: string,
+): Promise<{ ok: boolean; url?: string; error?: string }> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { data: p } = await db
+    .from("providers")
+    .select("agreement_document_path")
+    .eq("id", providerId)
+    .maybeSingle();
+  if (!p?.agreement_document_path) return { ok: false, error: "No agreement on file" };
+  const { data, error } = await db.storage
+    .from("provider-agreements")
+    .createSignedUrl(p.agreement_document_path, 120);
+  if (error || !data) return { ok: false, error: error?.message ?? "Could not open agreement" };
+  return { ok: true, url: data.signedUrl };
+}
+
+/** Archive / restore an order — hides it from the active list + board without
+ *  deleting it. Admin-only. */
+const ARCHIVABLE_STATUSES = ["cancelled", "invoiced", "paid"];
+
+export async function setOrderArchived(
+  orderId: string,
+  archived: boolean,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const db = createAdminClient();
+  // Only terminal orders may be archived; restoring is always allowed.
+  if (archived) {
+    const { data: o } = await db.from("orders").select("status").eq("id", orderId).maybeSingle();
+    if (!o) return { ok: false, error: "Order not found" };
+    if (!ARCHIVABLE_STATUSES.includes(o.status)) {
+      return { ok: false, error: "Only cancelled or invoiced orders can be archived" };
+    }
+  }
+  const { error } = await db
+    .from("orders")
+    .update(
+      archived
+        ? { archived_at: new Date().toISOString(), archived_by: admin.id }
+        : { archived_at: null, archived_by: null },
+    )
+    .eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/orders");
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath("/portal/admin/orders");
   return { ok: true };
 }
 

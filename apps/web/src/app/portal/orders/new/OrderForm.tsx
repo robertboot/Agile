@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
-import { createOrder, quoteOrder, type QuoteItemInput } from "@/app/portal/actions";
+import { createOrder, editOrder, quoteOrder, type QuoteItemInput } from "@/app/portal/actions";
 import { useServerQuote } from "@/lib/use-server-quote";
 
 interface ProviderOption {
@@ -36,12 +36,23 @@ export function OrderForm({
   products,
   sizes,
   initialProviderId,
+  editOrderId,
+  initialTier,
+  initialPatient,
+  initialDateApplied,
+  initialItems,
 }: {
   providers: ProviderOption[];
   products: ProductOption[];
   sizes: SizeOption[];
   initialProviderId?: string;
+  editOrderId?: string;
+  initialTier?: DiscountTier;
+  initialPatient?: string;
+  initialDateApplied?: string;
+  initialItems?: ItemRow[];
 }) {
+  const isEdit = Boolean(editOrderId);
   const firstProduct = products[0]?.code ?? "";
   const firstSku = sizes.find((s) => s.product_code === firstProduct)?.sku ?? "";
 
@@ -50,12 +61,14 @@ export function OrderForm({
       ? initialProviderId
       : providers[0]?.id ?? "",
   );
-  const [tier, setTier] = useState<DiscountTier>(40);
-  const [patient, setPatient] = useState("");
-  const [dateApplied, setDateApplied] = useState("");
-  const [items, setItems] = useState<ItemRow[]>([
-    { productCode: firstProduct, sku: firstSku, qty: 1, serial: "" },
-  ]);
+  const [tier, setTier] = useState<DiscountTier>(initialTier ?? 40);
+  const [patient, setPatient] = useState(initialPatient ?? "");
+  const [dateApplied, setDateApplied] = useState(initialDateApplied ?? "");
+  const [items, setItems] = useState<ItemRow[]>(
+    initialItems && initialItems.length > 0
+      ? initialItems
+      : [{ productCode: firstProduct, sku: firstSku, qty: 1, serial: "" }],
+  );
   const [error, setError] = useState<string | null>(null);
   const [submitting, startSubmit] = useTransition();
 
@@ -92,15 +105,12 @@ export function OrderForm({
   function submit() {
     setError(null);
     startSubmit(async () => {
-      const result = await createOrder(
-        providerId,
-        tier,
-        items.map(({ productCode, sku, qty, serial }) => ({ productCode, sku, qty, serial })),
-        patient,
-        dateApplied,
-      );
-      // createOrder redirects on success; a return value is always an error.
-      if (result && !result.ok) setError(result.error ?? "Order creation failed");
+      const lines = items.map(({ productCode, sku, qty, serial }) => ({ productCode, sku, qty, serial }));
+      const result = isEdit
+        ? await editOrder(editOrderId!, tier, lines, patient, dateApplied)
+        : await createOrder(providerId, tier, lines, patient, dateApplied);
+      // Both redirect on success; a return value is always an error.
+      if (result && !result.ok) setError(result.error ?? "Save failed");
     });
   }
 
@@ -121,7 +131,8 @@ export function OrderForm({
           <select
             value={providerId}
             onChange={(e) => setProviderId(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+            disabled={isEdit}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm disabled:bg-slate-100 disabled:text-slate-500"
           >
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -284,7 +295,7 @@ export function OrderForm({
         disabled={submitting || !providerId || items.length === 0}
         className="btn-brand rounded-lg px-5 py-2.5 font-semibold text-white disabled:opacity-60"
       >
-        {submitting ? "Creating…" : "Create order"}
+        {submitting ? "Saving…" : isEdit ? "Save changes & update invoice" : "Create order"}
       </button>
     </div>
   );

@@ -58,7 +58,10 @@ export default async function ProviderDetailPage({
         <p className="mt-1 text-sm text-slate-500">
           {user.role === "admin" &&
             `Rep: ${(provider.profiles as unknown as { display_name: string })?.display_name} · `}
-          Registered {formatDate(provider.created_at)} · BAA: {baaStatus}
+          Registered {formatDate(provider.created_at)} · BAA: {baaStatus} · Agreement:{" "}
+          {provider.agreement_document_path
+            ? `on file${provider.agreement_signed_at ? `, signed ${formatDate(provider.agreement_signed_at)}` : ""}`
+            : "missing"}
         </p>
       </div>
 

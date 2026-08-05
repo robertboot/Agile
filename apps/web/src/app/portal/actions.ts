@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getIvrSubmission, registerProvider, submitIvr } from "@/lib/integrations/mednecessity";
 import { notifySlack, sendSlackMessage, GENERAL_CHANNEL_ID } from "@/lib/integrations/slack";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
+import { qboUpdateInvoiceForOrder } from "@/lib/integrations/quickbooks";
 
 export type { QuoteItemInput };
 
@@ -315,6 +316,62 @@ export async function createOrder(
 
   revalidatePath("/portal/orders");
   redirect(`/portal/orders/${orderId as string}`);
+}
+
+/**
+ * Edit an existing order in place — recompute pricing/commission from the new
+ * lines, then push the correction through to the QuickBooks invoice (updated in
+ * place, keeping its number; voided + reissued if it was already paid).
+ */
+export async function editOrder(
+  orderId: string,
+  tier: DiscountTier,
+  items: (QuoteItemInput & { serial?: string })[],
+  patientName?: string,
+  dateApplied?: string,
+): Promise<ActionResult> {
+  await requirePortalUser();
+  if (items.length === 0) return { ok: false, error: "Add at least one line item" };
+  if (![30, 35, 40].includes(tier)) return { ok: false, error: "Invalid discount tier" };
+
+  let resolved;
+  try {
+    resolved = await resolveLineInputs(items);
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+  const econ = priceOrder(resolved.lineInputs, resolved.reimbursement, tier, resolved.cogsMultiplier);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_edit_order", {
+    p_order_id: orderId,
+    p_discount_tier: tier,
+    p_pricing_version_id: resolved.pricingVersionId,
+    p_items: econ.lines.map((line, i) => ({
+      product_code: line.productCode,
+      sku: line.sku,
+      size_label: resolved.lineInputs[i]!.sizeLabel,
+      cm2: line.cm2,
+      qty: line.qty,
+      billed_cents: line.billedCents,
+      rep_commission_cents: line.repCommissionCents,
+      provider_keeps_cents: line.providerKeepsCents,
+      serial_number: items[i]?.serial ?? null,
+    })),
+    p_cogs_cents: econ.cogsCents,
+    p_agile_net_cents: econ.agileNetCents,
+    p_patient_name: patientName ?? null,
+    p_date_applied: dateApplied || null,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  // Follow the correction through to QuickBooks (best-effort — a sync failure
+  // is surfaced on the order page, it doesn't roll back the saved edit).
+  await qboUpdateInvoiceForOrder(orderId);
+
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath("/portal/orders");
+  redirect(`/portal/orders/${orderId}`);
 }
 
 /** Fill in patient + product serial numbers after ordering (owner rep or admin). */

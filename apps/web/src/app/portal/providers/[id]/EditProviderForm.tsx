@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { isValidNpi } from "@agile/shared";
-import { updateProvider } from "@/app/portal/admin/actions";
+import { updateProvider, getAgreementUrl } from "@/app/portal/admin/actions";
 import type { ActionResult } from "@/app/portal/actions";
 
 export interface ProviderRecord {
@@ -29,6 +29,8 @@ export interface ProviderRecord {
   taxonomy: string | null;
   license_number: string | null;
   provider_ptan: string | null;
+  agreement_document_path: string | null;
+  agreement_signed_at: string | null;
 }
 
 export function EditProviderForm({
@@ -86,6 +88,18 @@ export function EditProviderForm({
             <Field name="provider_ptan" label="Provider PTAN" v={provider.provider_ptan} />
           </div>
         </Section>
+
+        <Section title="Signed agreement">
+          <p className="mb-4 text-sm text-slate-500">
+            Upload a signed copy of this provider&apos;s agreement (PDF or photo). Use this for
+            providers carried over from the old system; new providers sign digitally.
+          </p>
+          <AgreementField
+            providerId={provider.id}
+            hasDoc={Boolean(provider.agreement_document_path)}
+            signedAt={provider.agreement_signed_at}
+          />
+        </Section>
       </fieldset>
 
       {state && !state.ok && state.error && (
@@ -138,6 +152,60 @@ function Field({
         defaultValue={v ?? ""}
         className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand-blue"
       />
+    </div>
+  );
+}
+
+function AgreementField({
+  providerId,
+  hasDoc,
+  signedAt,
+}: {
+  providerId: string;
+  hasDoc: boolean;
+  signedAt: string | null;
+}) {
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+
+  const view = () => {
+    setErr(null);
+    start(async () => {
+      const r = await getAgreementUrl(providerId);
+      if (r.ok && r.url) window.open(r.url, "_blank", "noopener");
+      else setErr(r.error ?? "Could not open agreement");
+    });
+  };
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label htmlFor="agreement_file" className="label-mono text-slate-500">
+          {hasDoc ? "Replace signed agreement" : "Upload signed agreement"}
+        </label>
+        <input
+          id="agreement_file"
+          name="agreement_file"
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.heic,image/*,application/pdf"
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium"
+        />
+        {hasDoc && (
+          <div className="mt-2 flex items-center gap-3 text-sm">
+            <span className="text-emerald-700">On file ✓</span>
+            <button
+              type="button"
+              onClick={view}
+              disabled={pending}
+              className="text-brand-blue hover:underline disabled:opacity-60"
+            >
+              {pending ? "Opening…" : "View current"}
+            </button>
+          </div>
+        )}
+        {err && <p className="mt-1 text-xs text-red-600">{err}</p>}
+      </div>
+      <Field name="agreement_signed_at" label="Date signed" type="date" v={signedAt} />
     </div>
   );
 }

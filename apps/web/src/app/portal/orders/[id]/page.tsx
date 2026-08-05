@@ -145,12 +145,23 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           ivrStatus={order.ivr_status ?? null}
           role={user.role}
         />
-        <Link
-          href={`/portal/orders/new?provider=${order.provider_id}`}
-          className="rounded-lg border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue hover:bg-blue-50"
-        >
-          + New order for this provider
-        </Link>
+        <div className="flex gap-2">
+          {(user.role === "admin" || order.rep_id === user.id) &&
+            Number(order.gross_collected_cents ?? 0) === 0 && (
+              <Link
+                href={`/portal/orders/${order.id}/edit`}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Edit order
+              </Link>
+            )}
+          <Link
+            href={`/portal/orders/new?provider=${order.provider_id}`}
+            className="rounded-lg border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue hover:bg-blue-50"
+          >
+            + New order for this provider
+          </Link>
+        </div>
       </div>
 
       {user.role === "admin" && ["shipped", "invoiced", "paid"].includes(order.status) && (

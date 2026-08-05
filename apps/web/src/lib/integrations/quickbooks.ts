@@ -219,3 +219,89 @@ async function recordError(db: ReturnType<typeof createAdminClient>, orderId: st
   await db.from("orders").update({ qbo_sync_error: msg }).eq("id", orderId);
   return { ok: false, error: msg };
 }
+
+/**
+ * Push a corrected order through to its existing QuickBooks invoice.
+ * - No invoice yet → no-op (it'll be created when the order reaches Invoiced).
+ * - Unpaid invoice → update its lines in place, keeping the same invoice number.
+ * - Already has a payment → QB won't allow line edits, so void the old one and
+ *   issue a fresh corrected invoice (new number).
+ */
+export async function qboUpdateInvoiceForOrder(
+  orderId: string,
+): Promise<{ ok: boolean; error?: string; invoiceNumber?: string; reissued?: boolean }> {
+  const db = createAdminClient();
+  const { data: order } = await db
+    .from("orders")
+    .select(
+      "id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id), order_items(product_code, size_label, qty, billed_cents)",
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found" };
+  if (!order.qbo_invoice_id) return { ok: true }; // not invoiced yet — nothing to sync
+
+  const provider = order.providers as unknown as { practice_name: string; qbo_customer_id: string | null };
+  const items = (order.order_items ?? []) as {
+    product_code: string; size_label: string; qty: number; billed_cents: number;
+  }[];
+
+  try {
+    let customerId = provider.qbo_customer_id;
+    if (!customerId) {
+      customerId = await findOrCreateCustomer(provider.practice_name);
+      if (!customerId) return await recordError(db, orderId, "Couldn't resolve QuickBooks customer");
+    }
+    const itemId = await findOrCreateItem();
+    if (!itemId) return await recordError(db, orderId, "Couldn't resolve QuickBooks service item");
+
+    const lines = items.map((i) => ({
+      DetailType: "SalesItemLineDetail",
+      Amount: i.billed_cents / 100,
+      Description: `${i.product_code} · ${i.size_label} · qty ${i.qty}`,
+      SalesItemLineDetail: { ItemRef: { value: itemId }, Qty: i.qty },
+    }));
+    const memoBits = [
+      order.patient_name ? `Patient: ${order.patient_name}` : null,
+      order.date_applied ? `Applied: ${order.date_applied}` : null,
+    ].filter(Boolean);
+
+    // Read current invoice: SyncToken + whether a payment is applied.
+    const cur = await qbo(`/invoice/${order.qbo_invoice_id}`, "GET");
+    if (!cur.ok) return await recordError(db, orderId, cur.error ?? "Couldn't load QuickBooks invoice");
+    const inv = (cur.json as {
+      Invoice?: { SyncToken: string; Balance?: number; TotalAmt?: number; LinkedTxn?: { TxnType: string }[] };
+    }).Invoice!;
+    const paid =
+      (inv.LinkedTxn ?? []).some((t) => t.TxnType === "Payment") ||
+      (inv.Balance != null && inv.TotalAmt != null && Number(inv.Balance) < Number(inv.TotalAmt));
+
+    if (paid) {
+      // Can't edit a paid invoice — void it, then reissue fresh.
+      await qbo("/invoice?operation=void", "POST", { Id: order.qbo_invoice_id, SyncToken: inv.SyncToken });
+      await db.from("orders").update({ qbo_invoice_id: null, qbo_invoice_number: null }).eq("id", orderId);
+      const created = await qboCreateInvoiceForOrder(orderId);
+      return { ...created, reissued: true };
+    }
+
+    // Unpaid — sparse update keeps the same invoice number.
+    const res = await qbo("/invoice", "POST", {
+      sparse: true,
+      Id: order.qbo_invoice_id,
+      SyncToken: inv.SyncToken,
+      CustomerRef: { value: customerId },
+      Line: lines,
+      ...(memoBits.length ? { CustomerMemo: { value: memoBits.join(" · ") } } : {}),
+    });
+    if (!res.ok) return await recordError(db, orderId, res.error ?? "QuickBooks invoice update failed");
+    const updated = (res.json as { Invoice?: { Id: string; DocNumber?: string } }).Invoice!;
+    const num = updated.DocNumber ?? updated.Id;
+    await db
+      .from("orders")
+      .update({ qbo_invoice_number: num, qbo_sync_error: null })
+      .eq("id", orderId);
+    return { ok: true, invoiceNumber: num, reissued: false };
+  } catch (err) {
+    return await recordError(db, orderId, String(err));
+  }
+}

@@ -4,6 +4,7 @@ import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 import { SortTip } from "./SortTip";
+import { ArchiveButton } from "./ArchiveButton";
 
 const PAGE_SIZE = 50;
 
@@ -11,12 +12,13 @@ const SORT_COLS: Record<string, string> = {
   created: "created_at",
   patient: "patient_name",
   applied: "date_applied",
+  status: "status",
 };
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{ page?: string; sort?: string; dir?: string; archived?: string }>;
 }) {
   const user = await requirePortalUser();
   const supabase = await createClient();
@@ -24,37 +26,54 @@ export default async function OrdersPage({
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const sort = sp.sort && SORT_COLS[sp.sort] ? sp.sort : "created";
   const asc = sp.dir === "asc";
+  const showArchived = sp.archived === "1";
   const from = (page - 1) * PAGE_SIZE;
 
-  const { data: orders, count } = await supabase
+  let query = supabase
     .from("orders")
     .select(
-      "id, status, created_at, patient_name, date_applied, discount_tier, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
+      "id, status, created_at, patient_name, date_applied, qbo_invoice_number, archived_at, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
       { count: "exact" },
     )
-    .is("deleted_at", null)
+    .is("deleted_at", null);
+  query = showArchived ? query.not("archived_at", "is", null) : query.is("archived_at", null);
+
+  const { data: orders, count } = await query
     .order(SORT_COLS[sort]!, { ascending: asc, nullsFirst: false })
     .range(from, from + PAGE_SIZE - 1);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
+  const archParam = showArchived ? "&archived=1" : "";
   // Clickable header: toggles direction on the active column, else sorts asc.
   const sortHref = (key: string) => {
     const nextDir = sort === key && asc ? "desc" : "asc";
-    return `/portal/orders?sort=${key}&dir=${nextDir}`;
+    return `/portal/orders?sort=${key}&dir=${nextDir}${archParam}`;
   };
   const arrow = (key: string) => (sort === key ? (asc ? " ▲" : " ▼") : "");
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-navy-900">Orders</h1>
-        <Link
-          href="/portal/orders/new"
-          className="btn-brand rounded-lg px-3 py-2 text-sm font-semibold text-white"
-        >
-          + New order
-        </Link>
+        <h1 className="text-2xl font-bold text-navy-900">
+          {showArchived ? "Archived orders" : "Orders"}
+        </h1>
+        <div className="flex items-center gap-3">
+          {user.role === "admin" && (
+            <Link
+              href={showArchived ? "/portal/orders" : "/portal/orders?archived=1"}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              {showArchived ? "← Active orders" : "View archived"}
+            </Link>
+          )}
+          <Link
+            href="/portal/orders/new"
+            className="btn-brand rounded-lg px-3 py-2 text-sm font-semibold text-white"
+          >
+            + New order
+          </Link>
+        </div>
       </div>
 
       <SortTip />
@@ -81,9 +100,14 @@ export default async function OrdersPage({
                   Date applied{arrow("applied")}
                 </Link>
               </th>
-              <th className="px-4 py-2.5 font-medium">Tier</th>
               <th className="px-4 py-2.5 font-medium">Billed</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
+              <th className="px-4 py-2.5 font-medium">Invoice #</th>
+              <th className="px-4 py-2.5 font-medium">
+                <Link href={sortHref("status")} className="hover:text-navy-900">
+                  Status{arrow("status")}
+                </Link>
+              </th>
+              {user.role === "admin" && <th className="px-4 py-2.5 font-medium" />}
             </tr>
           </thead>
           <tbody>
@@ -117,8 +141,10 @@ export default async function OrdersPage({
                   <td className="px-4 py-2.5">
                     {o.date_applied ? formatDate(o.date_applied) : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-4 py-2.5">{o.discount_tier}%</td>
                   <td className="px-4 py-2.5">{formatCents(billed)}</td>
+                  <td className="px-4 py-2.5 font-mono">
+                    {o.qbo_invoice_number ?? <span className="text-slate-300">—</span>}
+                  </td>
                   <td className="px-4 py-2.5">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[o.status]}`}
@@ -126,13 +152,18 @@ export default async function OrdersPage({
                       {STATUS_LABELS[o.status]}
                     </span>
                   </td>
+                  {user.role === "admin" && (
+                    <td className="px-4 py-2.5 text-right">
+                      <ArchiveButton orderId={o.id} archived={Boolean(o.archived_at)} status={o.status} />
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {(orders ?? []).length === 0 && (
               <tr>
-                <td colSpan={user.role === "admin" ? 9 : 8} className="px-4 py-8 text-center text-slate-400">
-                  No orders yet.
+                <td colSpan={user.role === "admin" ? 10 : 8} className="px-4 py-8 text-center text-slate-400">
+                  {showArchived ? "No archived orders." : "No orders yet."}
                 </td>
               </tr>
             )}
@@ -148,7 +179,7 @@ export default async function OrdersPage({
           <div className="flex gap-2">
             {page > 1 && (
               <Link
-                href={`/portal/orders?page=${page - 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
+                href={`/portal/orders?page=${page - 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}${archParam}`}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
               >
                 ← Previous
@@ -156,7 +187,7 @@ export default async function OrdersPage({
             )}
             {page < totalPages && (
               <Link
-                href={`/portal/orders?page=${page + 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
+                href={`/portal/orders?page=${page + 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}${archParam}`}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
               >
                 Next →
