@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import {
   commissionOnCollection,
   formatCents,
-  isValidNpi,
   priceOrder,
   toRepView,
   type DiscountTier,
@@ -52,18 +51,12 @@ export async function createProvider(
   const user = await requirePortalUser();
   const f = (k: string) => (formData.get(k) as string | null)?.trim() || null;
 
-  const required = ["practice_name", "address_line1", "city", "state", "zip", "provider_first", "provider_last", "individual_npi"];
-  for (const k of required) {
-    if (!f(k)) return { ok: false, error: `Missing required field: ${k.replaceAll("_", " ")}` };
-  }
-  const individualNpi = f("individual_npi")!;
-  if (!isValidNpi(individualNpi)) {
-    return { ok: false, error: "Individual NPI failed check-digit validation" };
-  }
+  // Allow saving partial provider info — only the practice name is required so
+  // the record can be identified. NPI + other details can be filled in later;
+  // ordering is still gated on approve + MedNecessity-onboarded.
+  if (!f("practice_name")) return { ok: false, error: "Practice name is required" };
+  const individualNpi = f("individual_npi");
   const orgNpi = f("organization_npi");
-  if (orgNpi && !isValidNpi(orgNpi)) {
-    return { ok: false, error: "Organization NPI failed check-digit validation" };
-  }
 
   // Admin may assign any rep and the provider is approved on save (spec §4).
   const isAdmin = user.role === "admin";

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isValidNpi } from "@agile/shared";
 import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
@@ -36,6 +37,20 @@ export default async function ProviderDetailPage({
 
   // RLS lets reps update only their own unapproved providers; admins any.
   const editable = user.role === "admin" || !provider.approved;
+
+  // Partial saves are allowed — surface what's still missing before approval.
+  const missing: string[] = [];
+  if (!provider.individual_npi) missing.push("Individual NPI");
+  else if (!isValidNpi(provider.individual_npi)) missing.push("Individual NPI (check digit invalid)");
+  for (const [label, val] of [
+    ["Address", provider.address_line1],
+    ["City", provider.city],
+    ["State", provider.state],
+    ["ZIP", provider.zip],
+    ["Provider name", provider.provider_first && provider.provider_last],
+  ] as const) {
+    if (!val) missing.push(label);
+  }
 
   const baaStatus = provider.baa_accepted_at
     ? `e-signed by ${provider.baa_signatory_name ?? "provider"} on ${formatDate(provider.baa_accepted_at)}`
@@ -76,6 +91,13 @@ export default async function ProviderDetailPage({
             : "missing"}
         </p>
       </div>
+
+      {missing.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">Incomplete —</span> still needs: {missing.join(", ")}. Saved,
+          but complete these before the provider can order.
+        </div>
+      )}
 
       {user.role === "admin" && (
         <ProviderAdminOverride

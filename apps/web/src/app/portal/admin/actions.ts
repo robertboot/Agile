@@ -4,7 +4,7 @@
 // with GO LIVE, provider edits, rep invites, and the contract template.
 
 import { revalidatePath } from "next/cache";
-import { isValidNpi, priceOrder, type DiscountTier } from "@agile/shared";
+import { priceOrder, type DiscountTier } from "@agile/shared";
 import { requireAdmin, requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -221,17 +221,10 @@ export async function updateProvider(
   await requirePortalUser();
   const f = (k: string) => (formData.get(k) as string | null)?.trim() || null;
 
-  // Mirror createProvider's validation — edits must not bypass it (audit H5).
-  for (const k of ["practice_name", "address_line1", "city", "state", "zip", "provider_first", "provider_last", "individual_npi"]) {
-    if (!f(k)) return { ok: false, error: `Missing required field: ${k.replaceAll("_", " ")}` };
-  }
-  if (!isValidNpi(f("individual_npi")!)) {
-    return { ok: false, error: "Individual NPI failed check-digit validation" };
-  }
-  const orgNpi = f("organization_npi");
-  if (orgNpi && !isValidNpi(orgNpi)) {
-    return { ok: false, error: "Organization NPI failed check-digit validation" };
-  }
+  // Partial saves allowed (data entry in progress) — only practice name is
+  // required. NPI + other fields can be completed later; ordering stays gated
+  // on approve + MedNecessity-onboarded.
+  if (!f("practice_name")) return { ok: false, error: "Practice name is required" };
 
   // Optional signed-agreement upload (legacy paper agreements) → private
   // bucket via service role. Only overwrite the stored path when a new file

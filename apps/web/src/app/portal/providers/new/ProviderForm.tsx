@@ -28,12 +28,12 @@ export function ProviderForm({ isAdmin, reps }: { isAdmin: boolean; reps: RepOpt
           <Field name="fax" label="Fax" />
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field name="address_line1" label="Address line 1" required />
+          <Field name="address_line1" label="Address line 1" />
           <Field name="address_line2" label="Address line 2" />
-          <Field name="city" label="City" required />
+          <Field name="city" label="City" />
           <div className="grid grid-cols-2 gap-4">
-            <Field name="state" label="State" required maxLength={2} placeholder="TX" />
-            <Field name="zip" label="ZIP" required />
+            <Field name="state" label="State" maxLength={2} placeholder="TX" />
+            <Field name="zip" label="ZIP" />
           </div>
         </div>
       </Section>
@@ -48,10 +48,10 @@ export function ProviderForm({ isAdmin, reps }: { isAdmin: boolean; reps: RepOpt
 
       <Section title="Rendering provider">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field name="provider_first" label="First name" required />
-          <Field name="provider_last" label="Last name" required />
+          <Field name="provider_first" label="First name" />
+          <Field name="provider_last" label="Last name" />
           <Field name="credentials" label="Credentials" placeholder="DPM, MD, NP…" />
-          <NpiField name="individual_npi" label="Individual NPI" required />
+          <NpiField name="individual_npi" label="Individual NPI" />
           <Field name="taxonomy" label="Taxonomy code" />
           <Field name="license_number" label="License number" />
           <Field name="provider_ptan" label="Provider PTAN" />

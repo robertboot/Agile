@@ -59,12 +59,12 @@ export function EditProviderForm({
             <Field name="fax" label="Fax" v={provider.fax} />
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field name="address_line1" label="Address line 1" required v={provider.address_line1} />
+            <Field name="address_line1" label="Address line 1" v={provider.address_line1} />
             <Field name="address_line2" label="Address line 2" v={provider.address_line2} />
-            <Field name="city" label="City" required v={provider.city} />
+            <Field name="city" label="City" v={provider.city} />
             <div className="grid grid-cols-2 gap-4">
-              <Field name="state" label="State" required maxLength={2} v={provider.state} />
-              <Field name="zip" label="ZIP" required v={provider.zip} />
+              <Field name="state" label="State" maxLength={2} v={provider.state} />
+              <Field name="zip" label="ZIP" v={provider.zip} />
             </div>
           </div>
         </Section>
@@ -79,10 +79,10 @@ export function EditProviderForm({
 
         <Section title="Rendering provider">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field name="provider_first" label="First name" required v={provider.provider_first} />
-            <Field name="provider_last" label="Last name" required v={provider.provider_last} />
+            <Field name="provider_first" label="First name" v={provider.provider_first} />
+            <Field name="provider_last" label="Last name" v={provider.provider_last} />
             <Field name="credentials" label="Credentials" v={provider.credentials} />
-            <NpiField name="individual_npi" label="Individual NPI" required v={provider.individual_npi} />
+            <NpiField name="individual_npi" label="Individual NPI" v={provider.individual_npi} />
             <Field name="taxonomy" label="Taxonomy code" v={provider.taxonomy} />
             <Field name="license_number" label="License number" v={provider.license_number} />
             <Field name="provider_ptan" label="Provider PTAN" v={provider.provider_ptan} />
