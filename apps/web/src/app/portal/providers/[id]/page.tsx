@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import { EditProviderForm, type ProviderRecord } from "./EditProviderForm";
 import { ProviderAdminOverride } from "./ProviderAdminOverride";
+import { ReassignRep, type RepOption } from "./ReassignRep";
 
 export default async function ProviderDetailPage({
   params,
@@ -21,6 +22,17 @@ export default async function ProviderDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!provider) notFound();
+
+  // Reps list for admin reassignment (any rep, incl. suspended legacy reps).
+  let reps: RepOption[] = [];
+  if (user.role === "admin") {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, display_name, status")
+      .eq("role", "rep")
+      .order("display_name");
+    reps = (data ?? []) as RepOption[];
+  }
 
   // RLS lets reps update only their own unapproved providers; admins any.
   const editable = user.role === "admin" || !provider.approved;
@@ -71,6 +83,10 @@ export default async function ProviderDetailPage({
           approved={provider.approved}
           onboarded={provider.mednecessity_status === "onboarded"}
         />
+      )}
+
+      {user.role === "admin" && reps.length > 0 && (
+        <ReassignRep providerId={provider.id} currentRepId={provider.rep_id} reps={reps} />
       )}
 
       <EditProviderForm provider={provider as unknown as ProviderRecord} editable={editable} />
