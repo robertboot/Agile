@@ -37,7 +37,7 @@ export async function askStitch(question: string): Promise<StitchReply> {
 
   // Pleasantries shouldn't escalate to admins.
   if (isSmallTalk(q)) {
-    return { ok: true, answer: "Anytime! Ask me whenever you need a hand. 🧵" };
+    return { ok: true, answer: "Anytime! Ask me whenever you need a hand. 🤖" };
   }
 
   const resolved = await answerQuestion(q);
