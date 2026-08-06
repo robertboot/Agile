@@ -203,22 +203,25 @@ export function StitchWidget() {
               </div>
             ))}
             {pending && <div className="text-xs text-slate-400">Stitch is thinking…</div>}
+          </div>
 
-            {/* Tutorial chips */}
-            {msgs.length <= 1 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {TUTORIALS.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => showTutorial(t.id)}
-                    className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
-                  >
-                    {t.title}
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Persistent tutorial bar — always reachable, no scrolling needed */}
+          <div className="border-t border-slate-200 px-2 py-2">
+            <div className="mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              Tutorials
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-0.5">
+              {TUTORIALS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => showTutorial(t.id)}
+                  className="shrink-0 rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  {t.title}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="border-t border-slate-200 p-2">

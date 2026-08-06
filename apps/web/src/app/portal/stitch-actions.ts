@@ -69,7 +69,7 @@ export async function askStitch(question: string): Promise<StitchReply> {
     ok: true,
     escalated: true,
     answer:
-      "I don't have a solid answer for that one, so I've passed it to the Agile team — they'll follow up. Meanwhile, try one of the tutorial topics above.",
+      "I don't have a solid answer for that one, so I've passed it to the Agile team — they'll follow up. Meanwhile, try one of the tutorial topics below.",
   };
 }
 
