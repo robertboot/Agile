@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/format";
 import { EditProviderForm, type ProviderRecord } from "./EditProviderForm";
 import { ProviderAdminOverride } from "./ProviderAdminOverride";
 import { ReassignRep, type RepOption } from "./ReassignRep";
+import { ActiveToggle } from "./ActiveToggle";
 
 export default async function ProviderDetailPage({
   params,
@@ -94,6 +95,13 @@ export default async function ProviderDetailPage({
         </p>
       </div>
 
+      {provider.active === false && (
+        <div className="rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
+          <span className="font-semibold">Inactive —</span> this provider is deactivated and can&apos;t be
+          ordered against. Reactivate below to resume ordering.
+        </div>
+      )}
+
       {missing.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span className="font-semibold">Incomplete —</span> still needs: {missing.join(", ")}. Saved,
@@ -116,6 +124,19 @@ export default async function ProviderDetailPage({
           reps={reps}
           houseOwners={houseOwners}
         />
+      )}
+
+      {user.role === "admin" && (
+        <section className="rounded-lg border border-slate-200 bg-white p-5">
+          <h2 className="font-semibold text-navy-900">Provider status</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Deactivate to remove this provider from ordering while keeping its history. Reactivate
+            anytime.
+          </p>
+          <div className="mt-4">
+            <ActiveToggle providerId={provider.id} active={provider.active !== false} />
+          </div>
+        </section>
       )}
 
       <EditProviderForm provider={provider as unknown as ProviderRecord} editable={editable} />

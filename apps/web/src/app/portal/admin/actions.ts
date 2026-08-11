@@ -273,8 +273,24 @@ export async function updateProvider(
       taxonomy: f("taxonomy"),
       license_number: f("license_number"),
       provider_ptan: f("provider_ptan"),
+      notes: f("notes"),
     })
     .eq("id", providerId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/providers/${providerId}`);
+  revalidatePath("/portal/providers");
+  return { ok: true };
+}
+
+/** Activate / deactivate a provider. Inactive providers can't be ordered
+ *  against and drop off the new-order picker; data is preserved. Admin-only. */
+export async function setProviderActive(
+  providerId: string,
+  active: boolean,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { error } = await db.from("providers").update({ active }).eq("id", providerId);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/portal/providers/${providerId}`);
   revalidatePath("/portal/providers");

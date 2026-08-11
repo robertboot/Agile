@@ -14,6 +14,7 @@ export interface ProviderRow {
   credentials: string | null;
   mednecessity_status: string;
   approved: boolean;
+  active: boolean;
   rep_id: string;
   repName: string;
   isHouse: boolean;
@@ -151,6 +152,11 @@ export function ProvidersTable({
                   {p.npiMissing && (
                     <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
                       NPI needed
+                    </span>
+                  )}
+                  {!p.active && (
+                    <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                      Inactive
                     </span>
                   )}
                 </td>

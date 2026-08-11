@@ -17,6 +17,7 @@ export default async function NewOrderPage({
       .select("id, practice_name")
       .eq("approved", true)
       .eq("mednecessity_status", "onboarded")
+      .eq("active", true)
       .is("deleted_at", null)
       .order("practice_name"),
     supabase.from("products").select("code, name").eq("active", true).order("code"),

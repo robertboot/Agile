@@ -31,6 +31,7 @@ export interface ProviderRecord {
   provider_ptan: string | null;
   agreement_document_path: string | null;
   agreement_signed_at: string | null;
+  notes: string | null;
 }
 
 export function EditProviderForm({
@@ -87,6 +88,16 @@ export function EditProviderForm({
             <Field name="license_number" label="License number" v={provider.license_number} />
             <Field name="provider_ptan" label="Provider PTAN" v={provider.provider_ptan} />
           </div>
+        </Section>
+
+        <Section title="Notes">
+          <textarea
+            name="notes"
+            defaultValue={provider.notes ?? ""}
+            rows={4}
+            placeholder="Internal notes about this provider (visible to reps + admins)…"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand-blue"
+          />
         </Section>
 
         <Section title="Signed agreement">
