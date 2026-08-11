@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { reassignProvider } from "@/app/portal/actions";
+import { HOUSE_ACCOUNT_OWNER_ID, HOUSE_ACCOUNT_LABEL } from "@/lib/house-account";
 
 export interface RepOption {
   id: string;
@@ -14,12 +15,10 @@ export function ReassignRep({
   providerId,
   currentRepId,
   reps,
-  houseOwners,
 }: {
   providerId: string;
   currentRepId: string;
   reps: RepOption[];
-  houseOwners: RepOption[];
 }) {
   const router = useRouter();
   const [repId, setRepId] = useState(currentRepId);
@@ -64,15 +63,9 @@ export function ReassignRep({
                 </option>
               ))}
             </optgroup>
-            {houseOwners.length > 0 && (
-              <optgroup label="House account">
-                {houseOwners.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    House account — {h.display_name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
+            <optgroup label="Internal">
+              <option value={HOUSE_ACCOUNT_OWNER_ID}>{HOUSE_ACCOUNT_LABEL}</option>
+            </optgroup>
           </select>
         </div>
         <button

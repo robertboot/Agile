@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/app/portal/actions";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 import { qboCreateInvoiceForOrder } from "@/lib/integrations/quickbooks";
+import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 
 // ---------------------------------------------------------------------------
 // Admin calculator — FULL economics (COGS + Agile net). Admin-only.
@@ -290,7 +291,12 @@ export async function setProviderActive(
 ): Promise<ActionResult> {
   await requireAdmin();
   const db = createAdminClient();
-  const { error } = await db.from("providers").update({ active }).eq("id", providerId);
+  // Deactivating hands the provider to the single House Account (no rep owns a
+  // dormant provider). Reactivating leaves ownership as-is — reassign a rep after.
+  const patch = active
+    ? { active: true }
+    : { active: false, rep_id: HOUSE_ACCOUNT_OWNER_ID };
+  const { error } = await db.from("providers").update(patch).eq("id", providerId);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/portal/providers/${providerId}`);
   revalidatePath("/portal/providers");

@@ -43,17 +43,15 @@ export default async function ProviderDetailPage({
   }));
   const lastTouch = touchpoints[0]?.occurred_at ?? null;
 
-  // Reps + admins (House account owners) for admin reassignment.
+  // Reps for admin reassignment (House Account is a fixed option in the widget).
   let reps: RepOption[] = [];
-  let houseOwners: RepOption[] = [];
   if (user.role === "admin") {
     const { data } = await supabase
       .from("profiles")
-      .select("id, display_name, status, role")
-      .in("role", ["rep", "admin"])
+      .select("id, display_name, status")
+      .eq("role", "rep")
       .order("display_name");
-    reps = ((data ?? []) as (RepOption & { role: string })[]).filter((p) => p.role === "rep");
-    houseOwners = ((data ?? []) as (RepOption & { role: string })[]).filter((p) => p.role === "admin");
+    reps = (data ?? []) as RepOption[];
   }
 
   // RLS lets reps update only their own unapproved providers; admins any.
@@ -136,13 +134,8 @@ export default async function ProviderDetailPage({
         />
       )}
 
-      {user.role === "admin" && (reps.length > 0 || houseOwners.length > 0) && (
-        <ReassignRep
-          providerId={provider.id}
-          currentRepId={provider.rep_id}
-          reps={reps}
-          houseOwners={houseOwners}
-        />
+      {user.role === "admin" && (
+        <ReassignRep providerId={provider.id} currentRepId={provider.rep_id} reps={reps} />
       )}
 
       {user.role === "admin" && (

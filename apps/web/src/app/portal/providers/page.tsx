@@ -3,6 +3,7 @@ import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { InviteProvider } from "./InviteProvider";
 import { ProvidersTable, type ProviderRow } from "./ProvidersTable";
+import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 
 export default async function ProvidersPage() {
   const user = await requirePortalUser();
@@ -16,7 +17,7 @@ export default async function ProvidersPage() {
 
   const rows: ProviderRow[] = (providers ?? []).map((p) => {
     const owner = p.profiles as unknown as { display_name: string; role: string } | null;
-    const isHouse = owner?.role === "admin";
+    const isHouse = p.rep_id === HOUSE_ACCOUNT_OWNER_ID;
     return {
       id: p.id,
       practice_name: p.practice_name,
