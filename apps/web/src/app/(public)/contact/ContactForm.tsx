@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { submitContact, type ContactState } from "./actions";
 
 export function ContactForm() {
@@ -8,6 +8,11 @@ export function ContactForm() {
     submitContact,
     null,
   );
+  const startedRef = useRef<HTMLInputElement>(null);
+  // Stamp mount time client-side (avoids hydration mismatch) for the timing trap.
+  useEffect(() => {
+    if (startedRef.current) startedRef.current.value = String(Date.now());
+  }, []);
 
   if (state?.ok) {
     return (
@@ -22,6 +27,15 @@ export function ContactForm() {
 
   return (
     <form action={action} className="space-y-5">
+      {/* Anti-bot: honeypot (offscreen, hidden from humans) + timing stamp. */}
+      <div aria-hidden="true" className="pointer-events-none absolute -left-[9999px] h-0 w-0 overflow-hidden">
+        <label>
+          Company
+          <input name="company" type="text" tabIndex={-1} autoComplete="off" />
+        </label>
+      </div>
+      <input type="hidden" name="started" ref={startedRef} />
+
       <div>
         <label htmlFor="name" className="label-mono text-slate-500">
           Name
