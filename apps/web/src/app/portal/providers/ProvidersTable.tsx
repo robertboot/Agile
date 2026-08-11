@@ -44,7 +44,7 @@ const STATUS_META: Record<StatusCat, { label: string; cls: string }> = {
 };
 const STATUS_ORDER: StatusCat[] = ["unapproved", "awaiting_mn", "ready"];
 
-type SortKey = "practice" | "provider" | "location" | "rep" | "status";
+type SortKey = "practice" | "provider" | "location" | "rep" | "status" | "lastTouch";
 
 export function ProvidersTable({
   providers,
@@ -72,6 +72,7 @@ export function ProvidersTable({
         case "location": return `${p.state ?? ""} ${p.city ?? ""}`;
         case "rep": return p.repName;
         case "status": return String(STATUS_ORDER.indexOf(statusOf(p)));
+        case "lastTouch": return p.lastTouchAt ?? "";
         default: return p.practice_name;
       }
     };
@@ -145,7 +146,7 @@ export function ProvidersTable({
               <Th label={`Location${arrow("location")}`} onClick={() => toggle("location")} />
               {isAdmin && <Th label={`Rep${arrow("rep")}`} onClick={() => toggle("rep")} />}
               <Th label={`Status${arrow("status")}`} onClick={() => toggle("status")} />
-              <th className="px-4 py-2.5 font-medium">Last touch</th>
+              <Th label={`Last touch${arrow("lastTouch")}`} onClick={() => toggle("lastTouch")} />
               {isAdmin && <th className="px-4 py-2.5" />}
             </tr>
           </thead>
