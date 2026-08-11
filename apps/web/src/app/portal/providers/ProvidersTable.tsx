@@ -31,18 +31,20 @@ function touchDate(iso: string) {
 }
 
 // Combined provider status: admin approval → MedNecessity onboarding → ready.
-type StatusCat = "unapproved" | "awaiting_mn" | "ready";
+type StatusCat = "inactive" | "unapproved" | "awaiting_mn" | "ready";
 function statusOf(p: ProviderRow): StatusCat {
+  if (!p.active) return "inactive";
   if (!p.approved) return "unapproved";
   if (p.mednecessity_status === "onboarded") return "ready";
   return "awaiting_mn";
 }
 const STATUS_META: Record<StatusCat, { label: string; cls: string }> = {
+  inactive: { label: "Deactivated", cls: "bg-slate-200 text-slate-600" },
   unapproved: { label: "Awaiting approval", cls: "bg-amber-100 text-amber-800" },
   awaiting_mn: { label: "Awaiting MedNecessity", cls: "bg-blue-100 text-blue-800" },
   ready: { label: "Ready", cls: "bg-emerald-100 text-emerald-800" },
 };
-const STATUS_ORDER: StatusCat[] = ["unapproved", "awaiting_mn", "ready"];
+const STATUS_ORDER: StatusCat[] = ["unapproved", "awaiting_mn", "ready", "inactive"];
 
 type SortKey = "practice" | "provider" | "location" | "rep" | "status" | "lastTouch";
 
@@ -119,6 +121,7 @@ export function ProvidersTable({
           <option value="unapproved">Awaiting approval</option>
           <option value="awaiting_mn">Awaiting MedNecessity</option>
           <option value="ready">Ready</option>
+          <option value="inactive">Deactivated</option>
         </select>
         {isAdmin && owners.length > 1 && (
           <select
@@ -163,11 +166,6 @@ export function ProvidersTable({
                   {p.npiMissing && (
                     <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
                       NPI needed
-                    </span>
-                  )}
-                  {!p.active && (
-                    <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                      Inactive
                     </span>
                   )}
                 </td>
