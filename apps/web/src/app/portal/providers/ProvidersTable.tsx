@@ -21,6 +21,7 @@ export interface ProviderRow {
   npiMissing: boolean;
   lastTouchKind: string | null;
   lastTouchAt: string | null;
+  originatorName: string | null;
 }
 
 const TOUCH_ICON: Record<string, string> = {
@@ -46,7 +47,7 @@ const STATUS_META: Record<StatusCat, { label: string; cls: string }> = {
 };
 const STATUS_ORDER: StatusCat[] = ["unapproved", "awaiting_mn", "ready", "inactive"];
 
-type SortKey = "practice" | "provider" | "location" | "rep" | "status" | "lastTouch";
+type SortKey = "practice" | "provider" | "location" | "rep" | "originator" | "status" | "lastTouch";
 
 export function ProvidersTable({
   providers,
@@ -73,6 +74,7 @@ export function ProvidersTable({
         case "provider": return `${p.provider_last} ${p.provider_first}`;
         case "location": return `${p.state ?? ""} ${p.city ?? ""}`;
         case "rep": return p.repName;
+        case "originator": return p.originatorName ?? "";
         case "status": return String(STATUS_ORDER.indexOf(statusOf(p)));
         case "lastTouch": return p.lastTouchAt ?? "";
         default: return p.practice_name;
@@ -148,6 +150,7 @@ export function ProvidersTable({
               <Th label={`Rendering provider${arrow("provider")}`} onClick={() => toggle("provider")} />
               <Th label={`Location${arrow("location")}`} onClick={() => toggle("location")} />
               {isAdmin && <Th label={`Rep${arrow("rep")}`} onClick={() => toggle("rep")} />}
+              {isAdmin && <Th label={`Originator${arrow("originator")}`} onClick={() => toggle("originator")} />}
               <Th label={`Status${arrow("status")}`} onClick={() => toggle("status")} />
               <Th label={`Last touch${arrow("lastTouch")}`} onClick={() => toggle("lastTouch")} />
               {isAdmin && <th className="px-4 py-2.5" />}
@@ -187,6 +190,11 @@ export function ProvidersTable({
                     )}
                   </td>
                 )}
+                {isAdmin && (
+                  <td className="px-4 py-2.5 text-slate-600">
+                    {p.originatorName ?? <span className="text-slate-300">—</span>}
+                  </td>
+                )}
                 <td className="px-4 py-2.5">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_META[statusOf(p)].cls}`}>
                     {STATUS_META[statusOf(p)].label}
@@ -210,7 +218,7 @@ export function ProvidersTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 7 : 5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={isAdmin ? 8 : 5} className="px-4 py-8 text-center text-slate-400">
                   No providers match.
                 </td>
               </tr>

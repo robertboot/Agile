@@ -11,7 +11,7 @@ export default async function ProvidersPage() {
 
   const { data: providers } = await supabase
     .from("providers")
-    .select("id, practice_name, city, state, provider_first, provider_last, credentials, mednecessity_status, approved, active, individual_npi, rep_id, profiles:rep_id(display_name, role)")
+    .select("id, practice_name, city, state, provider_first, provider_last, credentials, mednecessity_status, approved, active, individual_npi, rep_id, profiles:rep_id(display_name, role), originator:originator_rep_id(display_name)")
     .is("deleted_at", null)
     .order("practice_name");
 
@@ -49,6 +49,7 @@ export default async function ProvidersPage() {
       npiMissing: !p.individual_npi || /^0+$/.test(p.individual_npi),
       lastTouchKind: lastTouch.get(p.id)?.kind ?? null,
       lastTouchAt: lastTouch.get(p.id)?.at ?? null,
+      originatorName: (p.originator as unknown as { display_name: string } | null)?.display_name ?? null,
     };
   });
 

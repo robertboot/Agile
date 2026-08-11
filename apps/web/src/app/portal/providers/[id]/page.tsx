@@ -22,7 +22,7 @@ export default async function ProviderDetailPage({
 
   const { data: provider } = await supabase
     .from("providers")
-    .select("*, profiles:rep_id(display_name)")
+    .select("*, profiles:rep_id(display_name), originator:originator_rep_id(display_name)")
     .eq("id", id)
     .maybeSingle();
   if (!provider) notFound();
@@ -104,7 +104,7 @@ export default async function ProviderDetailPage({
         </div>
         <p className="mt-1 text-sm text-slate-500">
           {user.role === "admin" &&
-            `Rep: ${(provider.profiles as unknown as { display_name: string })?.display_name} · `}
+            `Rep: ${(provider.profiles as unknown as { display_name: string })?.display_name} · Originator: ${(provider.originator as unknown as { display_name: string } | null)?.display_name ?? "—"} · `}
           Registered {formatDate(provider.created_at)} · BAA: {baaStatus} · Agreement:{" "}
           {provider.agreement_document_path
             ? `on file${provider.agreement_signed_at ? `, signed ${formatDate(provider.agreement_signed_at)}` : ""}`
