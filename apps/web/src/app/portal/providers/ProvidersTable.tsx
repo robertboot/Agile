@@ -19,6 +19,15 @@ export interface ProviderRow {
   repName: string;
   isHouse: boolean;
   npiMissing: boolean;
+  lastTouchKind: string | null;
+  lastTouchAt: string | null;
+}
+
+const TOUCH_ICON: Record<string, string> = {
+  call: "📞", email: "✉️", meeting: "🤝", note: "📝", invoice: "🧾", system: "⚙️",
+};
+function touchDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 // Combined provider status: admin approval → MedNecessity onboarding → ready.
@@ -136,6 +145,7 @@ export function ProvidersTable({
               <Th label={`Location${arrow("location")}`} onClick={() => toggle("location")} />
               {isAdmin && <Th label={`Rep${arrow("rep")}`} onClick={() => toggle("rep")} />}
               <Th label={`Status${arrow("status")}`} onClick={() => toggle("status")} />
+              <th className="px-4 py-2.5 font-medium">Last touch</th>
               {isAdmin && <th className="px-4 py-2.5" />}
             </tr>
           </thead>
@@ -183,6 +193,15 @@ export function ProvidersTable({
                     {STATUS_META[statusOf(p)].label}
                   </span>
                 </td>
+                <td className="px-4 py-2.5 text-slate-600">
+                  {p.lastTouchAt ? (
+                    <span className="whitespace-nowrap" title={p.lastTouchKind ?? "note"}>
+                      {TOUCH_ICON[p.lastTouchKind ?? "note"] ?? "📝"} {touchDate(p.lastTouchAt)}
+                    </span>
+                  ) : (
+                    <span className="text-slate-300">—</span>
+                  )}
+                </td>
                 {isAdmin && (
                   <td className="px-4 py-2.5 text-right">
                     <DeleteProviderButton id={p.id} name={p.practice_name} />
@@ -192,7 +211,7 @@ export function ProvidersTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 6 : 4} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={isAdmin ? 7 : 5} className="px-4 py-8 text-center text-slate-400">
                   No providers match.
                 </td>
               </tr>

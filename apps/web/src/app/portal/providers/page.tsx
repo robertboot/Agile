@@ -15,6 +15,20 @@ export default async function ProvidersPage() {
     .is("deleted_at", null)
     .order("practice_name");
 
+  // Latest touch point per provider for the list (RLS-scoped: admins all, reps own).
+  const ids = (providers ?? []).map((p) => p.id);
+  const lastTouch = new Map<string, { kind: string; at: string }>();
+  if (ids.length > 0) {
+    const { data: tps } = await supabase
+      .from("provider_touchpoints")
+      .select("provider_id, kind, occurred_at")
+      .in("provider_id", ids)
+      .order("occurred_at", { ascending: false });
+    for (const t of tps ?? []) {
+      if (!lastTouch.has(t.provider_id)) lastTouch.set(t.provider_id, { kind: t.kind, at: t.occurred_at });
+    }
+  }
+
   const rows: ProviderRow[] = (providers ?? []).map((p) => {
     const owner = p.profiles as unknown as { display_name: string; role: string } | null;
     const isHouse = p.rep_id === HOUSE_ACCOUNT_OWNER_ID;
@@ -33,6 +47,8 @@ export default async function ProvidersPage() {
       repName: isHouse ? "House account" : (owner?.display_name ?? "—"),
       isHouse,
       npiMissing: !p.individual_npi || /^0+$/.test(p.individual_npi),
+      lastTouchKind: lastTouch.get(p.id)?.kind ?? null,
+      lastTouchAt: lastTouch.get(p.id)?.at ?? null,
     };
   });
 
