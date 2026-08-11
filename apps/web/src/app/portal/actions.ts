@@ -241,6 +241,43 @@ export async function retryProviderRegistration(providerId: string): Promise<Act
   return { ok: true };
 }
 
+/** Log a contact touch point on a provider (call/email/meeting/note). Admins
+ *  or the owning rep. Timestamp defaults to now but can be backdated. */
+export async function addTouchpoint(
+  providerId: string,
+  kind: string,
+  body: string,
+  occurredAt?: string,
+): Promise<ActionResult> {
+  const user = await requirePortalUser();
+  if (!body.trim()) return { ok: false, error: "Add a note for the touch point" };
+  const allowed = ["note", "call", "email", "meeting"];
+  const k = allowed.includes(kind) ? kind : "note";
+
+  const db = createAdminClient();
+  const { data: provider } = await db
+    .from("providers")
+    .select("rep_id")
+    .eq("id", providerId)
+    .maybeSingle();
+  if (!provider) return { ok: false, error: "Provider not found" };
+  if (user.role !== "admin" && provider.rep_id !== user.id) {
+    return { ok: false, error: "Not your provider" };
+  }
+
+  const { error } = await db.from("provider_touchpoints").insert({
+    provider_id: providerId,
+    kind: k,
+    body: body.trim(),
+    occurred_at: occurredAt ? new Date(occurredAt).toISOString() : new Date().toISOString(),
+    created_by: user.id,
+    auto: false,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/providers/${providerId}`);
+  return { ok: true };
+}
+
 export async function reassignProvider(providerId: string, repId: string): Promise<ActionResult> {
   await requireAdmin();
   const db = createAdminClient();

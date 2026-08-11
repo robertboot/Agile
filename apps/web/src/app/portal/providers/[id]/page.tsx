@@ -8,6 +8,7 @@ import { EditProviderForm, type ProviderRecord } from "./EditProviderForm";
 import { ProviderAdminOverride } from "./ProviderAdminOverride";
 import { ReassignRep, type RepOption } from "./ReassignRep";
 import { ActiveToggle } from "./ActiveToggle";
+import { TouchpointLog, type Touchpoint } from "./TouchpointLog";
 
 export default async function ProviderDetailPage({
   params,
@@ -24,6 +25,23 @@ export default async function ProviderDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!provider) notFound();
+
+  // Contact log (touch points) — visible to admins + the owning rep via RLS.
+  const { data: tpRows } = await supabase
+    .from("provider_touchpoints")
+    .select("id, kind, body, occurred_at, auto, profiles:created_by(display_name)")
+    .eq("provider_id", id)
+    .order("occurred_at", { ascending: false })
+    .limit(100);
+  const touchpoints: Touchpoint[] = (tpRows ?? []).map((t) => ({
+    id: t.id,
+    kind: t.kind,
+    body: t.body,
+    occurred_at: t.occurred_at,
+    auto: t.auto,
+    by: (t.profiles as unknown as { display_name: string } | null)?.display_name ?? null,
+  }));
+  const lastTouch = touchpoints[0]?.occurred_at ?? null;
 
   // Reps + admins (House account owners) for admin reassignment.
   let reps: RepOption[] = [];
@@ -92,6 +110,7 @@ export default async function ProviderDetailPage({
           {provider.agreement_document_path
             ? `on file${provider.agreement_signed_at ? `, signed ${formatDate(provider.agreement_signed_at)}` : ""}`
             : "missing"}
+          {lastTouch && ` · Last touch: ${formatDate(lastTouch)}`}
         </p>
       </div>
 
@@ -138,6 +157,8 @@ export default async function ProviderDetailPage({
           </div>
         </section>
       )}
+
+      <TouchpointLog providerId={provider.id} touchpoints={touchpoints} />
 
       <EditProviderForm provider={provider as unknown as ProviderRecord} editable={editable} />
     </div>

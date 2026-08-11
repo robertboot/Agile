@@ -159,6 +159,19 @@ async function findOrCreateItem(): Promise<string | null> {
   return (created.json as { Item?: { Id: string } })?.Item?.Id ?? null;
 }
 
+/** Record an automatic contact touch point on a provider (best-effort). */
+async function logTouchpoint(
+  db: ReturnType<typeof createAdminClient>,
+  providerId: string,
+  body: string,
+): Promise<void> {
+  try {
+    await db.from("provider_touchpoints").insert({ provider_id: providerId, kind: "email", body, auto: true });
+  } catch {
+    /* never let logging break invoicing */
+  }
+}
+
 /** Email an invoice to a recipient via QuickBooks (marks it EmailSent). The
  *  send endpoint requires an octet-stream content type — JSON 500s server-side. */
 async function qboSendInvoice(invoiceId: string, email: string): Promise<{ ok: boolean; error?: string }> {
@@ -193,7 +206,7 @@ export async function qboCreateInvoiceForOrder(orderId: string): Promise<{ ok: b
   const db = createAdminClient();
   const { data: order } = await db
     .from("orders")
-    .select("id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id, contact_email), order_items(product_code, size_label, qty, billed_cents)")
+    .select("id, provider_id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id, contact_email), order_items(product_code, size_label, qty, billed_cents)")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { ok: false, error: "Order not found" };
@@ -250,6 +263,9 @@ export async function qboCreateInvoiceForOrder(orderId: string): Promise<{ ok: b
         qbo_invoice_email: emailedAt ? email : null,
       })
       .eq("id", orderId);
+    if (emailedAt && email) {
+      await logTouchpoint(db, order.provider_id, `Invoice #${inv.DocNumber ?? inv.Id} emailed to ${email}`);
+    }
     if (!provider.qbo_customer_id) {
       await db.from("providers").update({ qbo_customer_id: customerId }).eq("practice_name", provider.practice_name);
     }
@@ -278,7 +294,7 @@ export async function qboUpdateInvoiceForOrder(
   const { data: order } = await db
     .from("orders")
     .select(
-      "id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id, contact_email), order_items(product_code, size_label, qty, billed_cents)",
+      "id, provider_id, qbo_invoice_id, patient_name, date_applied, providers(practice_name, qbo_customer_id, contact_email), order_items(product_code, size_label, qty, billed_cents)",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -359,6 +375,9 @@ export async function qboUpdateInvoiceForOrder(
         ...(emailedAt ? { qbo_invoice_emailed_at: emailedAt, qbo_invoice_email: email } : {}),
       })
       .eq("id", orderId);
+    if (emailedAt && email) {
+      await logTouchpoint(db, order.provider_id, `Invoice #${num} re-emailed to ${email} (corrected)`);
+    }
     return { ok: true, invoiceNumber: num, reissued: false };
   } catch (err) {
     return await recordError(db, orderId, String(err));
