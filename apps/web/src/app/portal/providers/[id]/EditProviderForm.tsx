@@ -90,16 +90,6 @@ export function EditProviderForm({
           </div>
         </Section>
 
-        <Section title="Notes">
-          <textarea
-            name="notes"
-            defaultValue={provider.notes ?? ""}
-            rows={4}
-            placeholder="Internal notes about this provider (visible to reps + admins)…"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand-blue"
-          />
-        </Section>
-
         <Section title="Signed agreement">
           <p className="mb-4 text-sm text-slate-500">
             Upload a signed copy of this provider&apos;s agreement (PDF or photo). Use this for

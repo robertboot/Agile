@@ -274,7 +274,6 @@ export async function updateProvider(
       taxonomy: f("taxonomy"),
       license_number: f("license_number"),
       provider_ptan: f("provider_ptan"),
-      notes: f("notes"),
     })
     .eq("id", providerId);
   if (error) return { ok: false, error: error.message };

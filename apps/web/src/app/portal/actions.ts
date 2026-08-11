@@ -241,6 +241,29 @@ export async function retryProviderRegistration(providerId: string): Promise<Act
   return { ok: true };
 }
 
+/** Save a provider's notes. Admins or the owning rep — independent of the
+ *  provider's approval status (reps can always jot notes on their providers). */
+export async function saveProviderNotes(providerId: string, notes: string): Promise<ActionResult> {
+  const user = await requirePortalUser();
+  const db = createAdminClient();
+  const { data: provider } = await db
+    .from("providers")
+    .select("rep_id")
+    .eq("id", providerId)
+    .maybeSingle();
+  if (!provider) return { ok: false, error: "Provider not found" };
+  if (user.role !== "admin" && provider.rep_id !== user.id) {
+    return { ok: false, error: "Not your provider" };
+  }
+  const { error } = await db
+    .from("providers")
+    .update({ notes: notes.trim() || null })
+    .eq("id", providerId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/providers/${providerId}`);
+  return { ok: true };
+}
+
 /** Log a contact touch point on a provider (call/email/meeting/note). Admins
  *  or the owning rep. Timestamp defaults to now but can be backdated. */
 export async function addTouchpoint(

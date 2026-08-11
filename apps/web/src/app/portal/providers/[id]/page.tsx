@@ -9,6 +9,7 @@ import { ProviderAdminOverride } from "./ProviderAdminOverride";
 import { ReassignRep, type RepOption } from "./ReassignRep";
 import { ActiveToggle } from "./ActiveToggle";
 import { TouchpointLog, type Touchpoint } from "./TouchpointLog";
+import { ProviderNotes } from "./ProviderNotes";
 
 export default async function ProviderDetailPage({
   params,
@@ -150,6 +151,8 @@ export default async function ProviderDetailPage({
           </div>
         </section>
       )}
+
+      <ProviderNotes providerId={provider.id} notes={provider.notes ?? null} />
 
       <TouchpointLog providerId={provider.id} touchpoints={touchpoints} />
 
