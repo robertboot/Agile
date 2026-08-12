@@ -473,6 +473,57 @@ export async function recordOrderPayment(
   return { ok: true, qbError: qb.ok ? undefined : qb.error };
 }
 
+/**
+ * Record the monthly Gusto payout for a collection-month (YYYY-MM): pays out all
+ * unpaid commissions whose deposit fell in that month, one payout record per rep,
+ * and marks those commissions paid. This is the batch that runs on the 1st.
+ */
+export async function recordMonthlyGustoPayout(
+  monthKey: string,
+): Promise<ActionResult & { reps?: number; totalCents?: number }> {
+  const admin = await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) return { ok: false, error: "Bad month" };
+  const db = createAdminClient();
+
+  const { data: comms } = await db
+    .from("commissions")
+    .select("id, rep_id, amount_cents, paid_at, collection:collection_id(collected_on, recorded_at)")
+    .is("paid_at", null);
+
+  const due = (comms ?? []).filter((c) => {
+    const col = c.collection as unknown as { collected_on: string | null; recorded_at: string } | null;
+    const d = col?.collected_on ?? col?.recorded_at;
+    return d ? String(d).slice(0, 7) === monthKey : false;
+  });
+  if (due.length === 0) return { ok: false, error: "No unpaid commissions deposited that month" };
+
+  const byRep = new Map<string, { ids: string[]; total: number }>();
+  for (const c of due) {
+    const g = byRep.get(c.rep_id) ?? { ids: [], total: 0 };
+    g.ids.push(c.id);
+    g.total += Number(c.amount_cents);
+    byRep.set(c.rep_id, g);
+  }
+
+  let reps = 0, totalCents = 0;
+  for (const [repId, g] of byRep) {
+    if (g.total <= 0) continue; // net-zero/negative rep — nothing to hand to Gusto
+    const { data: payout, error } = await db
+      .from("commission_payouts")
+      .insert({ rep_id: repId, amount_cents: g.total, period_month: monthKey, note: `Gusto payout ${monthKey}`, recorded_by: admin.id })
+      .select("id")
+      .single();
+    if (error || !payout) continue;
+    await db.from("commissions").update({ paid_at: new Date().toISOString(), payout_id: payout.id }).in("id", g.ids);
+    reps++;
+    totalCents += g.total;
+  }
+
+  revalidatePath("/portal/commissions");
+  revalidatePath("/portal/admin/reps");
+  return { ok: true, reps, totalCents };
+}
+
 /** Soft-delete a provider (admin). Keeps the row for audit; hidden everywhere. */
 export async function deleteProvider(providerId: string): Promise<ActionResult> {
   await requireAdmin();

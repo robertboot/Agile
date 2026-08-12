@@ -3,6 +3,7 @@ import { formatCents } from "@agile/shared";
 import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
+import { RecordPayoutButton } from "./RecordPayoutButton";
 
 const PAGE_SIZE = 50;
 const STATUS_RANK = [
@@ -46,7 +47,7 @@ export default async function CommissionsPage({
     supabase
       .from("commissions")
       .select(
-        "amount_cents, created_at, collection:collection_id(collected_on, recorded_at), order:order_id(id, qbo_invoice_number, providers(practice_name), profiles:rep_id(display_name))",
+        "amount_cents, created_at, paid_at, collection:collection_id(collected_on, recorded_at), order:order_id(id, qbo_invoice_number, providers(practice_name), profiles:rep_id(display_name))",
       )
       .limit(2000),
   ]);
@@ -54,8 +55,10 @@ export default async function CommissionsPage({
   // ---- Monthly payout buckets (by deposit month of the collection) ----------
   const now = new Date();
   const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  type PayItem = { orderId: string; invoice: string | null; provider: string; rep: string; amount: number };
-  const buckets = new Map<string, { total: number; items: PayItem[] }>();
+  type PayItem = { orderId: string; invoice: string | null; provider: string; rep: string; amount: number; paid: boolean };
+  const buckets = new Map<string, { total: number; unpaid: number; items: PayItem[] }>();
+  const paidOrders = new Set<string>();   // orders whose commission has been paid out
+  const collectedOrders = new Set<string>(); // orders with accrued (collected) commission
   for (const c of comms ?? []) {
     const col = c.collection as unknown as { collected_on: string | null; recorded_at: string } | null;
     const dateStr = col?.collected_on ?? col?.recorded_at ?? c.created_at;
@@ -64,18 +67,25 @@ export default async function CommissionsPage({
       id: string; qbo_invoice_number: string | null;
       providers: { practice_name: string } | null; profiles: { display_name: string } | null;
     } | null;
-    const b = buckets.get(key) ?? { total: 0, items: [] };
+    const paid = Boolean(c.paid_at);
+    if (ord?.id) {
+      collectedOrders.add(ord.id);
+      if (paid) paidOrders.add(ord.id);
+    }
+    const b = buckets.get(key) ?? { total: 0, unpaid: 0, items: [] };
     b.total += Number(c.amount_cents);
+    if (!paid) b.unpaid += Number(c.amount_cents);
     b.items.push({
       orderId: ord?.id ?? "",
       invoice: ord?.qbo_invoice_number ?? null,
       provider: ord?.providers?.practice_name ?? "—",
       rep: ord?.profiles?.display_name ?? "—",
       amount: Number(c.amount_cents),
+      paid,
     });
     buckets.set(key, b);
   }
-  const upcoming = buckets.get(currentKey) ?? { total: 0, items: [] };
+  const upcoming = buckets.get(currentKey) ?? { total: 0, unpaid: 0, items: [] };
   const history = [...buckets.entries()]
     .filter(([k]) => k < currentKey)
     .sort((a, b) => (a[0] < b[0] ? 1 : -1));
@@ -149,19 +159,20 @@ export default async function CommissionsPage({
             <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
               Upcoming payout · pays {upcomingMeta.payLabel}
             </div>
-            <div className="mt-1 text-3xl font-bold text-emerald-800">{formatCents(upcoming.total)}</div>
+            <div className="mt-1 text-3xl font-bold text-emerald-800">{formatCents(upcoming.unpaid)}</div>
             <div className="mt-0.5 text-xs text-emerald-700">
-              Based on {upcomingMeta.label} collections to date{isAdmin ? " (all reps)" : ""}.
+              Collected {upcomingMeta.label} to date{isAdmin ? " (all reps)" : ""} — not yet paid out.
             </div>
           </div>
         </div>
-        {upcoming.items.length > 0 && (
+        {upcoming.items.filter((it) => !it.paid).length > 0 && (
           <details className="mt-3">
             <summary className="cursor-pointer text-sm font-medium text-emerald-800">
-              {upcoming.items.length} collection{upcoming.items.length > 1 ? "s" : ""} included
+              {upcoming.items.filter((it) => !it.paid).length} collection
+              {upcoming.items.filter((it) => !it.paid).length > 1 ? "s" : ""} included
             </summary>
             <ul className="mt-2 space-y-1 text-sm text-emerald-900">
-              {upcoming.items.map((it, i) => (
+              {upcoming.items.filter((it) => !it.paid).map((it, i) => (
                 <li key={i} className="flex justify-between gap-3 border-t border-emerald-100 pt-1">
                   <span>
                     <Link href={`/portal/orders/${it.orderId}`} className="font-mono text-emerald-800 hover:underline">
@@ -185,13 +196,22 @@ export default async function CommissionsPage({
           <div className="space-y-2">
             {history.map(([key, b]) => {
               const meta = monthMeta(key);
+              const due = b.unpaid > 0;
               return (
                 <details key={key} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                  <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                  <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 text-sm">
                     <span className="font-medium text-navy-900">
-                      {meta.label} collections · paid {meta.payLabel}
+                      {meta.label} collections · {due ? "due" : "paid"} {meta.payLabel}
                     </span>
-                    <span className="font-bold text-navy-900">{formatCents(b.total)}</span>
+                    <span className="flex items-center gap-3">
+                      {due ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Due</span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Paid ✓</span>
+                      )}
+                      {isAdmin && due && <RecordPayoutButton monthKey={key} label={meta.label} />}
+                      <span className="font-bold text-navy-900">{formatCents(b.total)}</span>
+                    </span>
                   </summary>
                   <ul className="mt-2 space-y-1 text-sm text-slate-600">
                     {b.items.map((it, i) => (
@@ -243,9 +263,19 @@ export default async function CommissionsPage({
                 <td className="px-4 py-2.5">{r.provider}</td>
                 {isAdmin && <td className="px-4 py-2.5">{r.rep}</td>}
                 <td className="px-4 py-2.5">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
-                    {STATUS_LABELS[r.status]}
-                  </span>
+                  {paidOrders.has(r.id) ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                      Commission paid
+                    </span>
+                  ) : collectedOrders.has(r.id) ? (
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                      Collected
+                    </span>
+                  ) : (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
+                      {STATUS_LABELS[r.status]}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-right">{formatCents(r.billed)}</td>
                 <td className="px-4 py-2.5 text-right text-slate-600">{formatCents(r.commission)}</td>
