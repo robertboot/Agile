@@ -453,14 +453,15 @@ export async function recordOrderPayment(
   });
   if (error) return { ok: false, error: error.message };
 
-  if (slipPath) {
-    const collectionId = (result as { collection_id?: string } | null)?.collection_id;
-    if (collectionId) {
-      await createAdminClient()
-        .from("order_collections")
-        .update({ deposit_slip_path: slipPath })
-        .eq("id", collectionId);
-    }
+  const collectionId = (result as { collection_id?: string } | null)?.collection_id;
+  if (collectionId && (slipPath || date)) {
+    await createAdminClient()
+      .from("order_collections")
+      .update({
+        ...(slipPath ? { deposit_slip_path: slipPath } : {}),
+        ...(date ? { collected_on: date } : {}),
+      })
+      .eq("id", collectionId);
   }
 
   // Push the payment into QuickBooks (best-effort — collection already booked).

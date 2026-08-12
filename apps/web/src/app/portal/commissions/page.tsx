@@ -8,8 +8,18 @@ const PAGE_SIZE = 50;
 const STATUS_RANK = [
   "new", "ivr_submitted", "good_to_order", "placed", "shipped", "invoiced", "paid", "cancelled",
 ];
-type SortKey = "date" | "order" | "provider" | "rep" | "status" | "billed" | "commission" | "earned";
-const SORT_KEYS: SortKey[] = ["date", "order", "provider", "rep", "status", "billed", "commission", "earned"];
+type SortKey = "date" | "order" | "invoice" | "provider" | "rep" | "status" | "billed" | "commission" | "earned";
+const SORT_KEYS: SortKey[] = ["date", "order", "invoice", "provider", "rep", "status", "billed", "commission", "earned"];
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// "2026-08" → { label: "Aug 2026", payLabel: "Sep 1, 2026" } (pays the 1st of the next month).
+function monthMeta(key: string) {
+  const [y, m] = key.split("-").map(Number);
+  const label = `${MONTHS[(m ?? 1) - 1]} ${y}`;
+  const pay = new Date(y!, m!, 1); // m is 1-based → this is the 1st of the next month
+  const payLabel = `${MONTHS[pay.getMonth()]} 1, ${pay.getFullYear()}`;
+  return { label, payLabel };
+}
 
 export default async function CommissionsPage({
   searchParams,
@@ -21,30 +31,61 @@ export default async function CommissionsPage({
   const sp = await searchParams;
   const sort = (SORT_KEYS as string[]).includes(sp.sort ?? "") ? (sp.sort as SortKey) : "date";
   const asc = sp.dir === "asc";
+  const isAdmin = user.role === "admin";
 
-  // Small volumes (a rep's own orders; admin all) — fetch, compute the derived
-  // money columns, then sort + paginate in memory so every column is sortable.
-  const [{ data: balances }, { data: orders }] = await Promise.all([
-    supabase.from("rep_balances").select("accrued_cents, reversed_cents, commission_net_cents"),
+  const [{ data: orders }, { data: comms }] = await Promise.all([
     supabase
       .from("orders")
       .select(
-        "id, status, created_at, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
+        "id, status, created_at, qbo_invoice_number, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
       )
       .is("deleted_at", null)
       .limit(1000),
+    // Commission ledger joined to its collection (deposit date) + order, for the
+    // monthly payout buckets. RLS scopes to the rep's own rows.
+    supabase
+      .from("commissions")
+      .select(
+        "amount_cents, created_at, collection:collection_id(collected_on, recorded_at), order:order_id(id, qbo_invoice_number, providers(practice_name), profiles:rep_id(display_name))",
+      )
+      .limit(2000),
   ]);
 
+  // ---- Monthly payout buckets (by deposit month of the collection) ----------
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  type PayItem = { orderId: string; invoice: string | null; provider: string; rep: string; amount: number };
+  const buckets = new Map<string, { total: number; items: PayItem[] }>();
+  for (const c of comms ?? []) {
+    const col = c.collection as unknown as { collected_on: string | null; recorded_at: string } | null;
+    const dateStr = col?.collected_on ?? col?.recorded_at ?? c.created_at;
+    const key = String(dateStr).slice(0, 7);
+    const ord = c.order as unknown as {
+      id: string; qbo_invoice_number: string | null;
+      providers: { practice_name: string } | null; profiles: { display_name: string } | null;
+    } | null;
+    const b = buckets.get(key) ?? { total: 0, items: [] };
+    b.total += Number(c.amount_cents);
+    b.items.push({
+      orderId: ord?.id ?? "",
+      invoice: ord?.qbo_invoice_number ?? null,
+      provider: ord?.providers?.practice_name ?? "—",
+      rep: ord?.profiles?.display_name ?? "—",
+      amount: Number(c.amount_cents),
+    });
+    buckets.set(key, b);
+  }
+  const upcoming = buckets.get(currentKey) ?? { total: 0, items: [] };
+  const history = [...buckets.entries()]
+    .filter(([k]) => k < currentKey)
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  const upcomingMeta = monthMeta(currentKey);
+
+  // ---- Earned-to-date per order (for the orders table) ----------------------
   const earnedByOrder = new Map<string, number>();
-  const orderIds = (orders ?? []).map((o) => o.id);
-  if (orderIds.length > 0) {
-    const { data: comms } = await supabase
-      .from("commissions")
-      .select("order_id, amount_cents")
-      .in("order_id", orderIds);
-    for (const c of comms ?? []) {
-      earnedByOrder.set(c.order_id, (earnedByOrder.get(c.order_id) ?? 0) + Number(c.amount_cents));
-    }
+  for (const c of comms ?? []) {
+    const ord = c.order as unknown as { id: string } | null;
+    if (ord?.id) earnedByOrder.set(ord.id, (earnedByOrder.get(ord.id) ?? 0) + Number(c.amount_cents));
   }
 
   const rows = (orders ?? []).map((o) => {
@@ -53,6 +94,7 @@ export default async function CommissionsPage({
       id: o.id,
       status: o.status,
       created_at: o.created_at,
+      invoice: o.qbo_invoice_number as string | null,
       provider: (o.providers as unknown as { practice_name: string })?.practice_name ?? "—",
       rep: (o.profiles as unknown as { display_name: string })?.display_name ?? "—",
       billed: items.reduce((a, i) => a + i.billed_cents, 0),
@@ -64,6 +106,7 @@ export default async function CommissionsPage({
   const val = (r: (typeof rows)[number]): string | number => {
     switch (sort) {
       case "order": return r.id;
+      case "invoice": return r.invoice ?? "";
       case "provider": return r.provider;
       case "rep": return r.rep;
       case "status": return STATUS_RANK.indexOf(r.status);
@@ -85,52 +128,100 @@ export default async function CommissionsPage({
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const sortHref = (key: SortKey) => {
-    const nextDir = sort === key && asc ? "desc" : "asc";
-    return `/portal/commissions?sort=${key}&dir=${nextDir}`;
-  };
+  const sortHref = (key: SortKey) => `/portal/commissions?sort=${key}&dir=${sort === key && asc ? "desc" : "asc"}`;
   const arrow = (key: SortKey) => (sort === key ? (asc ? " ▲" : " ▼") : "");
   const pageHref = (p: number) => `/portal/commissions?page=${p}&sort=${sort}&dir=${asc ? "asc" : "desc"}`;
-
-  const sum = (f: (b: { accrued_cents: number; reversed_cents: number; commission_net_cents: number }) => number) =>
-    (balances ?? []).reduce((a, b) => a + Number(f(b)), 0);
-  const total = sum((b) => b.commission_net_cents);
-  const accrued = sum((b) => b.accrued_cents);
-  const reversed = sum((b) => b.reversed_cents);
-
-  const isAdmin = user.role === "admin";
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-navy-900">Commissions</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Every order and where it stands. Commission is the full potential; earned accrues only on
-          gross collected dollars once an order is paid. Payouts run through Gusto.
+          Paid monthly on the 1st. Dollars deposited by the last day of a month pay out on the 1st of
+          the next month — commission accrues only on gross collected. Payouts run through Gusto.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="text-2xl font-bold text-brand-blue">{formatCents(total)}</div>
-          <div className="mt-1 text-xs text-slate-500">Net earned balance</div>
+      {/* Upcoming payout */}
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              Upcoming payout · pays {upcomingMeta.payLabel}
+            </div>
+            <div className="mt-1 text-3xl font-bold text-emerald-800">{formatCents(upcoming.total)}</div>
+            <div className="mt-0.5 text-xs text-emerald-700">
+              Based on {upcomingMeta.label} collections to date{isAdmin ? " (all reps)" : ""}.
+            </div>
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="text-2xl font-bold text-emerald-700">{formatCents(accrued)}</div>
-          <div className="mt-1 text-xs text-slate-500">Accrued</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="text-2xl font-bold text-red-600">{formatCents(reversed)}</div>
-          <div className="mt-1 text-xs text-slate-500">Reversed (clawbacks)</div>
-        </div>
+        {upcoming.items.length > 0 && (
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm font-medium text-emerald-800">
+              {upcoming.items.length} collection{upcoming.items.length > 1 ? "s" : ""} included
+            </summary>
+            <ul className="mt-2 space-y-1 text-sm text-emerald-900">
+              {upcoming.items.map((it, i) => (
+                <li key={i} className="flex justify-between gap-3 border-t border-emerald-100 pt-1">
+                  <span>
+                    <Link href={`/portal/orders/${it.orderId}`} className="font-mono text-emerald-800 hover:underline">
+                      {it.orderId.slice(0, 8)}
+                    </Link>{" "}
+                    {it.invoice ? `· Inv #${it.invoice} ` : ""}· {it.provider}
+                    {isAdmin ? ` · ${it.rep}` : ""}
+                  </span>
+                  <span className="font-medium">{formatCents(it.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
 
+      {/* Payout history */}
+      {history.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <h2 className="mb-3 font-semibold text-navy-900">Payout history</h2>
+          <div className="space-y-2">
+            {history.map(([key, b]) => {
+              const meta = monthMeta(key);
+              return (
+                <details key={key} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                  <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-navy-900">
+                      {meta.label} collections · paid {meta.payLabel}
+                    </span>
+                    <span className="font-bold text-navy-900">{formatCents(b.total)}</span>
+                  </summary>
+                  <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                    {b.items.map((it, i) => (
+                      <li key={i} className="flex justify-between gap-3 border-t border-slate-200 pt-1">
+                        <span>
+                          <Link href={`/portal/orders/${it.orderId}`} className="font-mono text-brand-blue hover:underline">
+                            {it.orderId.slice(0, 8)}
+                          </Link>{" "}
+                          {it.invoice ? `· Inv #${it.invoice} ` : ""}· {it.provider}
+                          {isAdmin ? ` · ${it.rep}` : ""}
+                        </span>
+                        <span className="font-medium">{formatCents(it.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* All orders */}
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 text-left text-slate-500">
             <tr>
               <Th onClick={sortHref("date")}>Date{arrow("date")}</Th>
               <Th onClick={sortHref("order")}>Order{arrow("order")}</Th>
+              <Th onClick={sortHref("invoice")}>Invoice #{arrow("invoice")}</Th>
               <Th onClick={sortHref("provider")}>Provider{arrow("provider")}</Th>
               {isAdmin && <Th onClick={sortHref("rep")}>Rep{arrow("rep")}</Th>}
               <Th onClick={sortHref("status")}>Status{arrow("status")}</Th>
@@ -148,6 +239,7 @@ export default async function CommissionsPage({
                     {r.id.slice(0, 8)}
                   </Link>
                 </td>
+                <td className="px-4 py-2.5 font-mono">{r.invoice ?? <span className="text-slate-300">—</span>}</td>
                 <td className="px-4 py-2.5">{r.provider}</td>
                 {isAdmin && <td className="px-4 py-2.5">{r.rep}</td>}
                 <td className="px-4 py-2.5">
@@ -168,7 +260,7 @@ export default async function CommissionsPage({
             ))}
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={isAdmin ? 9 : 8} className="px-4 py-8 text-center text-slate-400">
                   No orders yet.
                 </td>
               </tr>
@@ -201,9 +293,7 @@ export default async function CommissionsPage({
 function Th({ children, onClick, right }: { children: React.ReactNode; onClick: string; right?: boolean }) {
   return (
     <th className={`px-4 py-2.5 font-medium ${right ? "text-right" : ""}`}>
-      <Link href={onClick} className="hover:text-navy-900">
-        {children}
-      </Link>
+      <Link href={onClick} className="hover:text-navy-900">{children}</Link>
     </th>
   );
 }
