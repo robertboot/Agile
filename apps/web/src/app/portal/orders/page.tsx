@@ -149,7 +149,7 @@ export default async function OrdersPage({
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[o.status]}`}
                     >
-                      {STATUS_LABELS[o.status]}
+                      {user.role === "rep" && o.status === "paid" ? "Collected" : STATUS_LABELS[o.status]}
                     </span>
                   </td>
                   {user.role === "admin" && (

@@ -116,7 +116,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         <span
           className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_COLORS[order.status]}`}
         >
-          {STATUS_LABELS[order.status]}
+          {user.role === "rep" && order.status === "paid" ? "Collected" : STATUS_LABELS[order.status]}
         </span>
       </div>
 
@@ -133,7 +133,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     : "bg-slate-100 text-slate-400"
               }`}
             >
-              {STATUS_LABELS[s.key]}
+              {user.role === "rep" && s.key === "paid" ? "Collected" : STATUS_LABELS[s.key]}
             </li>
           ))}
         </ol>
