@@ -5,11 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 
 const PAGE_SIZE = 50;
-
-const SORT_COLS: Record<string, string> = {
-  date: "created_at",
-  status: "status",
-};
+const STATUS_RANK = [
+  "new", "ivr_submitted", "good_to_order", "placed", "shipped", "invoiced", "paid", "cancelled",
+];
+type SortKey = "date" | "order" | "provider" | "rep" | "status" | "billed" | "commission" | "earned";
+const SORT_KEYS: SortKey[] = ["date", "order", "provider", "rep", "status", "billed", "commission", "earned"];
 
 export default async function CommissionsPage({
   searchParams,
@@ -19,35 +19,24 @@ export default async function CommissionsPage({
   const user = await requirePortalUser();
   const supabase = await createClient();
   const sp = await searchParams;
-  const page = Math.max(1, Number(sp.page ?? "1") || 1);
-  const sort = sp.sort && SORT_COLS[sp.sort] ? sp.sort : "date";
+  const sort = (SORT_KEYS as string[]).includes(sp.sort ?? "") ? (sp.sort as SortKey) : "date";
   const asc = sp.dir === "asc";
-  const from = (page - 1) * PAGE_SIZE;
 
-  const sortHref = (key: string) => {
-    const nextDir = sort === key && asc ? "desc" : "asc";
-    return `/portal/commissions?sort=${key}&dir=${nextDir}`;
-  };
-  const arrow = (key: string) => (sort === key ? (asc ? " ▲" : " ▼") : "");
-
-  // Stat cards from the SQL aggregate view (immune to the 1000-row cap — audit
-  // H4). The table below lists every order + its pipeline status + commission.
-  const [{ data: balances }, { data: orders, count }] = await Promise.all([
+  // Small volumes (a rep's own orders; admin all) — fetch, compute the derived
+  // money columns, then sort + paginate in memory so every column is sortable.
+  const [{ data: balances }, { data: orders }] = await Promise.all([
     supabase.from("rep_balances").select("accrued_cents, reversed_cents, commission_net_cents"),
     supabase
       .from("orders")
       .select(
-        "id, status, created_at, gross_collected_cents, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
-        { count: "exact" },
+        "id, status, created_at, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
       )
       .is("deleted_at", null)
-      .order(SORT_COLS[sort]!, { ascending: asc, nullsFirst: false })
-      .range(from, from + PAGE_SIZE - 1),
+      .limit(1000),
   ]);
 
-  // Commission actually accrued so far, per order (net of any reversals).
-  const orderIds = (orders ?? []).map((o) => o.id);
   const earnedByOrder = new Map<string, number>();
+  const orderIds = (orders ?? []).map((o) => o.id);
   if (orderIds.length > 0) {
     const { data: comms } = await supabase
       .from("commissions")
@@ -58,13 +47,58 @@ export default async function CommissionsPage({
     }
   }
 
+  const rows = (orders ?? []).map((o) => {
+    const items = o.order_items as { billed_cents: number; rep_commission_cents: number }[];
+    return {
+      id: o.id,
+      status: o.status,
+      created_at: o.created_at,
+      provider: (o.providers as unknown as { practice_name: string })?.practice_name ?? "—",
+      rep: (o.profiles as unknown as { display_name: string })?.display_name ?? "—",
+      billed: items.reduce((a, i) => a + i.billed_cents, 0),
+      commission: items.reduce((a, i) => a + i.rep_commission_cents, 0),
+      earned: earnedByOrder.get(o.id) ?? 0,
+    };
+  });
+
+  const val = (r: (typeof rows)[number]): string | number => {
+    switch (sort) {
+      case "order": return r.id;
+      case "provider": return r.provider;
+      case "rep": return r.rep;
+      case "status": return STATUS_RANK.indexOf(r.status);
+      case "billed": return r.billed;
+      case "commission": return r.commission;
+      case "earned": return r.earned;
+      default: return r.created_at;
+    }
+  };
+  rows.sort((a, b) => {
+    const av = val(a), bv = val(b);
+    const cmp = typeof av === "number" && typeof bv === "number"
+      ? av - bv
+      : String(av).localeCompare(String(bv), undefined, { numeric: true });
+    return cmp * (asc ? 1 : -1);
+  });
+
+  const page = Math.max(1, Math.min(Number(sp.page ?? "1") || 1, Math.ceil(rows.length / PAGE_SIZE) || 1));
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const sortHref = (key: SortKey) => {
+    const nextDir = sort === key && asc ? "desc" : "asc";
+    return `/portal/commissions?sort=${key}&dir=${nextDir}`;
+  };
+  const arrow = (key: SortKey) => (sort === key ? (asc ? " ▲" : " ▼") : "");
+  const pageHref = (p: number) => `/portal/commissions?page=${p}&sort=${sort}&dir=${asc ? "asc" : "desc"}`;
+
   const sum = (f: (b: { accrued_cents: number; reversed_cents: number; commission_net_cents: number }) => number) =>
     (balances ?? []).reduce((a, b) => a + Number(f(b)), 0);
   const total = sum((b) => b.commission_net_cents);
   const accrued = sum((b) => b.accrued_cents);
   const reversed = sum((b) => b.reversed_cents);
 
-  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  const isAdmin = user.role === "admin";
 
   return (
     <div className="space-y-6">
@@ -95,65 +129,46 @@ export default async function CommissionsPage({
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 text-left text-slate-500">
             <tr>
-              <th className="px-4 py-2.5 font-medium">
-                <Link href={sortHref("date")} className="hover:text-navy-900">Date{arrow("date")}</Link>
-              </th>
-              <th className="px-4 py-2.5 font-medium">Order</th>
-              <th className="px-4 py-2.5 font-medium">Provider</th>
-              {user.role === "admin" && <th className="px-4 py-2.5 font-medium">Rep</th>}
-              <th className="px-4 py-2.5 font-medium">
-                <Link href={sortHref("status")} className="hover:text-navy-900">Status{arrow("status")}</Link>
-              </th>
-              <th className="px-4 py-2.5 font-medium text-right">Billed</th>
-              <th className="px-4 py-2.5 font-medium text-right">Commission</th>
-              <th className="px-4 py-2.5 font-medium text-right">Earned</th>
+              <Th onClick={sortHref("date")}>Date{arrow("date")}</Th>
+              <Th onClick={sortHref("order")}>Order{arrow("order")}</Th>
+              <Th onClick={sortHref("provider")}>Provider{arrow("provider")}</Th>
+              {isAdmin && <Th onClick={sortHref("rep")}>Rep{arrow("rep")}</Th>}
+              <Th onClick={sortHref("status")}>Status{arrow("status")}</Th>
+              <Th onClick={sortHref("billed")} right>Billed{arrow("billed")}</Th>
+              <Th onClick={sortHref("commission")} right>Commission{arrow("commission")}</Th>
+              <Th onClick={sortHref("earned")} right>Earned{arrow("earned")}</Th>
             </tr>
           </thead>
           <tbody>
-            {(orders ?? []).map((o) => {
-              const items = o.order_items as { billed_cents: number; rep_commission_cents: number }[];
-              const billed = items.reduce((a, i) => a + i.billed_cents, 0);
-              const commission = items.reduce((a, i) => a + i.rep_commission_cents, 0);
-              const earned = earnedByOrder.get(o.id) ?? 0;
-              return (
-                <tr key={o.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-2.5">{formatDate(o.created_at)}</td>
-                  <td className="px-4 py-2.5">
-                    <Link
-                      href={`/portal/orders/${o.id}`}
-                      className="font-mono text-brand-blue hover:underline"
-                    >
-                      {o.id.slice(0, 8)}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {(o.providers as unknown as { practice_name: string })?.practice_name ?? "—"}
-                  </td>
-                  {user.role === "admin" && (
-                    <td className="px-4 py-2.5">
-                      {(o.profiles as unknown as { display_name: string })?.display_name}
-                    </td>
-                  )}
-                  <td className="px-4 py-2.5">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[o.status]}`}>
-                      {STATUS_LABELS[o.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right">{formatCents(billed)}</td>
-                  <td className="px-4 py-2.5 text-right text-slate-600">{formatCents(commission)}</td>
-                  <td
-                    className={`px-4 py-2.5 text-right font-medium ${
-                      earned > 0 ? "text-emerald-700" : earned < 0 ? "text-red-600" : "text-slate-400"
-                    }`}
-                  >
-                    {earned === 0 ? "—" : formatCents(earned)}
-                  </td>
-                </tr>
-              );
-            })}
-            {(orders ?? []).length === 0 && (
+            {pageRows.map((r) => (
+              <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                <td className="px-4 py-2.5">{formatDate(r.created_at)}</td>
+                <td className="px-4 py-2.5">
+                  <Link href={`/portal/orders/${r.id}`} className="font-mono text-brand-blue hover:underline">
+                    {r.id.slice(0, 8)}
+                  </Link>
+                </td>
+                <td className="px-4 py-2.5">{r.provider}</td>
+                {isAdmin && <td className="px-4 py-2.5">{r.rep}</td>}
+                <td className="px-4 py-2.5">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
+                    {STATUS_LABELS[r.status]}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right">{formatCents(r.billed)}</td>
+                <td className="px-4 py-2.5 text-right text-slate-600">{formatCents(r.commission)}</td>
+                <td
+                  className={`px-4 py-2.5 text-right font-medium ${
+                    r.earned > 0 ? "text-emerald-700" : r.earned < 0 ? "text-red-600" : "text-slate-400"
+                  }`}
+                >
+                  {r.earned === 0 ? "—" : formatCents(r.earned)}
+                </td>
+              </tr>
+            ))}
+            {pageRows.length === 0 && (
               <tr>
-                <td colSpan={user.role === "admin" ? 8 : 7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={isAdmin ? 8 : 7} className="px-4 py-8 text-center text-slate-400">
                   No orders yet.
                 </td>
               </tr>
@@ -164,23 +179,15 @@ export default async function CommissionsPage({
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-500">
-            Page {page} of {totalPages}
-          </span>
+          <span className="text-slate-500">Page {page} of {totalPages}</span>
           <div className="flex gap-2">
             {page > 1 && (
-              <Link
-                href={`/portal/commissions?page=${page - 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
-              >
+              <Link href={pageHref(page - 1)} className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50">
                 ← Previous
               </Link>
             )}
             {page < totalPages && (
-              <Link
-                href={`/portal/commissions?page=${page + 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
-              >
+              <Link href={pageHref(page + 1)} className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50">
                 Next →
               </Link>
             )}
@@ -188,5 +195,15 @@ export default async function CommissionsPage({
         </div>
       )}
     </div>
+  );
+}
+
+function Th({ children, onClick, right }: { children: React.ReactNode; onClick: string; right?: boolean }) {
+  return (
+    <th className={`px-4 py-2.5 font-medium ${right ? "text-right" : ""}`}>
+      <Link href={onClick} className="hover:text-navy-900">
+        {children}
+      </Link>
+    </th>
   );
 }
