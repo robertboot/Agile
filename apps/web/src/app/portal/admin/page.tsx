@@ -107,13 +107,16 @@ export default async function AdminPage() {
   // product ships. Commissions earned = the rep cost (net of reversals); of that,
   // some is paid out, the rest still owed. Net profit = collected − COGS − comm.
   const grossCollected = (ordersEcon ?? []).reduce((a, o) => a + Number(o.gross_collected_cents ?? 0), 0);
-  const cogs = (ordersEcon ?? [])
+  // Stored COGS is the internal 2× buffer; the real purchase price we paid is
+  // half of it. Net profit uses actual cost, not the buffer.
+  const cogsBuffer = (ordersEcon ?? [])
     .filter((o) => ["shipped", "invoiced", "paid"].includes(o.status))
     .reduce((a, o) => a + Number((o.order_internals as unknown as { cogs_cents: number } | null)?.cogs_cents ?? 0), 0);
+  const productCost = Math.round(cogsBuffer / 2);
   const commissionsEarned = (allComms ?? []).reduce((a, c) => a + Number(c.amount_cents), 0);
   const commissionsPaid = (payoutRows ?? []).reduce((a, p) => a + Number(p.amount_cents), 0);
   const commissionsOutstanding = commissionsEarned - commissionsPaid;
-  const netProfit = grossCollected - cogs - commissionsEarned;
+  const netProfit = grossCollected - productCost - commissionsEarned;
 
   return (
     <div className="space-y-10">
@@ -156,7 +159,12 @@ export default async function AdminPage() {
         <h2 className="label-mono mb-3 text-slate-500">Company financials (to date)</h2>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Fin label="Gross collections" value={formatCents(grossCollected)} tone="navy" />
-          <Fin label="COGS" value={formatCents(cogs)} tone="slate" sub="Product cost (shipped)" />
+          <Fin
+            label="Product cost"
+            value={formatCents(productCost)}
+            tone="slate"
+            sub={`Actual paid · COGS buffer ${formatCents(cogsBuffer)}`}
+          />
           <Fin
             label="Rep commissions"
             value={formatCents(commissionsEarned)}
@@ -167,12 +175,14 @@ export default async function AdminPage() {
             label="Net profit"
             value={formatCents(netProfit)}
             tone={netProfit >= 0 ? "emerald" : "red"}
-            sub="Collections − COGS − commissions"
+            sub="Collections − product cost − commissions"
           />
         </div>
         <p className="mt-2 text-xs text-slate-400">
-          Net profit is realized on cash collected. Commissions are the full earned cost (paid +
-          owed). Use this to decide retained earnings vs. dividends.
+          Product cost is the actual purchase price; the internal COGS figure doubles it as a
+          buffer. Net profit is realized on cash collected, minus actual product cost and full
+          earned commissions (paid + owed). COGS is booked when a product ships, so orders that
+          shipped but haven&apos;t collected yet carry cost ahead of their revenue.
         </p>
       </section>
 
