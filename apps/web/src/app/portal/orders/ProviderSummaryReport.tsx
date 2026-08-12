@@ -30,7 +30,9 @@ export async function ProviderSummaryReport({
     );
   }
 
-  const csvHref = `/portal/orders/summary?provider=${providerId}&sumperiod=${period}${outstandingOnly ? "&ro=1" : ""}`;
+  const qs = `provider=${providerId}&sumperiod=${period}${outstandingOnly ? "&ro=1" : ""}`;
+  const csvHref = `/portal/orders/summary?${qs}`;
+  const pdfHref = `/print/provider-summary?${qs}`;
 
   return (
     <div className="space-y-4">
@@ -43,12 +45,22 @@ export async function ProviderSummaryReport({
             {orders.length === 1 ? "" : "s"}
           </p>
         </div>
-        <a
-          href={csvHref}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
-        >
-          ⬇ Download CSV
-        </a>
+        <div className="flex gap-2">
+          <a
+            href={pdfHref}
+            target="_blank"
+            rel="noopener"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
+          >
+            🖨 PDF
+          </a>
+          <a
+            href={csvHref}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
+          >
+            ⬇ CSV
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

@@ -75,7 +75,9 @@ export default async function DashboardPage() {
           {stages.map((s) => (
             <div key={s} className="rounded-lg border border-slate-200 bg-white p-3 text-center">
               <div className="text-xl font-bold text-navy-900">{pipeline[s] ?? 0}</div>
-              <div className="mt-1 text-[11px] font-medium text-slate-500">{STATUS_LABELS[s]}</div>
+              <div className="mt-1 text-[11px] font-medium text-slate-500">
+                {user.role === "rep" && s === "paid" ? "Collected" : STATUS_LABELS[s]}
+              </div>
             </div>
           ))}
         </div>
@@ -111,7 +113,7 @@ export default async function DashboardPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[o.status]}`}>
-                        {STATUS_LABELS[o.status]}
+                        {user.role === "rep" && o.status === "paid" ? "Collected" : STATUS_LABELS[o.status]}
                       </span>
                     </td>
                     <td className="px-4 py-2.5">{formatCents(billed)}</td>
