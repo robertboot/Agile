@@ -2,28 +2,9 @@ import Link from "next/link";
 import { formatCents } from "@agile/shared";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
+import { buildProviderSummary } from "./provider-summary";
 
-export const SUM_PERIODS: { key: string; label: string }[] = [
-  { key: "all", label: "All time" },
-  { key: "ytd", label: "YTD" },
-  { key: "this_q", label: "This quarter" },
-  { key: "this_month", label: "This month" },
-  { key: "last_month", label: "Last month" },
-];
-
-function rangeFor(period: string): { from: Date; to: Date } | null {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const q = Math.floor(m / 3);
-  switch (period) {
-    case "ytd": return { from: new Date(y, 0, 1), to: new Date(y + 1, 0, 1) };
-    case "this_q": return { from: new Date(y, q * 3, 1), to: new Date(y, q * 3 + 3, 1) };
-    case "this_month": return { from: new Date(y, m, 1), to: new Date(y, m + 1, 1) };
-    case "last_month": return { from: new Date(y, m - 1, 1), to: new Date(y, m, 1) };
-    default: return null;
-  }
-}
+export { SUM_PERIODS } from "./provider-summary";
 
 export async function ProviderSummaryReport({
   providerId,
@@ -37,14 +18,10 @@ export async function ProviderSummaryReport({
   isRep: boolean;
 }) {
   const supabase = await createClient();
-  const range = rangeFor(period);
+  const { provider, orders, totals, commissionEarned, periodLabel } = await buildProviderSummary(
+    supabase, providerId, period, outstandingOnly,
+  );
 
-  // RLS scopes this: a rep only sees their own providers' orders; admins any.
-  const { data: provider } = await supabase
-    .from("providers")
-    .select("practice_name, provider_first, provider_last")
-    .eq("id", providerId)
-    .maybeSingle();
   if (!provider) {
     return (
       <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -53,62 +30,25 @@ export async function ProviderSummaryReport({
     );
   }
 
-  let q = supabase
-    .from("orders")
-    .select("id, created_at, status, gross_collected_cents, qbo_invoice_number, order_items(product_code, size_label, billed_cents, rep_commission_cents)")
-    .eq("provider_id", providerId)
-    .is("deleted_at", null)
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: false });
-  if (range) q = q.gte("created_at", range.from.toISOString()).lt("created_at", range.to.toISOString());
-  const { data: ordersRaw } = await q;
-
-  const rows = (ordersRaw ?? []).map((o) => {
-    const items = o.order_items as { product_code: string; size_label: string; billed_cents: number; rep_commission_cents: number }[];
-    const billed = items.reduce((a, i) => a + i.billed_cents, 0);
-    const commission = items.reduce((a, i) => a + i.rep_commission_cents, 0);
-    const collected = Number(o.gross_collected_cents ?? 0);
-    return {
-      id: o.id,
-      created_at: o.created_at,
-      status: o.status,
-      invoice: o.qbo_invoice_number as string | null,
-      products: items.map((i) => `${i.product_code} ${i.size_label}`).join(", "),
-      billed,
-      commission,
-      collected,
-      outstanding: Math.max(billed - collected, 0),
-    };
-  });
-  const orders = outstandingOnly ? rows.filter((r) => r.outstanding > 0) : rows;
-
-  const earnedIds = orders.map((o) => o.id);
-  let commissionEarned = 0;
-  if (earnedIds.length > 0) {
-    const { data: comms } = await supabase.from("commissions").select("amount_cents").in("order_id", earnedIds);
-    commissionEarned = (comms ?? []).reduce((a, c) => a + Number(c.amount_cents), 0);
-  }
-
-  const totals = orders.reduce(
-    (a, r) => ({
-      billed: a.billed + r.billed,
-      collected: a.collected + r.collected,
-      outstanding: a.outstanding + r.outstanding,
-      commission: a.commission + r.commission,
-    }),
-    { billed: 0, collected: 0, outstanding: 0, commission: 0 },
-  );
+  const csvHref = `/portal/orders/summary?provider=${providerId}&sumperiod=${period}${outstandingOnly ? "&ro=1" : ""}`;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-bold text-navy-900">{provider.practice_name}</h3>
-        <p className="text-sm text-slate-500">
-          {provider.provider_first} {provider.provider_last} ·{" "}
-          {SUM_PERIODS.find((p) => p.key === period)?.label ?? "All time"}
-          {outstandingOnly ? " · outstanding only" : ""} · {orders.length} order
-          {orders.length === 1 ? "" : "s"}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-navy-900">{provider.practice_name}</h3>
+          <p className="text-sm text-slate-500">
+            {provider.provider_first} {provider.provider_last} · {periodLabel}
+            {outstandingOnly ? " · outstanding only" : ""} · {orders.length} order
+            {orders.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <a
+          href={csvHref}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
+        >
+          ⬇ Download CSV
+        </a>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -171,7 +111,7 @@ export async function ProviderSummaryReport({
 }
 
 function Card({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "emerald" | "navy" }) {
-  const color = tone === "emerald" ? "text-emerald-700" : tone === "navy" ? "text-navy-900" : "text-navy-900";
+  const color = tone === "emerald" ? "text-emerald-700" : "text-navy-900";
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className={`text-xl font-bold ${color}`}>{value}</div>
