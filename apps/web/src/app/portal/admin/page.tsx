@@ -21,6 +21,9 @@ export default async function AdminPage() {
     { data: messages },
     { data: repQuestions },
     { data: upcomingComms },
+    { data: ordersEcon },
+    { data: allComms },
+    { data: payoutRows },
   ] = await Promise.all([
     supabase
       .from("providers")
@@ -58,6 +61,15 @@ export default async function AdminPage() {
       .select("amount_cents, paid_at, collection:collection_id(collected_on, recorded_at), profiles:rep_id(display_name)")
       .is("paid_at", null)
       .limit(2000),
+    // Company financials.
+    supabase
+      .from("orders")
+      .select("status, gross_collected_cents, order_internals(cogs_cents)")
+      .is("deleted_at", null)
+      .neq("status", "cancelled")
+      .limit(5000),
+    supabase.from("commissions").select("amount_cents").limit(5000),
+    supabase.from("commission_payouts").select("amount_cents").limit(5000),
   ]);
 
   // Providers approved but stuck before MedNecessity onboarding (registration
@@ -90,6 +102,18 @@ export default async function AdminPage() {
   }
   const payRows = [...payByRep.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const payTotal = payRows.reduce((a, [, v]) => a + v, 0);
+
+  // Company financials. Gross collected = actual cash in. COGS booked once the
+  // product ships. Commissions earned = the rep cost (net of reversals); of that,
+  // some is paid out, the rest still owed. Net profit = collected − COGS − comm.
+  const grossCollected = (ordersEcon ?? []).reduce((a, o) => a + Number(o.gross_collected_cents ?? 0), 0);
+  const cogs = (ordersEcon ?? [])
+    .filter((o) => ["shipped", "invoiced", "paid"].includes(o.status))
+    .reduce((a, o) => a + Number((o.order_internals as unknown as { cogs_cents: number } | null)?.cogs_cents ?? 0), 0);
+  const commissionsEarned = (allComms ?? []).reduce((a, c) => a + Number(c.amount_cents), 0);
+  const commissionsPaid = (payoutRows ?? []).reduce((a, p) => a + Number(p.amount_cents), 0);
+  const commissionsOutstanding = commissionsEarned - commissionsPaid;
+  const netProfit = grossCollected - cogs - commissionsEarned;
 
   return (
     <div className="space-y-10">
@@ -125,6 +149,31 @@ export default async function AdminPage() {
         ) : (
           <p className="mt-2 text-sm text-emerald-700">No commissions collected yet this cycle.</p>
         )}
+      </section>
+
+      {/* Company financials */}
+      <section>
+        <h2 className="label-mono mb-3 text-slate-500">Company financials (to date)</h2>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Fin label="Gross collections" value={formatCents(grossCollected)} tone="navy" />
+          <Fin label="COGS" value={formatCents(cogs)} tone="slate" sub="Product cost (shipped)" />
+          <Fin
+            label="Rep commissions"
+            value={formatCents(commissionsEarned)}
+            tone="slate"
+            sub={`${formatCents(commissionsPaid)} paid · ${formatCents(commissionsOutstanding)} owed`}
+          />
+          <Fin
+            label="Net profit"
+            value={formatCents(netProfit)}
+            tone={netProfit >= 0 ? "emerald" : "red"}
+            sub="Collections − COGS − commissions"
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Net profit is realized on cash collected. Commissions are the full earned cost (paid +
+          owed). Use this to decide retained earnings vs. dividends.
+        </p>
       </section>
 
       <section>
@@ -407,6 +456,26 @@ export default async function AdminPage() {
           Approved commissions hand off to Gusto for payout.
         </p>
       </section>
+    </div>
+  );
+}
+
+function Fin({
+  label, value, sub, tone,
+}: {
+  label: string; value: string; sub?: string; tone: "navy" | "slate" | "emerald" | "red";
+}) {
+  const color = {
+    navy: "text-navy-900",
+    slate: "text-slate-700",
+    emerald: "text-emerald-700",
+    red: "text-red-600",
+  }[tone];
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div className="mt-1 text-xs font-medium text-slate-600">{label}</div>
+      {sub && <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>}
     </div>
   );
 }
