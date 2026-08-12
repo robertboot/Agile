@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatCents } from "@agile/shared";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
@@ -19,6 +20,7 @@ export default async function AdminPage() {
     { data: repDetails },
     { data: messages },
     { data: repQuestions },
+    { data: upcomingComms },
   ] = await Promise.all([
     supabase
       .from("providers")
@@ -50,6 +52,12 @@ export default async function AdminPage() {
       .eq("dismissed", false)
       .order("created_at", { ascending: false })
       .limit(25),
+    // Unpaid, collected commissions — for the "next payout" dashboard card.
+    supabase
+      .from("commissions")
+      .select("amount_cents, paid_at, collection:collection_id(collected_on, recorded_at), profiles:rep_id(display_name)")
+      .is("paid_at", null)
+      .limit(2000),
   ]);
 
   // Providers approved but stuck before MedNecessity onboarding (registration
@@ -65,11 +73,59 @@ export default async function AdminPage() {
   const detailByRep = new Map((repDetails ?? []).map((d) => [d.profile_id, d]));
   const repOptions = (reps ?? []).map((r) => ({ id: r.id, display_name: r.display_name }));
 
+  // Next payout: unpaid commissions deposited in the current month (pays the 1st
+  // of next month), grouped by rep.
+  const nowDate = new Date();
+  const curKey = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}`;
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const payDate = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 1);
+  const payLabel = `${MONTHS[payDate.getMonth()]} 1, ${payDate.getFullYear()}`;
+  const payByRep = new Map<string, number>();
+  for (const c of upcomingComms ?? []) {
+    const col = c.collection as unknown as { collected_on: string | null; recorded_at: string } | null;
+    const d = col?.collected_on ?? col?.recorded_at;
+    if (!d || String(d).slice(0, 7) !== curKey) continue;
+    const name = (c.profiles as unknown as { display_name: string } | null)?.display_name ?? "—";
+    payByRep.set(name, (payByRep.get(name) ?? 0) + Number(c.amount_cents));
+  }
+  const payRows = [...payByRep.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const payTotal = payRows.reduce((a, [, v]) => a + v, 0);
+
   return (
     <div className="space-y-10">
       <p className="text-sm text-slate-500">
         You are the gatekeeper: nothing reaches MedNecessity without approval here.
       </p>
+
+      {/* Next commission payout */}
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              Commissions due next cycle · pays {payLabel}
+            </div>
+            <div className="mt-1 text-3xl font-bold text-emerald-800">{formatCents(payTotal)}</div>
+            <div className="mt-0.5 text-xs text-emerald-700">
+              Collected this month, not yet paid out.
+            </div>
+          </div>
+          <Link href="/portal/commissions" className="text-sm font-medium text-emerald-800 hover:underline">
+            View commissions →
+          </Link>
+        </div>
+        {payRows.length > 0 ? (
+          <ul className="mt-3 divide-y divide-emerald-100 border-t border-emerald-100">
+            {payRows.map(([name, amt]) => (
+              <li key={name} className="flex justify-between py-1.5 text-sm text-emerald-900">
+                <span>{name}</span>
+                <span className="font-semibold">{formatCents(amt)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-emerald-700">No commissions collected yet this cycle.</p>
+        )}
+      </section>
 
       <section>
         <h2 className="label-mono mb-3 flex items-center gap-2 text-slate-500">
