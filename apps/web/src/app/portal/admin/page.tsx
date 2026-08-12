@@ -9,9 +9,49 @@ import { RepQuestionAnswer } from "./RepQuestionAnswer";
 import { DismissQuestion } from "./DismissQuestion";
 import { ContactMessageActions } from "./ContactMessageActions";
 
-export default async function AdminPage() {
+const FIN_PERIODS: { key: string; label: string }[] = [
+  { key: "ytd", label: "YTD" },
+  { key: "this_q", label: "This quarter" },
+  { key: "last_q", label: "Last quarter" },
+  { key: "this_month", label: "This month" },
+  { key: "last_month", label: "Last month" },
+  { key: "all", label: "All time" },
+];
+
+// [from, to) date range for a financial period, or null = all time.
+function finRange(period: string): { from: Date; to: Date } | null {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const q = Math.floor(m / 3);
+  switch (period) {
+    case "ytd": return { from: new Date(y, 0, 1), to: new Date(y + 1, 0, 1) };
+    case "this_q": return { from: new Date(y, q * 3, 1), to: new Date(y, q * 3 + 3, 1) };
+    case "last_q":
+      return q === 0
+        ? { from: new Date(y - 1, 9, 1), to: new Date(y, 0, 1) }
+        : { from: new Date(y, (q - 1) * 3, 1), to: new Date(y, q * 3, 1) };
+    case "this_month": return { from: new Date(y, m, 1), to: new Date(y, m + 1, 1) };
+    case "last_month": return { from: new Date(y, m - 1, 1), to: new Date(y, m, 1) };
+    default: return null;
+  }
+}
+
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fin?: string }>;
+}) {
   await requireAdmin();
   const supabase = await createClient();
+  const finParam = (await searchParams).fin;
+  const finPeriod = FIN_PERIODS.some((p) => p.key === finParam) ? finParam! : "ytd";
+  const range = finRange(finPeriod);
+  const finLabel = FIN_PERIODS.find((p) => p.key === finPeriod)!.label;
+  const fromISO = range?.from.toISOString();
+  const toISO = range?.to.toISOString();
+  const inRange = (createdAt: string | null | undefined) =>
+    !range || (!!createdAt && createdAt >= fromISO! && createdAt < toISO!);
 
   const [
     { data: pendingProviders },
@@ -23,7 +63,6 @@ export default async function AdminPage() {
     { data: upcomingComms },
     { data: ordersEcon },
     { data: allComms },
-    { data: payoutRows },
   ] = await Promise.all([
     supabase
       .from("providers")
@@ -64,12 +103,11 @@ export default async function AdminPage() {
     // Company financials.
     supabase
       .from("orders")
-      .select("status, gross_collected_cents, order_internals(cogs_cents), order_items(billed_cents, rep_commission_cents)")
+      .select("created_at, status, gross_collected_cents, order_internals(cogs_cents), order_items(billed_cents, rep_commission_cents)")
       .is("deleted_at", null)
       .neq("status", "cancelled")
       .limit(5000),
-    supabase.from("commissions").select("amount_cents").limit(5000),
-    supabase.from("commission_payouts").select("amount_cents").limit(5000),
+    supabase.from("commissions").select("amount_cents, paid_at, order:order_id(created_at)").limit(5000),
   ]);
 
   // Providers approved but stuck before MedNecessity onboarding (registration
@@ -106,21 +144,26 @@ export default async function AdminPage() {
   // Company financials. Gross collected = actual cash in. COGS booked once the
   // product ships. Commissions earned = the rep cost (net of reversals); of that,
   // some is paid out, the rest still owed. Net profit = collected − COGS − comm.
-  const grossCollected = (ordersEcon ?? []).reduce((a, o) => a + Number(o.gross_collected_cents ?? 0), 0);
+  // Financials scoped to the selected period (by order date).
+  const finOrders = (ordersEcon ?? []).filter((o) => inRange(o.created_at));
+  const finComms = (allComms ?? []).filter((c) =>
+    inRange((c.order as unknown as { created_at: string } | null)?.created_at));
+
+  const grossCollected = finOrders.reduce((a, o) => a + Number(o.gross_collected_cents ?? 0), 0);
   // Stored COGS is the internal 2× buffer; the real purchase price we paid is
   // half of it. Net profit uses actual cost, not the buffer.
-  const cogsBuffer = (ordersEcon ?? [])
+  const cogsBuffer = finOrders
     .filter((o) => ["shipped", "invoiced", "paid"].includes(o.status))
     .reduce((a, o) => a + Number((o.order_internals as unknown as { cogs_cents: number } | null)?.cogs_cents ?? 0), 0);
   const productCost = Math.round(cogsBuffer / 2);
-  const commissionsEarned = (allComms ?? []).reduce((a, c) => a + Number(c.amount_cents), 0);
-  const commissionsPaid = (payoutRows ?? []).reduce((a, p) => a + Number(p.amount_cents), 0);
+  const commissionsEarned = finComms.reduce((a, c) => a + Number(c.amount_cents), 0);
+  const commissionsPaid = finComms.filter((c) => c.paid_at).reduce((a, c) => a + Number(c.amount_cents), 0);
   const commissionsOutstanding = commissionsEarned - commissionsPaid;
   const netProfit = grossCollected - productCost - commissionsEarned;
 
   // Timing gap: product shipped/invoiced but not yet collected. Cost is already
   // booked; the revenue (+ its commission) is still to come.
-  const shippedOrders = (ordersEcon ?? []).filter((o) => ["shipped", "invoiced", "paid"].includes(o.status));
+  const shippedOrders = finOrders.filter((o) => ["shipped", "invoiced", "paid"].includes(o.status));
   const billedShipped = shippedOrders.reduce(
     (a, o) => a + (o.order_items as { billed_cents: number }[]).reduce((x, i) => x + i.billed_cents, 0), 0);
   const commissionFull = shippedOrders.reduce(
@@ -167,7 +210,24 @@ export default async function AdminPage() {
 
       {/* Company financials */}
       <section>
-        <h2 className="label-mono mb-3 text-slate-500">Company financials (to date)</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="label-mono text-slate-500">Company financials · {finLabel}</h2>
+          <div className="flex flex-wrap gap-1">
+            {FIN_PERIODS.map((p) => (
+              <Link
+                key={p.key}
+                href={`/portal/admin?fin=${p.key}`}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  p.key === finPeriod
+                    ? "bg-navy-900 text-white"
+                    : "border border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {p.label}
+              </Link>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Fin label="Gross collections" value={formatCents(grossCollected)} tone="navy" />
           <Fin
