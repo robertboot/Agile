@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 import { SortTip } from "./SortTip";
 import { ArchiveButton } from "./ArchiveButton";
+import { ProviderSummaryReport, SUM_PERIODS } from "./ProviderSummaryReport";
 
 const PAGE_SIZE = 50;
 
@@ -18,11 +19,24 @@ const SORT_COLS: Record<string, string> = {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; sort?: string; dir?: string; archived?: string }>;
+  searchParams: Promise<{
+    page?: string; sort?: string; dir?: string; archived?: string;
+    provider?: string; sumperiod?: string; ro?: string;
+  }>;
 }) {
   const user = await requirePortalUser();
   const supabase = await createClient();
   const sp = await searchParams;
+
+  // Provider summary report controls (RLS scopes the dropdown per role).
+  const { data: providerOptions } = await supabase
+    .from("providers")
+    .select("id, practice_name")
+    .is("deleted_at", null)
+    .order("practice_name");
+  const reportProvider = sp.provider && sp.provider !== "" ? sp.provider : null;
+  const sumPeriod = SUM_PERIODS.some((p) => p.key === sp.sumperiod) ? sp.sumperiod! : "all";
+  const outstandingOnly = sp.ro === "1";
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const sort = sp.sort && SORT_COLS[sp.sort] ? sp.sort : "created";
   const asc = sp.dir === "asc";
@@ -75,6 +89,61 @@ export default async function OrdersPage({
           </Link>
         </div>
       </div>
+
+      {/* Provider summary report */}
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+        <h2 className="font-semibold text-navy-900">Provider summary</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Pick a provider for an at-a-glance report of orders, collections, and outstanding.
+        </p>
+        <form method="get" className="mt-3 flex flex-wrap items-end gap-3">
+          {showArchived && <input type="hidden" name="archived" value="1" />}
+          <div>
+            <label htmlFor="provider" className="label-mono text-slate-500">Provider</label>
+            <select
+              id="provider"
+              name="provider"
+              defaultValue={reportProvider ?? ""}
+              className="mt-1 w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="">Select a provider…</option>
+              {(providerOptions ?? []).map((p) => (
+                <option key={p.id} value={p.id}>{p.practice_name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="sumperiod" className="label-mono text-slate-500">Period</label>
+            <select
+              id="sumperiod"
+              name="sumperiod"
+              defaultValue={sumPeriod}
+              className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              {SUM_PERIODS.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 pb-2 text-sm text-slate-600">
+            <input type="checkbox" name="ro" value="1" defaultChecked={outstandingOnly} />
+            Outstanding only
+          </label>
+          <button type="submit" className="btn-brand rounded-lg px-4 py-2 pb-2 text-sm font-semibold text-white">
+            Run report
+          </button>
+        </form>
+        {reportProvider && (
+          <div className="mt-5">
+            <ProviderSummaryReport
+              providerId={reportProvider}
+              period={sumPeriod}
+              outstandingOnly={outstandingOnly}
+              isRep={user.role === "rep"}
+            />
+          </div>
+        )}
+      </section>
 
       <SortTip />
 
