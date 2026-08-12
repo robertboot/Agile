@@ -18,7 +18,7 @@ export async function ProviderSummaryReport({
   isRep: boolean;
 }) {
   const supabase = await createClient();
-  const { provider, orders, totals, commissionEarned, periodLabel } = await buildProviderSummary(
+  const { provider, orders, totals, periodLabel } = await buildProviderSummary(
     supabase, providerId, period, outstandingOnly,
   );
 
@@ -63,16 +63,11 @@ export async function ProviderSummaryReport({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card label="Orders" value={String(orders.length)} />
         <Card label="Billed" value={formatCents(totals.billed)} />
         <Card label="Collected" value={formatCents(totals.collected)} tone="emerald" />
         <Card label="Outstanding" value={formatCents(totals.outstanding)} tone="navy" />
-        <Card
-          label={isRep ? "Commission" : "Rep commission"}
-          value={formatCents(totals.commission)}
-          sub={`${formatCents(commissionEarned)} earned`}
-        />
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">

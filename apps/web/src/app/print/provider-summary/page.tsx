@@ -19,7 +19,7 @@ export default async function ProviderSummaryPrint({
   const outstandingOnly = sp.ro === "1";
 
   const supabase = await createClient();
-  const { provider, orders, totals, commissionEarned, periodLabel } = await buildProviderSummary(
+  const { provider, orders, totals, periodLabel } = await buildProviderSummary(
     supabase, providerId, period, outstandingOnly,
   );
   const isRep = user.role === "rep";
@@ -61,13 +61,11 @@ export default async function ProviderSummaryPrint({
       </div>
 
       {/* Summary */}
-      <div className="mt-5 grid grid-cols-3 gap-4 rounded-lg border border-slate-200 p-4">
+      <div className="mt-5 grid grid-cols-4 gap-4 rounded-lg border border-slate-200 p-4">
         <Sum label="Orders" value={String(orders.length)} />
         <Sum label="Billed" value={formatCents(totals.billed)} />
         <Sum label="Collected" value={formatCents(totals.collected)} />
         <Sum label="Outstanding" value={formatCents(totals.outstanding)} />
-        <Sum label={isRep ? "Commission" : "Rep commission"} value={formatCents(totals.commission)} />
-        <Sum label="Commission earned" value={formatCents(commissionEarned)} />
       </div>
 
       {/* Orders */}
@@ -112,8 +110,8 @@ export default async function ProviderSummaryPrint({
       </table>
 
       <p className="mt-8 text-[11px] text-slate-400">
-        Commission is the potential at full collection; earned accrues on collected dollars. This
-        statement is generated from the Agile Medical Group portal.
+        Statement generated from the Agile Medical Group portal. Billed reflects the amount invoiced;
+        collected reflects payments received to date.
       </p>
     </main>
   );

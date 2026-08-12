@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const outstandingOnly = sp.get("ro") === "1";
 
   const supabase = await createClient();
-  const { provider, orders, totals, commissionEarned, periodLabel } = await buildProviderSummary(
+  const { provider, orders, totals, periodLabel } = await buildProviderSummary(
     supabase, providerId, period, outstandingOnly,
   );
   if (!provider) return new Response("Provider not found or not accessible", { status: 404 });
@@ -37,8 +37,6 @@ export async function GET(req: NextRequest) {
   lines.push(`Billed,${usd(totals.billed)}`);
   lines.push(`Collected,${usd(totals.collected)}`);
   lines.push(`Outstanding,${usd(totals.outstanding)}`);
-  lines.push(`Commission (potential),${usd(totals.commission)}`);
-  lines.push(`Commission earned,${usd(commissionEarned)}`);
   lines.push("");
   lines.push(["Date", "Invoice #", "Products", "Status", "Billed", "Collected", "Outstanding"].join(","));
   for (const r of orders) {
