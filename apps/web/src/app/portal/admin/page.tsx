@@ -64,7 +64,7 @@ export default async function AdminPage() {
     // Company financials.
     supabase
       .from("orders")
-      .select("status, gross_collected_cents, order_internals(cogs_cents)")
+      .select("status, gross_collected_cents, order_internals(cogs_cents), order_items(billed_cents, rep_commission_cents)")
       .is("deleted_at", null)
       .neq("status", "cancelled")
       .limit(5000),
@@ -117,6 +117,16 @@ export default async function AdminPage() {
   const commissionsPaid = (payoutRows ?? []).reduce((a, p) => a + Number(p.amount_cents), 0);
   const commissionsOutstanding = commissionsEarned - commissionsPaid;
   const netProfit = grossCollected - productCost - commissionsEarned;
+
+  // Timing gap: product shipped/invoiced but not yet collected. Cost is already
+  // booked; the revenue (+ its commission) is still to come.
+  const shippedOrders = (ordersEcon ?? []).filter((o) => ["shipped", "invoiced", "paid"].includes(o.status));
+  const billedShipped = shippedOrders.reduce(
+    (a, o) => a + (o.order_items as { billed_cents: number }[]).reduce((x, i) => x + i.billed_cents, 0), 0);
+  const commissionFull = shippedOrders.reduce(
+    (a, o) => a + (o.order_items as { rep_commission_cents: number }[]).reduce((x, i) => x + i.rep_commission_cents, 0), 0);
+  const outstanding = billedShipped - grossCollected;              // receivables still to collect
+  const projectedNet = billedShipped - productCost - commissionFull; // net once everything collects
 
   return (
     <div className="space-y-10">
@@ -172,10 +182,24 @@ export default async function AdminPage() {
             sub={`${formatCents(commissionsPaid)} paid · ${formatCents(commissionsOutstanding)} owed`}
           />
           <Fin
-            label="Net profit"
+            label="Net profit (realized)"
             value={formatCents(netProfit)}
             tone={netProfit >= 0 ? "emerald" : "red"}
-            sub="Collections − product cost − commissions"
+            sub="Cash in − product cost − commissions"
+          />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Fin
+            label="Outstanding to collect"
+            value={formatCents(outstanding)}
+            tone="navy"
+            sub="Invoiced, awaiting payment"
+          />
+          <Fin
+            label="Projected net (once collected)"
+            value={formatCents(projectedNet)}
+            tone={projectedNet >= 0 ? "emerald" : "red"}
+            sub="If all invoiced collects in full"
           />
         </div>
         <p className="mt-2 text-xs text-slate-400">
