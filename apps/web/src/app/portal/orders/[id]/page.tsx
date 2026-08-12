@@ -8,6 +8,7 @@ import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 import { OrderActions } from "./OrderActions";
 import { OrderFulfillment } from "./OrderFulfillment";
 import { QuickBooksSync } from "./QuickBooksSync";
+import { RecordPayment } from "./RecordPayment";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -171,6 +172,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           syncError={order.qbo_sync_error ?? null}
           emailedTo={order.qbo_invoice_email ?? null}
           emailedAt={order.qbo_invoice_emailed_at ?? null}
+        />
+      )}
+
+      {user.role === "admin" && ["invoiced", "paid"].includes(order.status) && (
+        <RecordPayment
+          orderId={order.id}
+          defaultAmount={(
+            Math.max(billed - Number(order.gross_collected_cents ?? 0), 0) / 100
+          ).toFixed(2)}
         />
       )}
 

@@ -159,6 +159,57 @@ async function findOrCreateItem(): Promise<string | null> {
   return (created.json as { Item?: { Id: string } })?.Item?.Id ?? null;
 }
 
+/** Create a QuickBooks Payment applied to an order's invoice, so the invoice
+ *  balance drops in QB too. Best-effort; returns a clear error on failure. */
+export async function qboRecordPayment(
+  orderId: string,
+  amountCents: number,
+  txnDate?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const db = createAdminClient();
+  const { data: order } = await db
+    .from("orders")
+    .select("qbo_invoice_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order?.qbo_invoice_id) return { ok: false, error: "Order has no QuickBooks invoice" };
+
+  // Need the invoice's customer to attach the payment.
+  const inv = await qbo(`/invoice/${order.qbo_invoice_id}`, "GET");
+  if (!inv.ok) return { ok: false, error: inv.error ?? "Couldn't load QuickBooks invoice" };
+  const customerId = (inv.json as { Invoice?: { CustomerRef?: { value: string } } })?.Invoice?.CustomerRef?.value;
+  if (!customerId) return { ok: false, error: "Invoice has no customer" };
+
+  const amount = amountCents / 100;
+  const res = await qbo("/payment", "POST", {
+    CustomerRef: { value: customerId },
+    TotalAmt: amount,
+    ...(txnDate ? { TxnDate: txnDate } : {}),
+    Line: [
+      {
+        Amount: amount,
+        LinkedTxn: [{ TxnId: order.qbo_invoice_id, TxnType: "Invoice" }],
+      },
+    ],
+  });
+  if (!res.ok) return { ok: false, error: res.error ?? "QuickBooks payment failed" };
+  return { ok: true };
+}
+
+/** Current total + open balance for every invoice, keyed by QBO invoice id.
+ *  Used to reconcile payments matched in QuickBooks back to portal orders. */
+export async function qboInvoiceBalances(): Promise<Map<string, { total: number; balance: number }>> {
+  const out = new Map<string, { total: number; balance: number }>();
+  const r = await qbo(`/query?query=${encodeURIComponent("select Id, TotalAmt, Balance from Invoice maxresults 1000")}`, "GET");
+  if (!r.ok) return out;
+  const invs = (r.json as { QueryResponse?: { Invoice?: { Id: string; TotalAmt: number; Balance?: number }[] } })
+    ?.QueryResponse?.Invoice ?? [];
+  for (const i of invs) {
+    out.set(i.Id, { total: Number(i.TotalAmt), balance: Number(i.Balance ?? i.TotalAmt) });
+  }
+  return out;
+}
+
 /** Record an automatic contact touch point on a provider (best-effort). */
 async function logTouchpoint(
   db: ReturnType<typeof createAdminClient>,

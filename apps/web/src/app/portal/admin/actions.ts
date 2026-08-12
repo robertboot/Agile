@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/app/portal/actions";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
-import { qboCreateInvoiceForOrder } from "@/lib/integrations/quickbooks";
+import { qboCreateInvoiceForOrder, qboRecordPayment } from "@/lib/integrations/quickbooks";
 import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 
 // ---------------------------------------------------------------------------
@@ -412,6 +412,64 @@ export async function syncOrderToQuickBooks(orderId: string): Promise<ActionResu
   const r = await qboCreateInvoiceForOrder(orderId);
   revalidatePath(`/portal/orders/${orderId}`);
   return r.ok ? { ok: true } : { ok: false, error: r.error ?? "QuickBooks sync failed" };
+}
+
+/**
+ * Record a payment against an order's invoice: books the collection (accrues
+ * commission + flips to Paid via fn_record_collection), stores an optional
+ * deposit-slip upload, and pushes a matching Payment into QuickBooks so the
+ * invoice balance drops there too. Portal is the source of truth.
+ */
+export async function recordOrderPayment(
+  orderId: string,
+  formData: FormData,
+): Promise<ActionResult & { qbError?: string }> {
+  await requireAdmin();
+  const amountCents = Math.round(Number(formData.get("amount")) * 100);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return { ok: false, error: "Enter a payment amount greater than zero" };
+  }
+  const date = (formData.get("date") as string | null)?.trim() || undefined;
+
+  // Optional deposit-slip upload → private bucket.
+  let slipPath: string | null = null;
+  const slip = formData.get("slip");
+  if (slip instanceof File && slip.size > 0) {
+    if (slip.size > 10 * 1024 * 1024) return { ok: false, error: "Deposit slip too large (max 10 MB)" };
+    const ext = slip.name.split(".").pop()?.toLowerCase() ?? "pdf";
+    slipPath = `${orderId}/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await createAdminClient()
+      .storage.from("deposit-slips")
+      .upload(slipPath, slip, { contentType: slip.type || "application/pdf" });
+    if (upErr) return { ok: false, error: `Deposit slip upload failed: ${upErr.message}` };
+  }
+
+  // Book the collection (admin session → fn_record_collection allows it).
+  const supabase = await createClient();
+  const { data: result, error } = await supabase.rpc("fn_record_collection", {
+    p_order_id: orderId,
+    p_amount_cents: amountCents,
+    p_note: date ? `Payment ${date}` : "Payment",
+  });
+  if (error) return { ok: false, error: error.message };
+
+  if (slipPath) {
+    const collectionId = (result as { collection_id?: string } | null)?.collection_id;
+    if (collectionId) {
+      await createAdminClient()
+        .from("order_collections")
+        .update({ deposit_slip_path: slipPath })
+        .eq("id", collectionId);
+    }
+  }
+
+  // Push the payment into QuickBooks (best-effort — collection already booked).
+  const qb = await qboRecordPayment(orderId, amountCents, date);
+
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath("/portal/commissions");
+  revalidatePath("/portal/admin/orders");
+  return { ok: true, qbError: qb.ok ? undefined : qb.error };
 }
 
 /** Soft-delete a provider (admin). Keeps the row for audit; hidden everywhere. */
