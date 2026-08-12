@@ -6,15 +6,29 @@ import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 
 const PAGE_SIZE = 50;
 
+const SORT_COLS: Record<string, string> = {
+  date: "created_at",
+  status: "status",
+};
+
 export default async function CommissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; sort?: string; dir?: string }>;
 }) {
   const user = await requirePortalUser();
   const supabase = await createClient();
-  const page = Math.max(1, Number((await searchParams).page ?? "1") || 1);
+  const sp = await searchParams;
+  const page = Math.max(1, Number(sp.page ?? "1") || 1);
+  const sort = sp.sort && SORT_COLS[sp.sort] ? sp.sort : "date";
+  const asc = sp.dir === "asc";
   const from = (page - 1) * PAGE_SIZE;
+
+  const sortHref = (key: string) => {
+    const nextDir = sort === key && asc ? "desc" : "asc";
+    return `/portal/commissions?sort=${key}&dir=${nextDir}`;
+  };
+  const arrow = (key: string) => (sort === key ? (asc ? " ▲" : " ▼") : "");
 
   // Stat cards from the SQL aggregate view (immune to the 1000-row cap — audit
   // H4). The table below lists every order + its pipeline status + commission.
@@ -27,7 +41,7 @@ export default async function CommissionsPage({
         { count: "exact" },
       )
       .is("deleted_at", null)
-      .order("created_at", { ascending: false })
+      .order(SORT_COLS[sort]!, { ascending: asc, nullsFirst: false })
       .range(from, from + PAGE_SIZE - 1),
   ]);
 
@@ -81,11 +95,15 @@ export default async function CommissionsPage({
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 text-left text-slate-500">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Date</th>
+              <th className="px-4 py-2.5 font-medium">
+                <Link href={sortHref("date")} className="hover:text-navy-900">Date{arrow("date")}</Link>
+              </th>
               <th className="px-4 py-2.5 font-medium">Order</th>
               <th className="px-4 py-2.5 font-medium">Provider</th>
               {user.role === "admin" && <th className="px-4 py-2.5 font-medium">Rep</th>}
-              <th className="px-4 py-2.5 font-medium">Status</th>
+              <th className="px-4 py-2.5 font-medium">
+                <Link href={sortHref("status")} className="hover:text-navy-900">Status{arrow("status")}</Link>
+              </th>
               <th className="px-4 py-2.5 font-medium text-right">Billed</th>
               <th className="px-4 py-2.5 font-medium text-right">Commission</th>
               <th className="px-4 py-2.5 font-medium text-right">Earned</th>
@@ -152,7 +170,7 @@ export default async function CommissionsPage({
           <div className="flex gap-2">
             {page > 1 && (
               <Link
-                href={`/portal/commissions?page=${page - 1}`}
+                href={`/portal/commissions?page=${page - 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
               >
                 ← Previous
@@ -160,7 +178,7 @@ export default async function CommissionsPage({
             )}
             {page < totalPages && (
               <Link
-                href={`/portal/commissions?page=${page + 1}`}
+                href={`/portal/commissions?page=${page + 1}&sort=${sort}&dir=${asc ? "asc" : "desc"}`}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
               >
                 Next →
