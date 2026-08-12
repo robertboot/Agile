@@ -126,6 +126,7 @@ export default async function AdminPage() {
   const commissionFull = shippedOrders.reduce(
     (a, o) => a + (o.order_items as { rep_commission_cents: number }[]).reduce((x, i) => x + i.rep_commission_cents, 0), 0);
   const outstanding = billedShipped - grossCollected;              // receivables still to collect
+  const anticipatedCommission = commissionFull - commissionsEarned; // commission owed once outstanding collects
   const projectedNet = billedShipped - productCost - commissionFull; // net once everything collects
 
   return (
@@ -196,17 +197,25 @@ export default async function AdminPage() {
             sub="Invoiced, awaiting payment"
           />
           <Fin
+            label="Anticipated commission"
+            value={formatCents(anticipatedCommission)}
+            tone="slate"
+            sub="Owed when outstanding collects"
+          />
+          <Fin
             label="Projected net (once collected)"
             value={formatCents(projectedNet)}
             tone={projectedNet >= 0 ? "emerald" : "red"}
-            sub="If all invoiced collects in full"
+            sub="Nets out anticipated commission"
           />
         </div>
         <p className="mt-2 text-xs text-slate-400">
-          Product cost is the actual purchase price; the internal COGS figure doubles it as a
-          buffer. Net profit is realized on cash collected, minus actual product cost and full
-          earned commissions (paid + owed). COGS is booked when a product ships, so orders that
-          shipped but haven&apos;t collected yet carry cost ahead of their revenue.
+          Product cost is the actual purchase price (the internal COGS figure doubles it as a
+          buffer). <strong>Net profit (realized)</strong> = cash collected − product cost − commission
+          earned so far. <strong>Projected net</strong> assumes every invoiced order collects in full
+          and subtracts the <strong>anticipated commission</strong> that comes due then — a true
+          fully-settled net. Cost is booked when product ships, so shipped-but-uncollected orders
+          carry cost ahead of their revenue until they pay.
         </p>
       </section>
 
