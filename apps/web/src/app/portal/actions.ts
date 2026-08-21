@@ -18,6 +18,9 @@ import { notifySlack, sendSlackMessage, GENERAL_CHANNEL_ID } from "@/lib/integra
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 import { qboUpdateInvoiceForOrder } from "@/lib/integrations/quickbooks";
 import { getPrepurchaseAccount, resolvePull } from "@/lib/prepurchase";
+import { buildProviderSummary } from "@/app/portal/orders/provider-summary";
+import { renderProviderSummaryPdf } from "@/lib/provider-summary-pdf";
+import { sendEmail, emailConfigured } from "@/lib/email";
 
 export type { QuoteItemInput };
 
@@ -262,6 +265,46 @@ export async function saveProviderNotes(providerId: string, notes: string): Prom
     .eq("id", providerId);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/portal/providers/${providerId}`);
+  return { ok: true };
+}
+
+/**
+ * Email a provider their order summary with the PDF attached. RLS-scoped (a rep
+ * can only email their own providers). Returns notConfigured=true when no email
+ * service is set up so the UI can fall back to a mailto draft.
+ */
+export async function emailProviderSummary(
+  providerId: string,
+  period: string,
+  outstandingOnly: boolean,
+): Promise<ActionResult & { notConfigured?: boolean }> {
+  const user = await requirePortalUser();
+  if (!emailConfigured()) return { ok: false, notConfigured: true, error: "Email isn't set up yet" };
+
+  const supabase = await createClient();
+  const summary = await buildProviderSummary(supabase, providerId, period, outstandingOnly);
+  if (!summary.provider) return { ok: false, error: "Provider not found" };
+  const to = summary.provider.contact_email?.trim();
+  if (!to) return { ok: false, error: "This provider has no contact email on file" };
+
+  const pdf = await renderProviderSummaryPdf(summary, user.role === "rep");
+  const base64 = Buffer.from(pdf).toString("base64");
+  const slug = summary.provider.practice_name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+
+  const sent = await sendEmail({
+    to,
+    subject: `Order summary — ${summary.provider.practice_name}`,
+    text:
+      `Hi ${summary.provider.provider_first} ${summary.provider.provider_last},\n\n` +
+      `Please find your order summary (${summary.periodLabel}) attached.\n\n` +
+      `Orders: ${summary.orders.length}\n` +
+      `Billed: $${(summary.totals.billed / 100).toFixed(2)}\n` +
+      `Collected: $${(summary.totals.collected / 100).toFixed(2)}\n` +
+      `Outstanding: $${(summary.totals.outstanding / 100).toFixed(2)}\n\n` +
+      `Thank you,\nAgile Medical Group`,
+    attachments: [{ filename: `provider-summary-${slug}-${period}.pdf`, content: base64 }],
+  });
+  if (!sent.ok) return { ok: false, error: sent.error };
   return { ok: true };
 }
 

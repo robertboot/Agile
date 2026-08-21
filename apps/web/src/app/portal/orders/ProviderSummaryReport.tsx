@@ -3,6 +3,8 @@ import { formatCents } from "@agile/shared";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 import { buildProviderSummary } from "./provider-summary";
+import { emailConfigured } from "@/lib/email";
+import { EmailProviderButton } from "./EmailProviderButton";
 
 export { SUM_PERIODS } from "./provider-summary";
 
@@ -58,18 +60,13 @@ export async function ProviderSummaryReport({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {mailtoHref ? (
-            <a
-              href={mailtoHref}
-              className="rounded-lg bg-brand-blue px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
-            >
-              ✉ Email provider
-            </a>
-          ) : (
-            <span className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-400" title="Add a provider contact email first">
-              ✉ Email provider
-            </span>
-          )}
+          <EmailProviderButton
+            providerId={providerId}
+            period={period}
+            outstandingOnly={outstandingOnly}
+            emailEnabled={emailConfigured() && !!email}
+            mailtoHref={mailtoHref}
+          />
           <a
             href={pdfHref}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
@@ -85,8 +82,11 @@ export async function ProviderSummaryReport({
         </div>
       </div>
       <p className="text-xs text-slate-400">
-        Tip: click <strong>PDF</strong> to download the statement, then <strong>Email provider</strong>
-        {email ? "" : " (add a provider contact email first)"} to open a pre-filled draft — attach the PDF and send.
+        {emailConfigured() && email
+          ? "Email provider sends this statement to the provider with the PDF attached."
+          : email
+            ? "Tip: click PDF to download, then Email provider opens a pre-filled draft — attach the PDF and send."
+            : "Add a provider contact email to enable emailing."}
       </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
