@@ -363,7 +363,8 @@ const ORDER_NEXT: Record<string, string> = {
   good_to_order: "placed",
   placed: "shipped",
   shipped: "invoiced",
-  invoiced: "paid",
+  // invoiced → paid only via Record payment (which books the collection +
+  // commission); the board can't flip to Paid without recording the money.
 };
 
 /** Move an order one step forward in the pipeline (admin, manual). */

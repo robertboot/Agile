@@ -23,7 +23,7 @@ const NEXT_LABEL: Record<string, string | null> = {
   good_to_order: "Placed",
   placed: "Shipped",
   shipped: "Invoice",
-  invoiced: "Paid",
+  invoiced: null, // → Paid only via Record payment (books dollars + commission)
   paid: null,
 };
 
