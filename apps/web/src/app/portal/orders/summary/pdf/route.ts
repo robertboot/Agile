@@ -35,10 +35,21 @@ export async function GET(req: NextRequest) {
   let page = doc.addPage([W, H]);
   let y = H - M;
 
+  // Standard Helvetica encodes WinAnsi only — map/strip characters it can't (em
+  // dash, ellipsis, bullet, ×, and anything above Latin-1) so it never throws.
+  const safe = (s: string) =>
+    s
+      .replace(/[—–]/g, "-")
+      .replace(/…/g, "...")
+      .replace(/[•·]/g, "-")
+      .replace(/×/g, "x")
+      .replace(/[^\x00-\xFF]/g, "");
   const text = (s: string, x: number, yy: number, size: number, f = font, color = NAVY) =>
-    page.drawText(s, { x, y: yy, size, font: f, color });
-  const right = (s: string, xr: number, yy: number, size: number, f = font, color = NAVY) =>
-    page.drawText(s, { x: xr - f.widthOfTextAtSize(s, size), y: yy, size, font: f, color });
+    page.drawText(safe(s), { x, y: yy, size, font: f, color });
+  const right = (s: string, xr: number, yy: number, size: number, f = font, color = NAVY) => {
+    const ss = safe(s);
+    page.drawText(ss, { x: xr - f.widthOfTextAtSize(ss, size), y: yy, size, font: f, color });
+  };
 
   // Header: logo + title
   const logoW = 116, logoH = (logo.height / logo.width) * logoW;
@@ -117,10 +128,11 @@ export async function GET(req: NextRequest) {
 
   const bytes = await doc.save();
   const slug = provider.practice_name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
-  return new Response(Buffer.from(bytes), {
+  return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="provider-summary-${slug}-${period}.pdf"`,
+      "Content-Length": String(bytes.length),
     },
   });
 }
