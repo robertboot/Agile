@@ -36,7 +36,7 @@ export interface SummaryRow {
 }
 
 export interface ProviderSummary {
-  provider: { practice_name: string; provider_first: string; provider_last: string } | null;
+  provider: { practice_name: string; provider_first: string; provider_last: string; contact_email: string | null } | null;
   orders: SummaryRow[];
   totals: { billed: number; collected: number; outstanding: number; commission: number };
   commissionEarned: number;
@@ -56,7 +56,7 @@ export async function buildProviderSummary(
 
   const { data: provider } = await supabase
     .from("providers")
-    .select("practice_name, provider_first, provider_last")
+    .select("practice_name, provider_first, provider_last, contact_email")
     .eq("id", providerId)
     .maybeSingle();
   if (!provider) {

@@ -32,7 +32,19 @@ export async function ProviderSummaryReport({
 
   const qs = `provider=${providerId}&sumperiod=${period}${outstandingOnly ? "&ro=1" : ""}`;
   const csvHref = `/portal/orders/summary?${qs}`;
-  const pdfHref = `/print/provider-summary?${qs}`;
+  const pdfHref = `/portal/orders/summary/pdf?${qs}`;
+  const email = provider.contact_email;
+  const mailSubject = encodeURIComponent(`Order summary — ${provider.practice_name}`);
+  const mailBody = encodeURIComponent(
+    `Hi ${provider.provider_first} ${provider.provider_last},\n\n` +
+      `Please find your order summary (${periodLabel}) below; the full statement PDF is attached.\n\n` +
+      `Orders: ${orders.length}\n` +
+      `Billed: ${formatCents(totals.billed)}\n` +
+      `Collected: ${formatCents(totals.collected)}\n` +
+      `Outstanding: ${formatCents(totals.outstanding)}\n\n` +
+      `Thank you,\nAgile Medical Group`,
+  );
+  const mailtoHref = email ? `mailto:${email}?subject=${mailSubject}&body=${mailBody}` : null;
 
   return (
     <div className="space-y-4">
@@ -45,14 +57,24 @@ export async function ProviderSummaryReport({
             {orders.length === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {mailtoHref ? (
+            <a
+              href={mailtoHref}
+              className="rounded-lg bg-brand-blue px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
+            >
+              ✉ Email provider
+            </a>
+          ) : (
+            <span className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-400" title="Add a provider contact email first">
+              ✉ Email provider
+            </span>
+          )}
           <a
             href={pdfHref}
-            target="_blank"
-            rel="noopener"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
           >
-            🖨 PDF
+            ⬇ PDF
           </a>
           <a
             href={csvHref}
@@ -62,6 +84,10 @@ export async function ProviderSummaryReport({
           </a>
         </div>
       </div>
+      <p className="text-xs text-slate-400">
+        Tip: click <strong>PDF</strong> to download the statement, then <strong>Email provider</strong>
+        {email ? "" : " (add a provider contact email first)"} to open a pre-filled draft — attach the PDF and send.
+      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card label="Orders" value={String(orders.length)} />
