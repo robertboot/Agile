@@ -12,6 +12,7 @@ export interface BoardOrder {
   rep: string;
   billed: number;
   invoiceNumber: string | null;
+  pullCents: number | null;
 }
 
 export function OrderCard({
@@ -44,17 +45,23 @@ export function OrderCard({
         >
           {order.id.slice(0, 8)}
         </Link>
-        {order.invoiceNumber && (
+        {order.pullCents != null ? (
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+            Pull
+          </span>
+        ) : order.invoiceNumber ? (
           <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-emerald-700">
             Inv #{order.invoiceNumber}
           </span>
-        )}
+        ) : null}
       </div>
       <div className="mt-0.5 text-sm font-medium text-navy-900">{order.provider}</div>
       {order.patient && <div className="text-xs text-slate-500">Patient: {order.patient}</div>}
       <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
         <span>{order.rep}</span>
-        <span className="font-semibold text-slate-600">{formatCents(order.billed)}</span>
+        <span className="font-semibold text-slate-600">
+          {order.pullCents != null ? `${formatCents(order.pullCents)} pull` : formatCents(order.billed)}
+        </span>
       </div>
 
       {nextLabel && (

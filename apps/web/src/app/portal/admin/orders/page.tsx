@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { formatCents } from "@agile/shared";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABELS } from "@/lib/format";
@@ -35,20 +37,27 @@ export default async function AdminOrderBoardPage({
   const qboFlash = (await searchParams).qbo;
   const qbo = qboConfigured() ? await qboStatus() : { connected: false };
 
-  const { data: orders } = await supabase
-    .from("orders")
-    .select(
-      "id, status, patient_name, qbo_invoice_number, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents)",
-    )
-    .is("deleted_at", null)
-    .is("archived_at", null)
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: true });
+  const [{ data: orders }, { data: deals }] = await Promise.all([
+    supabase
+      .from("orders")
+      .select(
+        "id, status, patient_name, qbo_invoice_number, prepurchase_draw_cents, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents)",
+      )
+      .is("deleted_at", null)
+      .is("archived_at", null)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("prepurchase_accounts")
+      .select("id, credit_cents, initial_cents, qbo_invoice_number, providers:provider_id(id, practice_name)")
+      .limit(200),
+  ]);
 
   const byStatus = new Map<string, BoardOrder[]>();
   for (const c of COLUMNS) byStatus.set(c, []);
   for (const o of orders ?? []) {
     const billed = (o.order_items as { billed_cents: number }[]).reduce((a, i) => a + i.billed_cents, 0);
+    const draw = o.prepurchase_draw_cents as number | null;
     byStatus.get(o.status)?.push({
       id: o.id,
       provider: (o.providers as unknown as { practice_name: string })?.practice_name ?? "—",
@@ -56,6 +65,7 @@ export default async function AdminOrderBoardPage({
       rep: (o.profiles as unknown as { display_name: string })?.display_name ?? "—",
       billed,
       invoiceNumber: o.qbo_invoice_number ?? null,
+      pullCents: draw ?? null,
     });
   }
 
@@ -97,6 +107,35 @@ export default async function AdminOrderBoardPage({
           Invoices auto-create when an order reaches “Invoiced”.
         </span>
       </div>
+
+      {/* Pre-purchase deals — bulk credit, billed once; pulls draw it down */}
+      {(deals ?? []).length > 0 && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Pre-purchased inventory
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {(deals ?? []).map((d) => {
+              const prov = d.providers as unknown as { id: string; practice_name: string } | null;
+              const initial = Number(d.initial_cents);
+              const remaining = Number(d.credit_cents);
+              return (
+                <Link
+                  key={d.id}
+                  href={prov ? `/portal/providers/${prov.id}` : "#"}
+                  className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm hover:border-emerald-400"
+                >
+                  <div className="font-medium text-navy-900">{prov?.practice_name ?? "—"}</div>
+                  <div className="text-xs text-slate-500">
+                    {d.qbo_invoice_number ? `Inv #${d.qbo_invoice_number} · ` : ""}
+                    {formatCents(remaining)} of {formatCents(initial)} left
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Full-bleed: break out of the centered portal container to use the
           whole viewport width so all pipeline columns fit. */}
