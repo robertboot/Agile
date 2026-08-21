@@ -153,7 +153,9 @@ export default async function ProviderDetailPage({
         </section>
       )}
 
-      {user.role === "admin" && <PrepurchasePanel providerId={provider.id} />}
+      {(user.role === "admin" || provider.rep_id === user.id) && (
+        <PrepurchasePanel providerId={provider.id} isAdmin={user.role === "admin"} />
+      )}
 
       <ProviderNotes providerId={provider.id} notes={provider.notes ?? null} />
 

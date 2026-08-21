@@ -10,7 +10,7 @@ const PRODUCT_NAMES: Record<string, string> = {
 
 /** Admin-only pre-purchased inventory panel: remaining credit, deal P&L (Agile
  *  cost is internal), price list, and pull ledger. */
-export async function PrepurchasePanel({ providerId }: { providerId: string }) {
+export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: string; isAdmin: boolean }) {
   const db = createAdminClient();
   const { data: acct } = await db
     .from("prepurchase_accounts")
@@ -40,12 +40,12 @@ export async function PrepurchasePanel({ providerId }: { providerId: string }) {
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className={`mt-3 grid grid-cols-2 gap-3 ${isAdmin ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
         <Cell label="Credit remaining" value={formatCents(remaining)} tone="emerald" />
         <Cell label="Initial credit" value={formatCents(initial)} />
-        <Cell label="Drawn (sale)" value={formatCents(consumed)} />
-        <Cell label="Cost of drawn" value={formatCents(costOfDrawn)} tone="violet" />
-        <Cell label="Margin on drawn" value={formatCents(marginOnDrawn)} tone="violet" />
+        <Cell label="Drawn" value={formatCents(consumed)} />
+        {isAdmin && <Cell label="Cost of drawn" value={formatCents(costOfDrawn)} tone="violet" />}
+        {isAdmin && <Cell label="Margin on drawn" value={formatCents(marginOnDrawn)} tone="violet" />}
       </div>
 
       {/* Price list (admin sees Agile cost) */}
@@ -55,8 +55,8 @@ export async function PrepurchasePanel({ providerId }: { providerId: string }) {
             <tr>
               <th className="px-3 py-2 font-medium">Product</th>
               <th className="px-3 py-2 text-right font-medium">Sale $/cm²</th>
-              <th className="px-3 py-2 text-right font-medium text-violet-500">Agile cost $/cm²</th>
-              <th className="px-3 py-2 text-right font-medium text-violet-500">Margin $/cm²</th>
+              {isAdmin && <th className="px-3 py-2 text-right font-medium text-violet-500">Agile cost $/cm²</th>}
+              {isAdmin && <th className="px-3 py-2 text-right font-medium text-violet-500">Margin $/cm²</th>}
             </tr>
           </thead>
           <tbody>
@@ -67,10 +67,12 @@ export async function PrepurchasePanel({ providerId }: { providerId: string }) {
                   <span className="font-mono text-xs text-slate-400">{p.product_code}</span>
                 </td>
                 <td className="px-3 py-1.5 text-right">{formatCents(Number(p.sale_per_cm2_cents))}</td>
-                <td className="px-3 py-1.5 text-right text-violet-600">{formatCents(Number(p.cost_per_cm2_cents))}</td>
-                <td className="px-3 py-1.5 text-right text-violet-600">
-                  {formatCents(Number(p.sale_per_cm2_cents) - Number(p.cost_per_cm2_cents))}
-                </td>
+                {isAdmin && <td className="px-3 py-1.5 text-right text-violet-600">{formatCents(Number(p.cost_per_cm2_cents))}</td>}
+                {isAdmin && (
+                  <td className="px-3 py-1.5 text-right text-violet-600">
+                    {formatCents(Number(p.sale_per_cm2_cents) - Number(p.cost_per_cm2_cents))}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -98,7 +100,9 @@ export async function PrepurchasePanel({ providerId }: { providerId: string }) {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-[11px] text-slate-400">Agile cost + margin are internal (admins only).</p>
+      {isAdmin && (
+        <p className="mt-2 text-[11px] text-slate-400">Agile cost + margin are internal (admins only).</p>
+      )}
     </section>
   );
 }
