@@ -63,6 +63,7 @@ export default async function AdminPage({
     { data: upcomingComms },
     { data: ordersEcon },
     { data: allComms },
+    { data: prepurchaseAccounts },
   ] = await Promise.all([
     supabase
       .from("providers")
@@ -109,6 +110,10 @@ export default async function AdminPage({
       .neq("status", "cancelled")
       .limit(5000),
     supabase.from("commissions").select("amount_cents, paid_at, order:order_id(created_at)").limit(5000),
+    supabase
+      .from("prepurchase_accounts")
+      .select("id, credit_cents, initial_cents, qbo_invoice_number, providers:provider_id(id, practice_name)")
+      .limit(200),
   ]);
 
   // Providers approved but stuck before MedNecessity onboarding (registration
@@ -279,6 +284,51 @@ export default async function AdminPage({
           carry cost ahead of their revenue until they pay.
         </p>
       </section>
+
+      {(prepurchaseAccounts ?? []).length > 0 && (
+        <section>
+          <h2 className="label-mono mb-3 text-slate-500">Pre-purchase deals</h2>
+          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="border-b border-slate-200 text-left text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5 font-medium">Provider</th>
+                  <th className="px-4 py-2.5 font-medium">Bulk invoice</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Billed</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Drawn</th>
+                  <th className="px-4 py-2.5 font-medium text-right">Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(prepurchaseAccounts ?? []).map((a) => {
+                  const prov = a.providers as unknown as { id: string; practice_name: string } | null;
+                  const initial = Number(a.initial_cents);
+                  const remaining = Number(a.credit_cents);
+                  return (
+                    <tr key={a.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                      <td className="px-4 py-2.5">
+                        {prov ? (
+                          <Link href={`/portal/providers/${prov.id}`} className="text-brand-blue hover:underline">
+                            {prov.practice_name}
+                          </Link>
+                        ) : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono">{a.qbo_invoice_number ? `#${a.qbo_invoice_number}` : "—"}</td>
+                      <td className="px-4 py-2.5 text-right">{formatCents(initial)}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-600">{formatCents(initial - remaining)}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-emerald-700">{formatCents(remaining)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            The bulk invoice is billed once in QuickBooks; pulls draw down the remaining credit.
+            Full ledger + Agile cost/margin on each provider&apos;s page.
+          </p>
+        </section>
+      )}
 
       <section>
         <h2 className="label-mono mb-3 flex items-center gap-2 text-slate-500">
