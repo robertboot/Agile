@@ -19,16 +19,23 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
     .maybeSingle();
   if (!acct) return null;
 
-  const [{ data: prices }, { data: ledger }, { data: drawn }] = await Promise.all([
+  const [{ data: prices }, { data: ledger }, { data: pullOrders }] = await Promise.all([
     db.from("prepurchase_prices").select("product_code, sale_per_cm2_cents, cost_per_cm2_cents").eq("account_id", acct.id),
     db.from("prepurchase_ledger").select("id, delta_cents, balance_after_cents, note, created_at, order_id").eq("account_id", acct.id).order("created_at", { ascending: false }).limit(50),
-    db.from("orders").select("prepurchase_cost_cents").eq("prepurchase_account_id", acct.id).is("deleted_at", null),
+    db.from("orders").select("id").eq("prepurchase_account_id", acct.id).not("prepurchase_draw_cents", "is", null).is("deleted_at", null),
   ]);
+
+  // Cost of drawn from order_internals (admin-only) — never stored on orders.
+  const pullIds = (pullOrders ?? []).map((o) => o.id);
+  let costOfDrawn = 0;
+  if (isAdmin && pullIds.length > 0) {
+    const { data: internals } = await db.from("order_internals").select("cogs_cents").in("order_id", pullIds);
+    costOfDrawn = (internals ?? []).reduce((a, o) => a + Number(o.cogs_cents ?? 0), 0);
+  }
 
   const initial = Number(acct.initial_cents);
   const remaining = Number(acct.credit_cents);
   const consumed = initial - remaining;
-  const costOfDrawn = (drawn ?? []).reduce((a, o) => a + Number(o.prepurchase_cost_cents ?? 0), 0);
   const marginOnDrawn = consumed - costOfDrawn;
 
   return (

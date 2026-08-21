@@ -432,7 +432,8 @@ export async function createInventoryPull(
       placed_at: new Date().toISOString(),
       prepurchase_account_id: account.id,
       prepurchase_draw_cents: pull.drawCents,
-      prepurchase_cost_cents: pull.costCents,
+      // Agile cost is stored only in order_internals (admin-only RLS), never on
+      // the orders row (which the owning rep can read).
     })
     .select("id")
     .single();
