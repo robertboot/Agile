@@ -41,6 +41,7 @@ export default async function CommissionsPage({
         "id, status, created_at, qbo_invoice_number, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents, rep_commission_cents)",
       )
       .is("deleted_at", null)
+      .is("prepurchase_account_id", null)
       .limit(1000),
     // Commission ledger joined to its collection (deposit date) + order, for the
     // monthly payout buckets. RLS scopes to the rep's own rows.

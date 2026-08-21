@@ -105,6 +105,7 @@ export default async function AdminPage({
       .from("orders")
       .select("created_at, status, gross_collected_cents, order_internals(cogs_cents), order_items(billed_cents, rep_commission_cents)")
       .is("deleted_at", null)
+      .is("prepurchase_account_id", null)
       .neq("status", "cancelled")
       .limit(5000),
     supabase.from("commissions").select("amount_cents, paid_at, order:order_id(created_at)").limit(5000),

@@ -17,6 +17,7 @@ import { getIvrSubmission, registerProvider, submitIvr } from "@/lib/integration
 import { notifySlack, sendSlackMessage, GENERAL_CHANNEL_ID } from "@/lib/integrations/slack";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 import { qboUpdateInvoiceForOrder } from "@/lib/integrations/quickbooks";
+import { getPrepurchaseAccount, resolvePull } from "@/lib/prepurchase";
 
 export type { QuoteItemInput };
 
@@ -371,6 +372,107 @@ export async function createOrder(
 
   revalidatePath("/portal/orders");
   redirect(`/portal/orders/${orderId as string}`);
+}
+
+/**
+ * Pull inventory from a provider's pre-purchased credit. Not billed and not a
+ * reimbursement order: it draws the credit at the deal's sale price, records the
+ * pull as an order (for fulfillment/patient tracking) with zero billing/commission,
+ * and books Agile's cost internally. Blocks if the draw exceeds remaining credit.
+ */
+export async function createInventoryPull(
+  providerId: string,
+  items: (QuoteItemInput & { serial?: string })[],
+  patientName?: string,
+  dateApplied?: string,
+): Promise<ActionResult> {
+  const user = await requirePortalUser();
+  if (items.length === 0) return { ok: false, error: "Add at least one line item" };
+
+  const account = await getPrepurchaseAccount(providerId);
+  if (!account) return { ok: false, error: "This provider has no pre-purchased inventory" };
+
+  const db = createAdminClient();
+  const { data: prov } = await db.from("providers").select("rep_id").eq("id", providerId).maybeSingle();
+  if (!prov) return { ok: false, error: "Provider not found" };
+  if (user.role !== "admin" && prov.rep_id !== user.id) return { ok: false, error: "Not your provider" };
+
+  let pull;
+  try {
+    pull = await resolvePull(items.map(({ productCode, sku, qty }) => ({ productCode, sku, qty })), account);
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+  if (pull.drawCents > account.creditCents) {
+    return {
+      ok: false,
+      error: `Draw $${(pull.drawCents / 100).toFixed(2)} exceeds remaining credit $${(account.creditCents / 100).toFixed(2)}`,
+    };
+  }
+
+  const { data: pv } = await db
+    .from("pricing_versions")
+    .select("id")
+    .is("effective_to", null)
+    .order("effective_from", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: order, error: oerr } = await db
+    .from("orders")
+    .insert({
+      provider_id: providerId,
+      rep_id: prov.rep_id,
+      discount_tier: 30, // n/a for pulls; column is not-null
+      pricing_version_id: pv?.id ?? null,
+      status: "placed",
+      gross_collected_cents: 0,
+      patient_name: patientName?.trim() || null,
+      date_applied: dateApplied || null,
+      placed_at: new Date().toISOString(),
+      prepurchase_account_id: account.id,
+      prepurchase_draw_cents: pull.drawCents,
+      prepurchase_cost_cents: pull.costCents,
+    })
+    .select("id")
+    .single();
+  if (oerr || !order) return { ok: false, error: oerr?.message ?? "Could not create pull" };
+
+  const { error: ierr } = await db.from("order_items").insert(
+    pull.lines.map((l, i) => ({
+      order_id: order.id,
+      product_code: l.productCode,
+      sku: l.sku,
+      size_label: l.sizeLabel,
+      cm2: l.cm2,
+      qty: l.qty,
+      billed_cents: 0,
+      rep_commission_cents: 0,
+      provider_keeps_cents: 0,
+      serial_number: items[i]?.serial?.trim() || null,
+    })),
+  );
+  if (ierr) return { ok: false, error: ierr.message };
+
+  await db.from("order_internals").insert({
+    order_id: order.id,
+    cogs_cents: pull.costCents,
+    agile_net_cents: pull.drawCents - pull.costCents,
+  });
+
+  const newBalance = account.creditCents - pull.drawCents;
+  await db.from("prepurchase_accounts").update({ credit_cents: newBalance, updated_at: new Date().toISOString() }).eq("id", account.id);
+  await db.from("prepurchase_ledger").insert({
+    account_id: account.id,
+    order_id: order.id,
+    delta_cents: -pull.drawCents,
+    balance_after_cents: newBalance,
+    note: patientName?.trim() ? `Pull — ${patientName.trim()}` : "Inventory pull",
+  });
+
+  revalidatePath("/portal/orders");
+  revalidatePath(`/portal/providers/${providerId}`);
+  redirect(`/portal/orders/${order.id}`);
 }
 
 /**

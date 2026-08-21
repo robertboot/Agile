@@ -8,6 +8,7 @@ import { EditProviderForm, type ProviderRecord } from "./EditProviderForm";
 import { ProviderAdminOverride } from "./ProviderAdminOverride";
 import { ReassignRep, type RepOption } from "./ReassignRep";
 import { ActiveToggle } from "./ActiveToggle";
+import { PrepurchasePanel } from "./PrepurchasePanel";
 import { TouchpointLog, type Touchpoint } from "./TouchpointLog";
 import { ProviderNotes } from "./ProviderNotes";
 
@@ -151,6 +152,8 @@ export default async function ProviderDetailPage({
           </div>
         </section>
       )}
+
+      {user.role === "admin" && <PrepurchasePanel providerId={provider.id} />}
 
       <ProviderNotes providerId={provider.id} notes={provider.notes ?? null} />
 

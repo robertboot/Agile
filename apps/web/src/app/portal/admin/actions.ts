@@ -373,10 +373,14 @@ export async function advanceOrderStatus(
 ): Promise<ActionResult> {
   await requireAdmin();
   const db = createAdminClient();
-  const { data: order } = await db.from("orders").select("status").eq("id", orderId).single();
+  const { data: order } = await db.from("orders").select("status, prepurchase_account_id").eq("id", orderId).single();
   if (!order) return { ok: false, error: "Order not found" };
   const next = ORDER_NEXT[order.status];
   if (!next) return { ok: false, error: `No next step from ${order.status}` };
+  // Pre-purchased pulls are paid from credit — they never get invoiced/collected.
+  if (order.prepurchase_account_id && (next === "invoiced" || next === "paid")) {
+    return { ok: false, error: "Inventory pulls aren't invoiced — they're covered by pre-purchased credit." };
+  }
 
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { status: next };

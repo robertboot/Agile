@@ -68,6 +68,7 @@ export async function buildProviderSummary(
     .select("id, created_at, status, gross_collected_cents, qbo_invoice_number, order_items(product_code, size_label, billed_cents, rep_commission_cents)")
     .eq("provider_id", providerId)
     .is("deleted_at", null)
+    .is("prepurchase_account_id", null)
     .neq("status", "cancelled")
     .order("created_at", { ascending: false });
   if (range) q = q.gte("created_at", range.from.toISOString()).lt("created_at", range.to.toISOString());
