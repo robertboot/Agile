@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/app/portal/actions";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
-import { qboCreateInvoiceForOrder, qboRecordPayment } from "@/lib/integrations/quickbooks";
+import { qboCreateInvoiceForOrder, qboRecordPayment, qboVoidInvoiceForOrder } from "@/lib/integrations/quickbooks";
 import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 
 // ---------------------------------------------------------------------------
@@ -526,6 +526,56 @@ export async function recordMonthlyGustoPayout(
   revalidatePath("/portal/commissions");
   revalidatePath("/portal/admin/reps");
   return { ok: true, reps, totalCents };
+}
+
+/**
+ * Delete an order (admin). Soft-delete for audit. Blocks if money's been
+ * collected (handle refunds first). Restores pre-purchased credit if it was a
+ * pull, and voids the QuickBooks invoice if one exists so no orphan remains.
+ */
+export async function deleteOrder(orderId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { data: order } = await db
+    .from("orders")
+    .select("gross_collected_cents, prepurchase_account_id, prepurchase_draw_cents, qbo_invoice_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Order not found" };
+  if (Number(order.gross_collected_cents ?? 0) > 0) {
+    return { ok: false, error: "This order has recorded collections — refund/adjust them before deleting." };
+  }
+
+  // Void the QuickBooks invoice first (best-effort) so books stay clean.
+  if (order.qbo_invoice_id) {
+    try { await qboVoidInvoiceForOrder(orderId); } catch { /* leave it; admin can void manually */ }
+  }
+
+  // Restore pre-purchased credit if this was a pull.
+  if (order.prepurchase_account_id && order.prepurchase_draw_cents) {
+    const { data: acct } = await db
+      .from("prepurchase_accounts")
+      .select("credit_cents")
+      .eq("id", order.prepurchase_account_id)
+      .maybeSingle();
+    if (acct) {
+      const restored = Number(acct.credit_cents) + Number(order.prepurchase_draw_cents);
+      await db.from("prepurchase_accounts").update({ credit_cents: restored, updated_at: new Date().toISOString() }).eq("id", order.prepurchase_account_id);
+      await db.from("prepurchase_ledger").insert({
+        account_id: order.prepurchase_account_id,
+        order_id: orderId,
+        delta_cents: Number(order.prepurchase_draw_cents),
+        balance_after_cents: restored,
+        note: "Pull deleted — credit restored",
+      });
+    }
+  }
+
+  const { error } = await db.from("orders").update({ deleted_at: new Date().toISOString() }).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/orders");
+  revalidatePath("/portal/admin/orders");
+  return { ok: true };
 }
 
 /** Soft-delete a provider (admin). Keeps the row for audit; hidden everywhere. */

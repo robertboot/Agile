@@ -196,6 +196,18 @@ export async function qboRecordPayment(
   return { ok: true };
 }
 
+/** Void an order's QuickBooks invoice (keeps the number, zeroes it). Best-effort. */
+export async function qboVoidInvoiceForOrder(orderId: string): Promise<{ ok: boolean; error?: string }> {
+  const db = createAdminClient();
+  const { data: order } = await db.from("orders").select("qbo_invoice_id").eq("id", orderId).maybeSingle();
+  if (!order?.qbo_invoice_id) return { ok: true }; // nothing to void
+  const cur = await qbo(`/invoice/${order.qbo_invoice_id}`, "GET");
+  if (!cur.ok) return { ok: false, error: cur.error };
+  const syncToken = (cur.json as { Invoice?: { SyncToken: string } })?.Invoice?.SyncToken;
+  const v = await qbo("/invoice?operation=void", "POST", { Id: order.qbo_invoice_id, SyncToken: syncToken });
+  return v.ok ? { ok: true } : { ok: false, error: v.error };
+}
+
 /** Current total + open balance for every invoice, keyed by QBO invoice id.
  *  Used to reconcile payments matched in QuickBooks back to portal orders. */
 export async function qboInvoiceBalances(): Promise<Map<string, { total: number; balance: number }>> {

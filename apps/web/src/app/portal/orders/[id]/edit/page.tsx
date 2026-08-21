@@ -4,6 +4,7 @@ import type { DiscountTier } from "@agile/shared";
 import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { OrderForm } from "../../new/OrderForm";
+import { DeleteOrderButton } from "../DeleteOrderButton";
 
 export default async function EditOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -68,6 +69,13 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
           initialDateApplied={order.date_applied ?? ""}
           initialItems={items}
         />
+      )}
+
+      {user.role === "admin" && (
+        <div className="border-t border-slate-200 pt-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-500">Danger zone</h2>
+          <DeleteOrderButton orderId={order.id} />
+        </div>
       )}
     </div>
   );
