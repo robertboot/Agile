@@ -4,6 +4,7 @@ import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, STATUS_COLORS, STATUS_LABELS } from "@/lib/format";
 import { RecordPayoutButton } from "./RecordPayoutButton";
+import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 
 const PAGE_SIZE = 50;
 const STATUS_RANK = [
@@ -42,6 +43,7 @@ export default async function CommissionsPage({
       )
       .is("deleted_at", null)
       .is("prepurchase_account_id", null)
+      .neq("rep_id", HOUSE_ACCOUNT_OWNER_ID) // house accounts pay no commission
       .limit(1000),
     // Commission ledger joined to its collection (deposit date) + order, for the
     // monthly payout buckets. RLS scopes to the rep's own rows.

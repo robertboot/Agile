@@ -9,6 +9,8 @@ import { ProviderAdminOverride } from "./ProviderAdminOverride";
 import { ReassignRep, type RepOption } from "./ReassignRep";
 import { ActiveToggle } from "./ActiveToggle";
 import { PrepurchasePanel } from "./PrepurchasePanel";
+import { HouseAccountPanel } from "./HouseAccountPanel";
+import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 import { TouchpointLog, type Touchpoint } from "./TouchpointLog";
 import { ProviderNotes } from "./ProviderNotes";
 
@@ -155,6 +157,10 @@ export default async function ProviderDetailPage({
 
       {(user.role === "admin" || provider.rep_id === user.id) && (
         <PrepurchasePanel providerId={provider.id} isAdmin={user.role === "admin"} />
+      )}
+
+      {user.role === "admin" && provider.rep_id === HOUSE_ACCOUNT_OWNER_ID && (
+        <HouseAccountPanel providerId={provider.id} />
       )}
 
       <ProviderNotes providerId={provider.id} notes={provider.notes ?? null} />
