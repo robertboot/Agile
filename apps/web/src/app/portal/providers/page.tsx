@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { InviteProvider } from "./InviteProvider";
 import { ProvidersTable, type ProviderRow } from "./ProvidersTable";
 import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
@@ -53,6 +54,29 @@ export default async function ProvidersPage() {
     };
   });
 
+  // House-account profitability (admin only) — no rep commission; profit =
+  // collected − actual product cost (stored COGS is the 2× buffer).
+  let houseProfit: { orders: number; billed: number; collected: number; productCost: number; profit: number } | null = null;
+  if (user.role === "admin") {
+    const admin = createAdminClient();
+    const { data: ho } = await admin
+      .from("orders")
+      .select("status, gross_collected_cents, order_internals(cogs_cents), order_items(billed_cents)")
+      .eq("rep_id", HOUSE_ACCOUNT_OWNER_ID)
+      .is("deleted_at", null)
+      .is("prepurchase_account_id", null)
+      .neq("status", "cancelled")
+      .limit(5000);
+    const hr = ho ?? [];
+    const billed = hr.reduce((a, o) => a + (o.order_items as { billed_cents: number }[]).reduce((x, i) => x + i.billed_cents, 0), 0);
+    const collected = hr.reduce((a, o) => a + Number(o.gross_collected_cents ?? 0), 0);
+    const cogsBuffer = hr
+      .filter((o) => ["shipped", "invoiced", "paid"].includes(o.status))
+      .reduce((a, o) => a + Number((o.order_internals as unknown as { cogs_cents: number } | null)?.cogs_cents ?? 0), 0);
+    const productCost = Math.round(cogsBuffer / 2);
+    houseProfit = { orders: hr.length, billed, collected, productCost, profit: collected - productCost };
+  }
+
   return (
     <div className="space-y-6">
       <div className="relative flex items-center justify-between">
@@ -68,7 +92,12 @@ export default async function ProvidersPage() {
         </div>
       </div>
 
-      <ProvidersTable providers={rows} isAdmin={user.role === "admin"} />
+      <ProvidersTable
+        providers={rows}
+        isAdmin={user.role === "admin"}
+        houseOwnerId={HOUSE_ACCOUNT_OWNER_ID}
+        houseProfit={houseProfit}
+      />
 
       <p className="text-xs text-slate-400">
         Providers must be approved by Agile and onboarded with MedNecessity before orders can be

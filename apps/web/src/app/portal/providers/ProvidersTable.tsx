@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { formatCents } from "@agile/shared";
 import { deleteProvider } from "@/app/portal/admin/actions";
 
 export interface ProviderRow {
@@ -49,12 +50,24 @@ const STATUS_ORDER: StatusCat[] = ["unapproved", "awaiting_mn", "ready", "inacti
 
 type SortKey = "practice" | "provider" | "location" | "rep" | "originator" | "status" | "lastTouch";
 
+interface HouseProfit {
+  orders: number;
+  billed: number;
+  collected: number;
+  productCost: number;
+  profit: number;
+}
+
 export function ProvidersTable({
   providers,
   isAdmin,
+  houseOwnerId,
+  houseProfit,
 }: {
   providers: ProviderRow[];
   isAdmin: boolean;
+  houseOwnerId?: string;
+  houseProfit?: HouseProfit | null;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("practice");
   const [asc, setAsc] = useState(true);
@@ -141,6 +154,31 @@ export function ProvidersTable({
         )}
         <span className="text-xs text-slate-400">{rows.length} shown</span>
       </div>
+
+      {isAdmin && houseProfit && houseOwnerId && owner === houseOwnerId && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-violet-700">
+            House account profitability — no rep commission
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {[
+              ["Providers", String(rows.length)],
+              ["Billed", formatCents(houseProfit.billed)],
+              ["Collected", formatCents(houseProfit.collected)],
+              ["Product cost", formatCents(houseProfit.productCost)],
+              ["Profit", formatCents(houseProfit.profit)],
+            ].map(([label, val], i) => (
+              <div key={label} className="rounded-lg border border-violet-100 bg-white p-3">
+                <div className={`text-lg font-bold ${i === 4 ? (houseProfit.profit >= 0 ? "text-emerald-700" : "text-red-600") : "text-navy-900"}`}>
+                  {val}
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500">{label}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">Profit = collected − actual product cost. Admins only.</p>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">

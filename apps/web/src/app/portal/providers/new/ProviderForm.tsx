@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { isValidNpi } from "@agile/shared";
 import { createProvider, type ActionResult } from "@/app/portal/actions";
+import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 
 interface RepOption {
   id: string;
@@ -92,8 +93,10 @@ export function ProviderForm({ isAdmin, reps }: { isAdmin: boolean; reps: RepOpt
           <label className="label-mono text-slate-500">Assigned rep</label>
           <select
             name="rep_id"
+            defaultValue={HOUSE_ACCOUNT_OWNER_ID}
             className="mt-1 w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
           >
+            <option value={HOUSE_ACCOUNT_OWNER_ID}>House Account (default)</option>
             {reps.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.display_name}
@@ -101,7 +104,8 @@ export function ProviderForm({ isAdmin, reps }: { isAdmin: boolean; reps: RepOpt
             ))}
           </select>
           <p className="mt-2 text-xs text-slate-400">
-            Admin-created providers are approved on save.
+            Defaults to House Account (no rep commission) unless you assign a rep. Admin-created
+            providers are approved on save.
           </p>
         </Section>
       )}

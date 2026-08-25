@@ -18,6 +18,7 @@ import { notifySlack, sendSlackMessage, GENERAL_CHANNEL_ID } from "@/lib/integra
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 import { qboUpdateInvoiceForOrder } from "@/lib/integrations/quickbooks";
 import { getPrepurchaseAccount, resolvePull } from "@/lib/prepurchase";
+import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 import { buildProviderSummary } from "@/app/portal/orders/provider-summary";
 import { renderProviderSummaryPdf } from "@/lib/provider-summary-pdf";
 import { sendEmail, emailConfigured } from "@/lib/email";
@@ -63,8 +64,10 @@ export async function createProvider(
   const orgNpi = f("organization_npi");
 
   // Admin may assign any rep and the provider is approved on save (spec §4).
+  // Admin-created providers default to the House Account (no rep commission)
+  // unless a rep is explicitly assigned. Rep-created providers are their own.
   const isAdmin = user.role === "admin";
-  const repId = isAdmin ? (f("rep_id") ?? user.id) : user.id;
+  const repId = isAdmin ? (f("rep_id") ?? HOUSE_ACCOUNT_OWNER_ID) : user.id;
 
   // Optional signed-BAA upload → private storage bucket (service role only).
   let baaDocumentPath: string | null = null;
