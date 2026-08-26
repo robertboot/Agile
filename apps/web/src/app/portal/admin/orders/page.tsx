@@ -7,6 +7,9 @@ import { qboConfigured, qboStatus } from "@/lib/integrations/quickbooks";
 import { OrderCard, type BoardOrder } from "./OrderCard";
 
 // Pipeline columns in flow order. Cancelled/paid shown but not advanceable.
+// "outstanding" is a derived aging bucket (not a stored status): an invoiced
+// order past OUTSTANDING_DAYS from its bill date shows here instead of Invoiced.
+const OUTSTANDING_DAYS = 30;
 const COLUMNS = [
   "new",
   "ivr_submitted",
@@ -14,7 +17,9 @@ const COLUMNS = [
   "placed",
   "shipped",
   "invoiced",
+  "outstanding",
   "paid",
+  "delivered",
 ] as const;
 
 const NEXT_LABEL: Record<string, string | null> = {
@@ -41,7 +46,7 @@ export default async function AdminOrderBoardPage({
     supabase
       .from("orders")
       .select(
-        "id, status, patient_name, qbo_invoice_number, prepurchase_draw_cents, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents)",
+        "id, status, patient_name, qbo_invoice_number, prepurchase_draw_cents, invoiced_at, providers(practice_name), profiles:rep_id(display_name), order_items(billed_cents)",
       )
       .is("deleted_at", null)
       .is("archived_at", null)
@@ -55,10 +60,21 @@ export default async function AdminOrderBoardPage({
 
   const byStatus = new Map<string, BoardOrder[]>();
   for (const c of COLUMNS) byStatus.set(c, []);
+  const now = Date.now();
   for (const o of orders ?? []) {
     const billed = (o.order_items as { billed_cents: number }[]).reduce((a, i) => a + i.billed_cents, 0);
     const draw = o.prepurchase_draw_cents as number | null;
-    byStatus.get(o.status)?.push({
+    // Invoiced past OUTSTANDING_DAYS from the bill date → Outstanding bucket.
+    let col: string = o.status;
+    let overdueDays: number | null = null;
+    if (o.status === "invoiced" && o.invoiced_at) {
+      const days = Math.floor((now - new Date(o.invoiced_at as string).getTime()) / 86_400_000);
+      if (days >= OUTSTANDING_DAYS) {
+        col = "outstanding";
+        overdueDays = days;
+      }
+    }
+    byStatus.get(col)?.push({
       id: o.id,
       provider: (o.providers as unknown as { practice_name: string })?.practice_name ?? "—",
       patient: o.patient_name,
@@ -66,6 +82,7 @@ export default async function AdminOrderBoardPage({
       billed,
       invoiceNumber: o.qbo_invoice_number ?? null,
       pullCents: draw ?? null,
+      overdueDays,
     });
   }
 
