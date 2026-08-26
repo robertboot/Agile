@@ -7,8 +7,8 @@ import { qboConfigured, qboStatus } from "@/lib/integrations/quickbooks";
 import { OrderCard, type BoardOrder } from "./OrderCard";
 
 // Pipeline columns in flow order. Cancelled/paid shown but not advanceable.
-// "outstanding" is a derived aging bucket (not a stored status): an invoiced
-// order past OUTSTANDING_DAYS from its bill date shows here instead of Invoiced.
+// Invoiced orders past OUTSTANDING_DAYS from their bill date get a "days overdue"
+// badge (no separate column). Delivered pulls show in the Paid column.
 const OUTSTANDING_DAYS = 30;
 const COLUMNS = [
   "new",
@@ -17,9 +17,7 @@ const COLUMNS = [
   "placed",
   "shipped",
   "invoiced",
-  "outstanding",
   "paid",
-  "delivered",
 ] as const;
 
 const NEXT_LABEL: Record<string, string | null> = {
@@ -64,15 +62,13 @@ export default async function AdminOrderBoardPage({
   for (const o of orders ?? []) {
     const billed = (o.order_items as { billed_cents: number }[]).reduce((a, i) => a + i.billed_cents, 0);
     const draw = o.prepurchase_draw_cents as number | null;
-    // Invoiced past OUTSTANDING_DAYS from the bill date → Outstanding bucket.
-    let col: string = o.status;
+    // Invoiced past OUTSTANDING_DAYS from the bill date → overdue badge (stays
+    // in Invoiced). Delivered pulls show in the Paid column.
+    let col: string = o.status === "delivered" ? "paid" : o.status;
     let overdueDays: number | null = null;
     if (o.status === "invoiced" && o.invoiced_at) {
       const days = Math.floor((now - new Date(o.invoiced_at as string).getTime()) / 86_400_000);
-      if (days >= OUTSTANDING_DAYS) {
-        col = "outstanding";
-        overdueDays = days;
-      }
+      if (days >= OUTSTANDING_DAYS) overdueDays = days;
     }
     byStatus.get(col)?.push({
       id: o.id,
@@ -83,6 +79,7 @@ export default async function AdminOrderBoardPage({
       invoiceNumber: o.qbo_invoice_number ?? null,
       pullCents: draw ?? null,
       overdueDays,
+      delivered: o.status === "delivered",
     });
   }
 

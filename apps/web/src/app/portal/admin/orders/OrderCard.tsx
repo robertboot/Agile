@@ -14,6 +14,7 @@ export interface BoardOrder {
   invoiceNumber: string | null;
   pullCents: number | null;
   overdueDays: number | null;
+  delivered: boolean;
 }
 
 export function OrderCard({
@@ -52,7 +53,11 @@ export function OrderCard({
               {order.overdueDays}d overdue
             </span>
           )}
-          {order.pullCents != null ? (
+          {order.delivered ? (
+            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+              Delivered · pull
+            </span>
+          ) : order.pullCents != null ? (
             <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
               Pull
             </span>
