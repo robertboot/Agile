@@ -13,6 +13,7 @@ export const STATUS_LABELS: Record<string, string> = {
   shipped: "Shipped",
   invoiced: "Invoiced",
   paid: "Paid",
+  delivered: "Delivered",
   cancelled: "Cancelled",
 };
 
@@ -24,5 +25,6 @@ export const STATUS_COLORS: Record<string, string> = {
   shipped: "bg-indigo-100 text-indigo-800",
   invoiced: "bg-violet-100 text-violet-800",
   paid: "bg-green-100 text-green-800",
+  delivered: "bg-green-100 text-green-800",
   cancelled: "bg-red-100 text-red-700",
 };

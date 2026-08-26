@@ -156,7 +156,7 @@ export default async function AdminOrderBoardPage({
                   <OrderCard
                     key={o.id}
                     order={o}
-                    nextLabel={o.pullCents != null && col === "shipped" ? null : (NEXT_LABEL[col] ?? null)}
+                    nextLabel={o.pullCents != null && col === "shipped" ? "Delivered" : (NEXT_LABEL[col] ?? null)}
                     needsTracking={col === "placed"}
                   />
                 ))}

@@ -376,11 +376,13 @@ export async function advanceOrderStatus(
   const db = createAdminClient();
   const { data: order } = await db.from("orders").select("status, prepurchase_account_id").eq("id", orderId).single();
   if (!order) return { ok: false, error: "Order not found" };
-  const next = ORDER_NEXT[order.status];
+  // Pre-purchased pulls are paid from credit — they close at Delivered (receipt
+  // confirmation), never Invoiced/Paid.
+  const isPull = Boolean(order.prepurchase_account_id);
+  const next = isPull && order.status === "shipped" ? "delivered" : ORDER_NEXT[order.status];
   if (!next) return { ok: false, error: `No next step from ${order.status}` };
-  // Pre-purchased pulls are paid from credit — they never get invoiced/collected.
-  if (order.prepurchase_account_id && (next === "invoiced" || next === "paid")) {
-    return { ok: false, error: "Inventory pulls aren't invoiced — they're covered by pre-purchased credit." };
+  if (isPull && (next === "invoiced" || next === "paid")) {
+    return { ok: false, error: "Inventory pulls aren't invoiced — they close at Delivered." };
   }
 
   const now = new Date().toISOString();
@@ -392,6 +394,7 @@ export async function advanceOrderStatus(
   }
   if (next === "invoiced") patch.invoiced_at = now;
   if (next === "paid") patch.collected_at = now;
+  if (next === "delivered") patch.delivered_at = now;
 
   const { error } = await db.from("orders").update(patch).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
