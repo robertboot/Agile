@@ -14,7 +14,7 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
   const db = createAdminClient();
   const { data: acct } = await db
     .from("prepurchase_accounts")
-    .select("id, credit_cents, initial_cents, qbo_invoice_number, note")
+    .select("id, credit_cents, initial_cents, qbo_invoice_number, processing_fee_cents, note")
     .eq("provider_id", providerId)
     .maybeSingle();
   if (!acct) return null;
@@ -36,7 +36,9 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
   const initial = Number(acct.initial_cents);
   const remaining = Number(acct.credit_cents);
   const consumed = initial - remaining;
-  const marginOnDrawn = consumed - costOfDrawn;
+  const fee = Number(acct.processing_fee_cents ?? 0);
+  const netCollected = initial - fee; // cash Agile netted on the bulk payment
+  const marginOnDrawn = consumed - costOfDrawn - fee; // product margin less the one-time fee
 
   return (
     <section className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-5">
@@ -46,12 +48,18 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
           <span className="text-xs text-slate-500">Bulk invoice #{acct.qbo_invoice_number}</span>
         )}
       </div>
+      {isAdmin && fee > 0 && (
+        <p className="mt-1 text-xs text-slate-500">
+          {formatCents(initial)} billed · {formatCents(fee)} processing fee · {formatCents(netCollected)} net collected
+        </p>
+      )}
 
-      <div className={`mt-3 grid grid-cols-2 gap-3 ${isAdmin ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
+      <div className={`mt-3 grid grid-cols-2 gap-3 ${isAdmin ? "sm:grid-cols-3 lg:grid-cols-6" : "sm:grid-cols-3"}`}>
         <Cell label="Credit remaining" value={formatCents(remaining)} tone="emerald" />
         <Cell label="Initial credit" value={formatCents(initial)} />
         <Cell label="Drawn" value={formatCents(consumed)} />
         {isAdmin && <Cell label="Cost of drawn" value={formatCents(costOfDrawn)} tone="violet" />}
+        {isAdmin && <Cell label="Processing fee" value={formatCents(fee)} tone="violet" />}
         {isAdmin && <Cell label="Margin on drawn" value={formatCents(marginOnDrawn)} tone="violet" />}
       </div>
 
