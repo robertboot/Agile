@@ -78,3 +78,6 @@ coverage/
 .vercel
 .env*
 .prod-admin-temp-password.txt
+
+# Handoff — real secret values, never commit
+HANDOFF-SECRETS.md
