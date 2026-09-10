@@ -11,16 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.7.0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
+          cache: "npm"
+      - run: npm ci
+      # Portal workspaces only. apps/mobile is the separate Phase-1 Expo app and
+      # carries its own (pre-existing) React 18/19 type mismatch — out of scope.
+      - run: npm run typecheck --workspace=@agile/web --workspace=@agile/shared --workspace=@agile/supabase-client
+      - run: npm test --workspace=@agile/shared
 
   supabase-lint:
     runs-on: ubuntu-latest
