@@ -138,17 +138,26 @@ is our implementation for acting on it. Two payers with the same route can need 
 
 ---
 
-## 7. Medicare form selection (correction 1.6)
+## 7. Medicare packet assembly (correction 1.6, as corrected)
 
-The two forms are not interchangeable:
+> **§1.6 of the corrections is superseded.** It framed 855I and 855R as an either/or selection.
+> That framing was an error introduced in summarising the reviewer's comment, not a claim the
+> reviewer made — see `OPEN-QUESTIONS.md`. The forms describe two *purposes*, and one enrollment
+> may need both.
+>
+> **Packet generation assembles a set of forms. It does not select one.**
 
-| Form | Applies when |
+The two forms and what each is for:
+
+| Form | Purpose |
 |---|---|
-| **CMS-855I** | Provider is **not already enrolled** with Medicare — initial enrollment |
-| **CMS-855R** | Provider is **already participating** and is reassigning benefits to a location |
+| **CMS-855I** | Enrolls the **individual** provider with Medicare |
+| **CMS-855R** | Reassigns an enrolled provider's benefits **to a location** |
 
-The system must therefore know the provider's existing Medicare status *before* it can generate a
-Medicare packet. Minimum fields on the provider record:
+These are answers to different questions — "is this provider enrolled at all" and "who bills for
+them here" — so a provider new to Medicare joining a group commonly needs both.
+
+### What the system must know
 
 ```
 medicare_enrollment_status    not_enrolled | enrolled | unknown   (default unknown)
@@ -156,76 +165,109 @@ medicare_ptan                 nullable
 medicare_enrollment_verified_on
 ```
 
-Selection rule as stated by the reviewer:
+Status alone is not enough. Because 855R is per **(provider, location)** while 855I is per
+**provider**, the packet also depends on whether benefits are already reassigned to *this* location
+— which is a fact about the engagement, not the provider:
 
-- `not_enrolled` → 855I
-- `enrolled` → 855R
-- `unknown` → **block packet generation** and raise it on the completeness punch list (§7 of the
-  corrections). Guessing the form is worse than stalling: the wrong form is a rejection and a
-  restart of the payer's review clock.
+```
+ENGAGEMENT.medicare_reassignment_status   not_reassigned | reassigned | unknown
+```
 
-Note that 855R is inherently **per (provider, location)** — reassignment is to a specific location.
-855I is per provider. This is a second point where the taxonomy depends on the location model.
+This is the second place where the taxonomy depends on the location model
+(`02-location-model.md`), and the reason packet assembly cannot be driven from the provider record
+alone.
 
-> **Open — for the clinical reviewer (Q1.1).** The correction reads as either/or. In practice an
-> initial enrollment that also reassigns benefits to a group is often filed as 855I *and* 855R
-> together. Confirm whether the rule is strictly exclusive, or whether `not_enrolled` + reassigning
-> produces both forms. This changes packet generation from picking one form to assembling a set,
-> so it is worth settling before that code exists. Flagged rather than assumed — §1 is authoritative
-> and this is a question about it, not a correction to it.
+### Assembly rule
+
+| Provider status | Reassigned to this location | Packet |
+|---|---|---|
+| `not_enrolled` | no | 855I **+** 855R |
+| `not_enrolled` | n/a — bills under own NPI, no reassignment | 855I |
+| `enrolled` | no | 855R |
+| `enrolled` | yes | nothing — already covered |
+| `unknown` | any | **blocked** |
+
+`unknown` blocks generation and raises a completeness punch-list item (§7 of the corrections). The
+reasoning is unchanged and is strengthened by the set model: guessing is worse than stalling,
+because a wrong *or missing* form is a rejection that restarts the payer's review clock.
+
+### Shape, not membership
+
+The **set shape is settled** — build packet generation to assemble a collection, validate it as a
+collection, and submit it as a collection. The **membership rule** in the table above is pending
+confirmation (Q3). Getting the shape right now is what matters; a membership rule is a data change,
+whereas "one form per enrollment" baked into the generator is a rewrite.
+
+> **Open (Q15).** Does the set ever include **CMS-855B** — the organizational enrollment form? An
+> organization billing Medicare must itself be enrolled, and `02-location-model.md` establishes the
+> organization as the billing party. If so, 855B is an organization-level prerequisite rather than a
+> per-enrollment form, and packet assembly needs to check it. Raised here because the shift to set
+> assembly makes the question visible; it was invisible while the model assumed one form per
+> enrollment. Not asserted — flagged for the clinical reviewer.
 
 ---
 
 ## 8. Seed payer list
 
-**Authoritative** = classification stated directly in the corrections. **Proposed** = inferred from
-the product name and needs the clinical reviewer's confirmation.
+Three tiers of confidence:
 
-> ⚠️ The proposed rows are where the original §1.2 error would recur. Two in particular:
-> **Select Health CC** and **Select Advantage** are listed in §3 alongside commercial products, but
-> their names suggest a Medicaid community-care plan and a Medicare Advantage plan respectively. If
-> so they are exactly the kind of plan the earlier design misfiled as commercial. **Do not seed the
-> SelectHealth family until these are confirmed.**
+| Tier | Means |
+|---|---|
+| **authoritative** | Classification stated directly in `DESIGN-CORRECTIONS.md`. Settled. |
+| **evidenced** | Tracker evidence recorded in `OPEN-QUESTIONS.md` Q1. Awaiting the reviewer's confirmation, which is a yes/no rather than research. |
+| **inferred** | Name-based only. No evidence yet. |
+
+> **Status change.** Six of the ⚠️ rows that previously had no evidence now have tracker evidence
+> (Q1) — Select Health CC and Select Advantage among them, the two flagged as most likely to repeat
+> the §1.2 error. Both came back as suspected: `medicaid_mco` and `medicare_advantage`, not
+> commercial. **The SelectHealth family is still not seedable until Q1 is confirmed**, but the
+> question is now a confirmation rather than an open investigation.
 
 ### Credentialing required
 
 | Payer group | Product | Classification | Source |
 |---|---|---|---|
-| SelectHealth | Select Health CC | ⚠️ *confirm — Medicaid MCO?* | proposed |
-| SelectHealth | Select Med | commercial | proposed |
-| SelectHealth | Select Advantage | ⚠️ *confirm — Medicare Advantage?* | proposed |
-| SelectHealth | Select Share | commercial | proposed |
-| SelectHealth | Select Value | commercial | proposed |
-| SelectHealth | Select Choice | commercial | proposed |
-| SelectHealth | Select Care | commercial | proposed |
-| SelectHealth | Select Care Plus | commercial | proposed |
-| SelectHealth | Select Med Plus | commercial | proposed |
-| U of U Health Plans | Advantage U | ⚠️ *confirm — Medicare Advantage?* | proposed |
-| U of U Health Plans | Healthy Premier | commercial | proposed |
-| U of U Health Plans | Healthy Preferred | commercial | proposed |
-| U of U Health Plans | Healthy U | ⚠️ *confirm — Medicaid MCO?* | proposed |
-| UnitedHealthcare | UHC | commercial | proposed |
+| SelectHealth | Select Health CC | medicaid_mco | **evidenced (Q1)** — "CC" = Community Care |
+| SelectHealth | Select Med | commercial | inferred |
+| SelectHealth | Select Advantage | medicare_advantage | **evidenced (Q1)** — grouped with Medicare products |
+| SelectHealth | Select Share | commercial | inferred |
+| SelectHealth | Select Value | commercial | inferred |
+| SelectHealth | Select Choice | commercial | inferred |
+| SelectHealth | Select Care | commercial | inferred |
+| SelectHealth | Select Care Plus | commercial | inferred |
+| SelectHealth | Select Med Plus | commercial | **evidenced (Q1)** — tracker annotates "Privately funded" |
+| U of U Health Plans | Advantage U | medicare_advantage | **evidenced (Q1)** |
+| U of U Health Plans | Healthy Premier | commercial | inferred |
+| U of U Health Plans | Healthy Preferred | commercial | inferred |
+| U of U Health Plans | Healthy U | medicaid_mco | **evidenced (Q1)** |
+| UnitedHealthcare | UHC | commercial | inferred |
 | UnitedHealthcare | UHC Medicare | medicare_advantage | **authoritative (1.2)** |
 | UnitedHealthcare | AARP | medicare_advantage | **authoritative (1.2)** |
-| UnitedHealthcare | UMR | commercial | proposed |
-| UnitedHealthcare | UMR SutterSelect | commercial | proposed |
+| UnitedHealthcare | UMR | commercial | inferred |
+| UnitedHealthcare | UMR SutterSelect | commercial | inferred |
 | UnitedHealthcare | Optum | medicare_advantage | **authoritative (1.2)** |
 | Molina | Molina | commercial | **authoritative (1.3)** |
 | Molina | Molina Medicare | medicare_advantage | **authoritative (1.2)** |
 | Molina | Molina Medicaid | medicaid_mco | **authoritative (1.3)** |
-| Health Choice | Health Choice Medicaid | medicaid_mco | proposed |
-| Health Choice | Health Choice Generations | ⚠️ *confirm — Medicare Advantage?* | proposed |
-| Cigna | Cigna | commercial | proposed |
+| Health Choice | Health Choice Medicaid | medicaid_mco | inferred |
+| Health Choice | Health Choice Generations | medicare_advantage | **evidenced (Q1)** — sibling is explicitly Medicaid |
+| Cigna | Cigna | commercial | inferred |
 | Cigna | Cigna HealthSprings | medicare_advantage | **authoritative (1.2)** |
-| Humana | Humana | commercial | proposed |
+| Humana | Humana | commercial | inferred |
 | Humana | Humana MA | medicare_advantage | **authoritative (1.2)** |
-| Aetna | Aetna | commercial | proposed |
+| Aetna | Aetna | commercial | inferred |
 | Aetna | Aetna MA | medicare_advantage | **authoritative (1.2)** |
 | DMBA | DMBA | commercial | **authoritative (1.4)** |
-| PEHP | PEHP | ⚠️ *confirm* | proposed — named in §4 only as declined |
+| PEHP | PEHP | commercial | inferred — Utah public employees; appears only as declined (Q1) |
 | Medicare | Medicare Part B | medicare | structural |
 | CHAMPVA | CHAMPVA | va_champva · **subject = service_location** | **authoritative (§4)** |
-| Direct Care Administrators | DCA | ⚠️ *confirm* · **route = delegated → Health Utah** | **authoritative (§4)** |
+| Direct Care Administrators | DCA | *class unconfirmed* · **route = delegated → Health Utah** | route **authoritative (§4)**; class inferred |
+
+> **On the rest of the SelectHealth family.** If Q1 is confirmed, the remaining products — Select
+> Med, Select Share, Select Value, Select Choice, Select Care, Select Care Plus — are commercial by
+> elimination, and the family becomes seedable in one pass. Note that Select Care Plus and Select
+> Med Plus were the two products observed as panel-closed (§4 of the corrections); that is an
+> enrollment outcome, not a classification, and does not affect their commercial classification.
 
 ### Credentialing not required — explicit exclusions
 
@@ -262,8 +304,12 @@ the seed data needs a state scope from the start rather than being presented as 
 
 ## 10. Open questions raised here
 
-| # | Question | Blocks |
-|---|---|---|
-| Q1.1 | Is 855I/855R strictly exclusive, or can an initial enrollment with reassignment need both? | Medicare packet generation |
-| Q1.2 | Confirm the ⚠️ classifications, especially Select Health CC and Select Advantage | Seeding the payer list |
-| Q1.3 | Confirm `va_champva` and `auto_pip` as additions to the mandated seven | Classification enum |
+> Canonical list with evidence and audience: **`OPEN-QUESTIONS.md`**. The table below is the local
+> index.
+
+| # | Question | Status | Blocks |
+|---|---|---|---|
+| **Q2** | Confirm `va_champva` and `auto_pip` as additions to the mandated seven | open | **Classification enum — the only migration blocker** |
+| Q1 | Confirm the six evidenced classifications (§8) | evidence supplied; awaiting confirmation | Seeding the payer list |
+| Q3 | Which forms make up a Medicare packet — 855I, 855R, or both? | **reframed** — §1.6's either/or was withdrawn; set *shape* settled, membership open | Packet membership only |
+| Q15 | Does the packet ever include CMS-855B? | open | Whether packet assembly checks organization state |

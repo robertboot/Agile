@@ -147,7 +147,7 @@ correct for the common case and wrong for CHAMPVA.
 State is explicit on enrollment, defaulting from `location.state`. In almost every case it is
 functionally determined by the location and the default is right.
 
-> **Open (Q2.1).** Is enrollment ever filed in a state other than the location's — a Utah location
+> **Open (Q6).** Is enrollment ever filed in a state other than the location's — a Utah location
 > enrolling with Idaho Medicaid for border patients, or a telehealth arrangement? If never, state
 > could be derived rather than stored. Keeping the column costs nothing now and removing it later is
 > easy; adding it later is not. Kept explicit, as the reviewer specified.
@@ -255,12 +255,12 @@ Sections 1 and 2 are settled as design with these exceptions carried:
 | Must be answered first | Why |
 |---|---|
 | ⚠️ classifications in `01-payer-taxonomy.md` §8 | Seed data only — does not block the schema |
-| 855I/855R exclusivity (Q1.1) | Packet generation only — does not block the schema |
-| `va_champva` / `auto_pip` additions (Q1.3) | Classification enum values — **does block** the enum |
-| Enrollment state other than location's (Q2.1) | Kept explicit, so safe either way — does not block |
+| 855I/855R exclusivity (Q3) | Packet generation only — does not block the schema |
+| `va_champva` / `auto_pip` additions (Q2) | Classification enum values — **does block** the enum |
+| Enrollment state other than location's (Q6) | Kept explicit, so safe either way — does not block |
 | Per-location vs per-organization billing (6.3) | **No longer blocks**, per §7 |
 
-Only Q1.3 genuinely gates a migration, and it is a small question. Everything else in sections 1 and
+Only Q2 genuinely gates a migration, and it is a small question. Everything else in sections 1 and
 2 can be built against.
 
 Sections 3 and 4 — batch approval under a shared effective date, and the five enrollment outcomes —
@@ -272,8 +272,11 @@ that, since nothing outstanding touches them.
 
 ## 10. Open questions raised here
 
+> Canonical list with evidence and audience: **`OPEN-QUESTIONS.md`**. The table below is the
+> local index.
+
 | # | Question | Blocks |
 |---|---|---|
-| Q2.1 | Can enrollment state differ from the location's state? | Nothing — column kept explicit |
-| Q2.2 | Does intake ask the NPI-shape question (§4) explicitly at client onboarding? | Intake form design |
-| Q2.3 | Confirm the §7 billing-account proposal, and that engagement attaches to location | Nothing immediately — but confirm before the engagement migration |
+| Q6 | Can enrollment state differ from the location's state? | Nothing — column kept explicit |
+| Q7 | Does intake ask the NPI-shape question (§4) explicitly at client onboarding? | Intake form design |
+| Q8 | Confirm the §7 billing-account proposal, and that engagement attaches to location | Nothing immediately — but confirm before the engagement migration |

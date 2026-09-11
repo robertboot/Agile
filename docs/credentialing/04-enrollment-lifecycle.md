@@ -101,7 +101,7 @@ anyway because their absence is load-bearing:
   one sitting in a review queue. The first needs work today; the second needs patience. Conflating
   them means the operator finds out by missing a deadline.
 
-Both are flagged for confirmation rather than assumed correct (question Q4.1). If the reviewers say
+Both are flagged for confirmation rather than assumed correct (question Q12). If the reviewers say
 these never occur in practice, they cost nothing to remove now and are expensive to retrofit later.
 
 ---
@@ -190,7 +190,7 @@ recredentialing_due_on      nullable, set on approval
 recredentialing_interval    on the payer product
 ```
 
-Flagged as question Q4.2: intervals are payer-specific and the tracker did not cover a full cycle, so
+Flagged as question Q13: intervals are payer-specific and the tracker did not cover a full cycle, so
 the values need the clinical reviewer. Noting it here because an approval that sets no future date
 is how a lapse happens, and a lapsed enrollment is worse than one that was never filed — the
 provider is seeing patients under it.
@@ -230,7 +230,7 @@ Aetna product while the Aetna contract sits in `in_negotiation`, and both facts 
 useful derived output is that a provider is revenue-ready only when the enrollment is approved **and**
 the contract is settled — which is precisely the gap the reviewer was pointing at.
 
-> **Open (Q4.3).** Are contracts ever negotiated per product rather than per group, or per location
+> **Open (Q14).** Are contracts ever negotiated per product rather than per group, or per location
 > rather than per organization? Modelled at organization × group on the evidence available. A
 > product-level exception would need a nullable scope column.
 
@@ -244,26 +244,30 @@ With sections 1–4 resolved, this consolidates the preconditions (superseding
 | Table | Ready | Waiting on |
 |---|---|---|
 | organization, location, provider, engagement | **yes** | — |
-| payer_group, payer_product | **almost** | Q1.3 — confirm `va_champva` / `auto_pip` enum values |
+| payer_group, payer_product | **almost** | Q2 — confirm `va_champva` / `auto_pip` enum values |
 | submission_batch | **yes** | — |
-| contract | **yes** | Q4.3 affects scope columns only |
-| enrollment | **yes** | Q4.1 affects enum values only |
-| payer seed data | **no** | Q1.2 — the ⚠️ classifications, especially the SelectHealth family |
+| contract | **yes** | Q14 affects scope columns only |
+| enrollment | **yes** | Q12 affects enum values only |
+| payer seed data | **no** | Q1 — six classifications now evidenced, awaiting confirmation |
 
-Only the classification enum genuinely gates a migration, and it is a small question. Seed data is
-separate from schema and should not hold it up.
+Only the classification enum (Q2) genuinely gates a migration, and it is a small question. Seed data
+is separate from schema and should not hold it up — and since `OPEN-QUESTIONS.md` Q1 now carries
+tracker evidence for six of the classifications, it is a confirmation rather than an investigation.
 
 **Recommended order:** organization / location / provider / engagement first — nothing outstanding
-touches them. Then payer_group / payer_product once Q1.3 is answered, then enrollment,
+touches them. Then payer_group / payer_product once Q2 is answered, then enrollment,
 submission_batch and contract.
 
 ---
 
 ## 8. Open questions
 
+> Canonical list with evidence and audience: **`OPEN-QUESTIONS.md`**. The table below is the
+> local index.
+
 | # | Question | Blocks |
 |---|---|---|
-| Q4.1 | Confirm `denied_by_payer`, `additional_info_requested`, `superseded`, `withdrawn` | Enum values only |
-| Q4.2 | Recredentialing intervals per payer product | Nothing now; needed before first approval lapses |
-| Q4.3 | Are contracts ever per product or per location? | `contract` scope columns |
-| Q3.1 | ⚠️ The §3/§4 SelectHealth contradiction — see `03-batch-submission.md` §2 | Nothing — safe reading adopted |
+| Q12 | Confirm `denied_by_payer`, `additional_info_requested`, `superseded`, `withdrawn` | Enum values only |
+| Q13 | Recredentialing intervals per payer product | Nothing now; needed before first approval lapses |
+| Q14 | Are contracts ever per product or per location? | `contract` scope columns |
+| Q9 | ⚠️ The §3/§4 SelectHealth contradiction — see `03-batch-submission.md` §2 | Nothing — safe reading adopted |

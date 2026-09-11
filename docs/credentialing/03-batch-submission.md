@@ -41,7 +41,7 @@ These cannot both be true of the same submission. Either:
   mixed outcomes; or
 - **(b)** the two statements describe different providers, or the same products at different times.
 
-**This is not resolved here, and it should not be resolved by guessing.** Flagged as question Q3.1
+**This is not resolved here, and it should not be resolved by guessing.** Flagged as question Q9
 for the clinical reviewer, since it comes from their tracker.
 
 **The model proceeds on the safe reading — batches can have mixed outcomes — because that reading
@@ -162,8 +162,11 @@ A batch records *one submission and its decision*. It is deliberately not:
 
 ## 6. Open questions
 
+> Canonical list with evidence and audience: **`OPEN-QUESTIONS.md`**. The table below is the
+> local index.
+
 | # | Question | Blocks |
 |---|---|---|
-| Q3.1 | ⚠️ Did the SelectHealth submission have mixed outcomes (§2 above)? | Nothing — model handles both — but confirms which reading is real |
-| Q3.2 | Can one batch span several locations, or is a multi-site group application filed per site? | Batch key. Currently per location; widening later is a migration |
-| Q3.3 | Do payers return a batch-level reference number, or one per product? | `reference` cardinality |
+| Q9 | ⚠️ Did the SelectHealth submission have mixed outcomes (§2 above)? | Nothing — model handles both — but confirms which reading is real |
+| Q10 | Can one batch span several locations, or is a multi-site group application filed per site? | Batch key. Currently per location; widening later is a migration |
+| Q11 | Do payers return a batch-level reference number, or one per product? | `reference` cardinality |
