@@ -188,26 +188,49 @@ pricing, invoicing, and who signs the agreement, none of which are schema-shaped
 
 ---
 
-## Q9 — ⚠️ Did the SelectHealth submission have mixed outcomes? *(clinical reviewer)*
+## Q9 — ✅ RESOLVED from source data *(no reviewer input needed)*
 
-`03-batch-submission.md` §2. **This is a contradiction inside `DESIGN-CORRECTIONS.md` itself.**
+`03-batch-submission.md` §2 flagged a contradiction inside `DESIGN-CORRECTIONS.md`: §3 said every
+Select product returned "In Network 04/18/2022" together, while §4 said two were panel-closed.
 
-- **§3 says** every Select product returned "In Network 04/18/2022" together.
-- **§4 says** Select Care Plus and Select Med Plus returned "not accepting new providers."
+**§4 is correct. §3 overstated.** The source tracker records **three distinct outcomes inside the
+single SelectHealth group**, for one provider:
 
-Both cannot be true of one submission. Either "every Select product" meant every product *that was
-approved*, or the two notes describe different providers or different times.
+| Product | Recorded outcome |
+|---|---|
+| Select Health CC | In Network 04/18/2022 |
+| Select Med | In Network 04/18/2022 |
+| Select Advantage | In Network 04/18/2022 |
+| Select Share | In Network 04/18/2022 |
+| Select Value | In Network 04/18/2022 |
+| Select Choice | In Network 01/03/2022 |
+| Select Care | In Network 01/03/2022 |
+| Select Care Plus | Not accepting new providers at this time |
+| Select Med Plus | Not accepting new providers at this time |
 
-**Why it matters — and why it does not block:** the model takes the safe reading, that a batch can
-have mixed outcomes, because that reading is a superset. If batches turn out to be all-or-nothing it
-still represents them correctly. The reverse is not true, and fails silently: two panel-closed
-products would be recorded as in-network, putting a provider in front of patients under a plan that
-has not accepted them.
+Two different effective dates plus two panel-closed products, all within one payer group.
 
-Optum supports the mixed reading independently — it is a UnitedHealthcare product and was
-panel-closed while its siblings were not.
+### Consequences
 
----
+1. **The superset reading was right.** Mixed outcomes within a batch are real, not hypothetical.
+   Treat as settled.
+
+2. **Batch identity must be captured at submission time.** It cannot be derived from the payer
+   group — this data disproves that — and it cannot be derived from the effective date either,
+   since two unrelated batches could coincidentally share one. The Optum case suggested
+   per-submission batching; the split Select dates confirm it independently.
+
+3. **Effective date belongs on the batch, not the product.** Five products share 04/18/2022 and two
+   share 01/03/2022 because of when each set was filed, not because of anything intrinsic to them.
+
+4. **Do not rely on §3's wording elsewhere.** It generalised from a partial view. Where §3 and §4
+   conflict, §4 reflects what was actually recorded.
+
+### On the two panel-closed products
+
+Select Care Plus and Select Med Plus being closed is an enrollment outcome for one provider at one
+point in time, not a property of the products. Both stay `commercial` for seeding, and both may
+open later. `01-payer-taxonomy.md` §8 already keeps these separate.
 
 ## Q10 — Can one batch span several locations? *(clinical reviewer)*
 
