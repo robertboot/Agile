@@ -147,7 +147,7 @@ correct for the common case and wrong for CHAMPVA.
 State is explicit on enrollment, defaulting from `location.state`. In almost every case it is
 functionally determined by the location and the default is right.
 
-> **Open (2.1).** Is enrollment ever filed in a state other than the location's — a Utah location
+> **Open (Q2.1).** Is enrollment ever filed in a state other than the location's — a Utah location
 > enrolling with Idaho Medicaid for border patients, or a telehealth arrangement? If never, state
 > could be derived rather than stored. Keeping the column costs nothing now and removing it later is
 > easy; adding it later is not. Kept explicit, as the reviewer specified.
@@ -246,17 +246,21 @@ enrollment route to the organization owner.
 
 ## 9. Preconditions for migrations
 
+> **Superseded.** Sections 3 and 4 are now resolved; the consolidated, current migration
+> readiness table is `04-enrollment-lifecycle.md` §7. The table below is kept as the
+> sections 1–2 record.
+
 Sections 1 and 2 are settled as design with these exceptions carried:
 
 | Must be answered first | Why |
 |---|---|
 | ⚠️ classifications in `01-payer-taxonomy.md` §8 | Seed data only — does not block the schema |
-| 855I/855R exclusivity (7.1) | Packet generation only — does not block the schema |
-| `va_champva` / `auto_pip` additions (3.1) | Classification enum values — **does block** the enum |
-| Enrollment state other than location's (2.1) | Kept explicit, so safe either way — does not block |
+| 855I/855R exclusivity (Q1.1) | Packet generation only — does not block the schema |
+| `va_champva` / `auto_pip` additions (Q1.3) | Classification enum values — **does block** the enum |
+| Enrollment state other than location's (Q2.1) | Kept explicit, so safe either way — does not block |
 | Per-location vs per-organization billing (6.3) | **No longer blocks**, per §7 |
 
-Only 3.1 genuinely gates a migration, and it is a small question. Everything else in sections 1 and
+Only Q1.3 genuinely gates a migration, and it is a small question. Everything else in sections 1 and
 2 can be built against.
 
 Sections 3 and 4 — batch approval under a shared effective date, and the five enrollment outcomes —
@@ -270,6 +274,6 @@ that, since nothing outstanding touches them.
 
 | # | Question | Blocks |
 |---|---|---|
-| 2.1 | Can enrollment state differ from the location's state? | Nothing — column kept explicit |
-| 2.2 | Does intake ask the NPI-shape question (§4) explicitly at client onboarding? | Intake form design |
-| 2.3 | Confirm the §7 billing-account proposal, and that engagement attaches to location | Nothing immediately — but confirm before the engagement migration |
+| Q2.1 | Can enrollment state differ from the location's state? | Nothing — column kept explicit |
+| Q2.2 | Does intake ask the NPI-shape question (§4) explicitly at client onboarding? | Intake form design |
+| Q2.3 | Confirm the §7 billing-account proposal, and that engagement attaches to location | Nothing immediately — but confirm before the engagement migration |

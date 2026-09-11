@@ -167,7 +167,7 @@ Selection rule as stated by the reviewer:
 Note that 855R is inherently **per (provider, location)** — reassignment is to a specific location.
 855I is per provider. This is a second point where the taxonomy depends on the location model.
 
-> **Open — for the clinical reviewer (7.1).** The correction reads as either/or. In practice an
+> **Open — for the clinical reviewer (Q1.1).** The correction reads as either/or. In practice an
 > initial enrollment that also reassigns benefits to a group is often filed as 855I *and* 855R
 > together. Confirm whether the rule is strictly exclusive, or whether `not_enrolled` + reassigning
 > produces both forms. This changes packet generation from picking one form to assembling a set,
@@ -264,6 +264,6 @@ the seed data needs a state scope from the start rather than being presented as 
 
 | # | Question | Blocks |
 |---|---|---|
-| 7.1 | Is 855I/855R strictly exclusive, or can an initial enrollment with reassignment need both? | Medicare packet generation |
-| 8.1 | Confirm the ⚠️ classifications, especially Select Health CC and Select Advantage | Seeding the payer list |
-| 3.1 | Confirm `va_champva` and `auto_pip` as additions to the mandated seven | Classification enum |
+| Q1.1 | Is 855I/855R strictly exclusive, or can an initial enrollment with reassignment need both? | Medicare packet generation |
+| Q1.2 | Confirm the ⚠️ classifications, especially Select Health CC and Select Advantage | Seeding the payer list |
+| Q1.3 | Confirm `va_champva` and `auto_pip` as additions to the mandated seven | Classification enum |
