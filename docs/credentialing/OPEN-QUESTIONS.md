@@ -59,10 +59,12 @@ employees), but it is inferred.
 
 ---
 
-## Q2 — Two classification values, added beyond the mandated seven
+## Q2 — Two classification values, added beyond the mandated seven ✅ ANSWERED
 
-`01-payer-taxonomy.md` §3 proposes these. **This one gates a migration** — the enum cannot be
-written until it is settled.
+**Confirmed by the clinical reviewer. Both values are in
+`credentialing.payer_classification`, and the schema is built.** Kept here for the record.
+
+`01-payer-taxonomy.md` §3 proposed these. This was the last question gating a migration.
 
 | Value | Why it is needed |
 |---|---|
@@ -306,7 +308,7 @@ per enrollment.
 
 | # | Question | Audience | Unblocks |
 |---|---|---|---|
-| **Q2** | `va_champva`, `auto_pip` | clinical reviewer | **The classification enum migration — the only migration blocker** |
+| ~~Q2~~ | ~~`va_champva`, `auto_pip`~~ | clinical reviewer | ✅ **Answered — schema built** |
 | Q1 | Six product classifications | clinical reviewer | Seeding the payer list |
 | Q3 | 855I / 855R — both, or one? | clinical reviewer | Medicare packet *membership* (shape is settled) |
 | Q4 | Availity | clinical reviewer | Whether a second attestation hub exists as recurring work |
@@ -322,8 +324,13 @@ per enrollment.
 | Q14 | Contracts per product or per location? | operations lead | `contract` scope columns |
 | Q15 | Does the Medicare packet include 855B? | clinical reviewer | Whether packet assembly checks organization state |
 
-**Only Q2 blocks a migration.** Q1 affects seed data. Q3, Q5, Q13 and Q15 affect features not yet
-built. Q9 is a contradiction in the source document that the model already accommodates safely. The
-rest affect scope or single columns.
+**Q2 is answered and the schema is built** — `supabase/migrations/2026091400000{2,3,4,5}`, with
+constraint tests in `supabase/tests/credentialing_schema_test.sql`.
 
-**Answer Q2 and the schema work can start.** Everything else can be answered while it proceeds.
+**Nothing now blocks a migration.** Q1 gates the payer *seed data* only — `payer_group` and
+`payer_product` are created but empty, and Q1's six confirmations fill them. Q3, Q5, Q13 and Q15
+affect features not yet built. Q9 is a contradiction in the source document that the model already
+accommodates safely. The rest affect scope or single columns.
+
+**Q1 is the next one worth chasing:** it is a confirmation rather than research, and it turns an
+empty payer table into a working one.

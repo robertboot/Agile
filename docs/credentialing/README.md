@@ -26,8 +26,13 @@ assume recognition. These documents use "credentialing platform" and avoid the a
 
 ## Current state
 
-**Only Q2 — confirming the `va_champva` and `auto_pip` classification values — blocks a migration.**
+**The schema is built.** Q2 was confirmed, which was the last migration blocker.
 
-Ready to build now: `organization`, `location`, `provider`, `engagement`. Then `payer_group` /
-`payer_product` once Q2 is answered, then `enrollment`, `submission_batch` and `contract`. Full
-table in `04-enrollment-lifecycle.md` §7.
+| | |
+|---|---|
+| Migrations | `supabase/migrations/2026091400000{1..5}_*.sql` — 10 tables in a `credentialing` schema |
+| Tests | `supabase/tests/credentialing_schema_test.sql` — 40 constraint assertions |
+| Seed data | **None.** The payer list waits on Q1 |
+| RLS | Enabled everywhere, admin-only. The consent model (§5.3/§5.4) is not designed, and a guessed policy on credentialing data fails toward disclosure |
+
+Next: answer Q1 to seed the payer list. See `04-enrollment-lifecycle.md` §7.

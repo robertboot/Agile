@@ -130,7 +130,12 @@ direct constraint on the location model. Its consequence for enrollment grain is
 | `attestation_hub` | Payer pulls from a maintained profile after the provider authorises it | CAQH; Availity *(pending question 6.1)* |
 
 `delegated` needs a pointer to the delegate, which is itself a payer-group-shaped record. Modelled
-as a self-referencing nullable FK (`delegates_to_payer_group_id`) rather than a separate entity.
+as a nullable FK (`delegates_to_payer_group_id`) rather than a separate entity.
+
+> **Refined in implementation.** This originally placed the delegate FK on the payer *group*. It is
+> on the **product**, because `filing_route` is a product property: keeping the pair in one row makes
+> `route = 'delegated' ⟺ delegate is set` a check constraint instead of a cross-table trigger. It is
+> also more expressive — a payer can delegate one product line and not another.
 
 This axis is deliberately separate from the submission *adapter* in §5.6 of the corrections
 (`manual`, `pdf_packet`, `caqh_authorize`, …). Filing route is a fact about the payer; the adapter

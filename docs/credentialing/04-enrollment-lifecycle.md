@@ -236,27 +236,33 @@ the contract is settled — which is precisely the gap the reviewer was pointing
 
 ---
 
-## 7. Migration readiness
+## 7. Migration readiness — built
 
-With sections 1–4 resolved, this consolidates the preconditions (superseding
-`02-location-model.md` §9):
+Q2 was confirmed, and the schema is implemented. `supabase/migrations/`:
 
-| Table | Ready | Waiting on |
-|---|---|---|
-| organization, location, provider, engagement | **yes** | — |
-| payer_group, payer_product | **almost** | Q2 — confirm `va_champva` / `auto_pip` enum values |
-| submission_batch | **yes** | — |
-| contract | **yes** | Q14 affects scope columns only |
-| enrollment | **yes** | Q12 affects enum values only |
-| payer seed data | **no** | Q1 — six classifications now evidenced, awaiting confirmation |
+| Migration | Contents |
+|---|---|
+| `20260914000001_audit_log_partitions.sql` | Prerequisite — see the note below |
+| `20260914000002_credentialing_core.sql` | organization, location, billing_account, provider, engagement |
+| `20260914000003_credentialing_payers.sql` | payer_group, payer_product |
+| `20260914000004_credentialing_enrollment.sql` | contract, submission_batch, enrollment, disposition, queue view |
+| `20260914000005_credentialing_rls.sql` | RLS (deny by default) and audit triggers |
 
-Only the classification enum (Q2) genuinely gates a migration, and it is a small question. Seed data
-is separate from schema and should not hold it up — and since `OPEN-QUESTIONS.md` Q1 now carries
-tracker evidence for six of the classifications, it is a confirmation rather than an investigation.
+Constraint tests: `supabase/tests/credentialing_schema_test.sql` — 40 assertions, each checking a
+rule this design states in prose, so the schema cannot drift from it silently.
 
-**Recommended order:** organization / location / provider / engagement first — nothing outstanding
-touches them. Then payer_group / payer_product once Q2 is answered, then enrollment,
-submission_batch and contract.
+**Not seeded.** The payer list waits on Q1. `payer_group` and `payer_product` are empty.
+
+**Audit prerequisite.** `audit_log` partitions ran out on 2026-09-01 and nothing created more, so
+every audited write failed from that date. The credentialing tables are audited, so they could not
+have taken a write either. Fixed in the first migration above, plus a default partition added at the
+source in `20260523000002_audit_log.sql` so fresh databases never reach the gap.
+
+**What the schema encodes that prose could not.** The enrollment grain is enforced rather than
+documented: `credentialing_subject` is carried on the enrollment and pinned to the product's value
+by a composite foreign key, and a check ties `provider_id` to it. The result is that a location-scoped
+enrollment *cannot* carry a provider, a per-provider enrollment *cannot* omit one, and no row can
+misstate which kind it is — declaratively, with no trigger.
 
 ---
 
