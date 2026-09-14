@@ -294,4 +294,61 @@ select pg_temp.expect_eq('Utah payers carry a state scope',
      where g.name in ('SelectHealth','U of U Health Plans','PEHP','DMBA','Health Choice')
        and (p.operating_states is null or not ('UT' = any(p.operating_states)))), '0');
 
+-- ---------- 17. operations (migration 0007) ----------
+insert into credentialing.organization (id, legal_name) values ('a2000000-0000-4000-8000-000000000001','Ops Test Org');
+insert into credentialing.location (id, organization_id, address_line1, city, state, postal_code) values
+  ('b2000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000001','1 A','Provo','UT','84601'),
+  ('b2000000-0000-4000-8000-000000000002','a2000000-0000-4000-8000-000000000001','2 B','Orem','UT','84057');
+insert into credentialing.provider (id, individual_npi, first_name, last_name) values
+  ('c2000000-0000-4000-8000-000000000001','8100000001','Ops','One'),
+  ('c2000000-0000-4000-8000-000000000002','8100000002','Ops','Two');
+insert into credentialing.payer_group (id, name) values ('d2000000-0000-4000-8000-000000000001','TEST Ops Payer');
+insert into credentialing.payer_product (id, payer_group_id, name, classification, recredentialing_interval_months) values
+  ('e2000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','Ops A','commercial',36),
+  ('e2000000-0000-4000-8000-000000000002','d2000000-0000-4000-8000-000000000001','Ops B','commercial',null);
+insert into credentialing.submission_batch (id, location_id, payer_group_id, submitted_to_payer_group_id, submitted_on) values
+  ('42000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','2024-01-10');
+insert into credentialing.enrollment (id, location_id, provider_id, payer_product_id, credentialing_subject, submission_batch_id, status) values
+  ('f2000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000001','individual_provider','42000000-0000-4000-8000-000000000001','submitted'),
+  ('f2000000-0000-4000-8000-000000000002','b2000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002','individual_provider','42000000-0000-4000-8000-000000000001','submitted');
+
+-- one decision, two outcomes
+select pg_temp.expect_ok('batch decision with mixed outcomes',
+  $$select credentialing.fn_record_batch_decision('42000000-0000-4000-8000-000000000001', date '2024-02-15', date '2024-02-01',
+      '[{"enrollment_id":"f2000000-0000-4000-8000-000000000001","status":"approved"},
+        {"enrollment_id":"f2000000-0000-4000-8000-000000000002","status":"panel_closed"}]'::jsonb)$$);
+select pg_temp.expect_eq('approved member took the batch effective date',
+  (select effective_date::text from credentialing.enrollment where id='f2000000-0000-4000-8000-000000000001'), '2024-02-01');
+select pg_temp.expect_eq('panel_closed member got no effective date',
+  (select effective_date::text from credentialing.enrollment where id='f2000000-0000-4000-8000-000000000002'), null);
+select pg_temp.expect_eq('panel_closed member got a recheck date',
+  (select panel_recheck_due_on::text from credentialing.enrollment where id='f2000000-0000-4000-8000-000000000002'), '2024-08-15');
+-- interval known -> due date computed; unknown -> left null rather than guessed
+select pg_temp.expect_eq('recredentialing computed from the payer interval',
+  (select recredentialing_due_on::text from credentialing.enrollment where id='f2000000-0000-4000-8000-000000000001'), '2027-02-01');
+
+select pg_temp.expect_fail('outcome for an enrollment outside the batch',
+  $$select credentialing.fn_record_batch_decision('42000000-0000-4000-8000-000000000001', date '2024-02-15', date '2024-02-01',
+      '[{"enrollment_id":"f0000000-0000-0000-0000-000000000001","status":"approved"}]'::jsonb)$$);
+select pg_temp.expect_fail('approved with no effective date anywhere',
+  $$select credentialing.fn_record_batch_decision('42000000-0000-4000-8000-000000000001', date '2024-02-15', null,
+      '[{"enrollment_id":"f2000000-0000-4000-8000-000000000001","status":"approved"}]'::jsonb)$$);
+
+-- supersede: the product flag is global, so every location converts
+insert into credentialing.enrollment (location_id, provider_id, payer_product_id, credentialing_subject, status)
+values ('b2000000-0000-4000-8000-000000000002','c2000000-0000-4000-8000-000000000002','e2000000-0000-4000-8000-000000000001','individual_provider','in_preparation');
+select pg_temp.expect_eq('supersede converts BOTH locations, not just one',
+  (select count(*)::text from credentialing.fn_supersede_for_location_scope('e2000000-0000-4000-8000-000000000001')), '2');
+select pg_temp.expect_eq('superseded rows keep their provider',
+  (select count(*)::text from credentialing.enrollment
+    where payer_product_id='e2000000-0000-4000-8000-000000000001' and status='superseded' and provider_id is null), '0');
+select pg_temp.expect_eq('every superseded row names its replacement',
+  (select count(*)::text from credentialing.enrollment
+    where status='superseded' and superseded_by_enrollment_id is null), '0');
+select pg_temp.expect_eq('product is now location-scoped',
+  (select credentialing_subject::text from credentialing.payer_product where id='e2000000-0000-4000-8000-000000000001'), 'service_location');
+select pg_temp.expect_eq('one location-scoped enrollment per location',
+  (select count(*)::text from credentialing.enrollment
+    where payer_product_id='e2000000-0000-4000-8000-000000000001' and provider_id is null), '2');
+
 rollback;
