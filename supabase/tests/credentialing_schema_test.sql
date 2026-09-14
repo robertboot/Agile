@@ -295,6 +295,20 @@ select pg_temp.expect_eq('Utah payers carry a state scope',
        and (p.operating_states is null or not ('UT' = any(p.operating_states)))), '0');
 
 -- ---------- 17. operations (migration 0007) ----------
+-- The RPCs are guarded by public.is_admin(), which reads a profile row for
+-- auth.uid(). A bare superuser session has neither, so establish an admin
+-- identity for the rest of the suite. The DB role stays superuser here so
+-- fixture setup is not fighting RLS; section 18 switches role deliberately.
+insert into auth.users (id, email) values
+  ('9a000000-0000-4000-8000-000000000001','rls-rep@example.test'),
+  ('9a000000-0000-4000-8000-000000000002','rls-admin@example.test');
+insert into public.profiles (id, role, display_name, email) values
+  ('9a000000-0000-4000-8000-000000000001','rep','RLS Rep','rls-rep@example.test'),
+  ('9a000000-0000-4000-8000-000000000002','admin','RLS Admin','rls-admin@example.test');
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000002';
+select pg_temp.expect_eq('acting as admin for the operations tests',
+  public.is_admin()::text, 'true');
+
 insert into credentialing.organization (id, legal_name) values ('a2000000-0000-4000-8000-000000000001','Ops Test Org');
 insert into credentialing.location (id, organization_id, address_line1, city, state, postal_code) values
   ('b2000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000001','1 A','Provo','UT','84601'),
@@ -350,5 +364,55 @@ select pg_temp.expect_eq('product is now location-scoped',
 select pg_temp.expect_eq('one location-scoped enrollment per location',
   (select count(*)::text from credentialing.enrollment
     where payer_product_id='e2000000-0000-4000-8000-000000000001' and provider_id is null), '2');
+
+-- ---------- 18. RPC authorization (regression: PR #4 security finding) ----------
+-- Requires `authenticated` to hold USAGE on schema auth, which real Supabase
+-- grants; a hand-rolled local stack must grant it or auth.uid() raises here.
+-- SECURITY DEFINER RPCs granted to `authenticated` bypassed the admin-only RLS.
+-- A non-admin who could see zero rows was able to flip a payer product and mark
+-- a panel-closed enrollment as in network. Both layers of the fix are asserted.
+-- Fresh fixtures: section 17's supersede test converted its product to
+-- location-scoped, so those rows are no longer a valid batch-decision target.
+insert into credentialing.payer_product (id, payer_group_id, name, classification)
+  values ('e3000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','Ops C','commercial');
+insert into credentialing.submission_batch (id, location_id, payer_group_id, submitted_to_payer_group_id, submitted_on)
+  values ('43000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','2024-05-01');
+insert into credentialing.enrollment (id, location_id, provider_id, payer_product_id, credentialing_subject, submission_batch_id, status)
+  values ('f3000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001','e3000000-0000-4000-8000-000000000001','individual_provider','43000000-0000-4000-8000-000000000001','submitted');
+
+select pg_temp.expect_eq('both RPCs are SECURITY INVOKER, so RLS applies to the caller',
+  (select count(*)::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='credentialing'
+      and p.proname in ('fn_record_batch_decision','fn_supersede_for_location_scope')
+      and p.prosecdef), '0');
+select pg_temp.expect_eq('ops functions are not callable by client roles',
+  (select count(*)::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where p.proname in ('fn_ensure_audit_partitions','fn_enrollment_default_state')
+      and has_function_privilege('authenticated', p.oid, 'execute')), '0');
+
+-- act as a signed-in non-admin
+set local role authenticated;
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000001';
+
+select pg_temp.expect_eq('non-admin sees no credentialing rows',
+  (select count(*)::text from credentialing.enrollment), '0');
+select pg_temp.expect_fail('non-admin CANNOT record a batch decision',
+  $$select credentialing.fn_record_batch_decision('43000000-0000-4000-8000-000000000001',
+      current_date, date '2030-01-01',
+      '[{"enrollment_id":"f3000000-0000-4000-8000-000000000001","status":"approved"}]'::jsonb)$$);
+select pg_temp.expect_fail('non-admin CANNOT flip a payer product to location-scoped',
+  $$select * from credentialing.fn_supersede_for_location_scope('e2000000-0000-4000-8000-000000000002')$$);
+select pg_temp.expect_fail('non-admin CANNOT call the audit partition DDL function',
+  $$select public.fn_ensure_audit_partitions(1)$$);
+
+-- an admin is unaffected
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000002';
+select pg_temp.expect_eq('admin sees the rows',
+  (select case when count(*) > 0 then 'yes' else 'no' end from credentialing.enrollment), 'yes');
+select pg_temp.expect_ok('admin CAN record a batch decision',
+  $$select credentialing.fn_record_batch_decision('43000000-0000-4000-8000-000000000001',
+      current_date, date '2030-01-01',
+      '[{"enrollment_id":"f3000000-0000-4000-8000-000000000001","status":"approved"}]'::jsonb)$$);
+reset role;
 
 rollback;
