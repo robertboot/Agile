@@ -202,4 +202,58 @@ select pg_temp.expect_eq('no status maps to NULL',
 select pg_temp.expect_eq('tables without RLS',
   (select count(*)::text from pg_tables where schemaname='credentialing' and not rowsecurity), '0');
 
+-- ---------- 15. the real SelectHealth tracker (Q9, resolved from source data) ----------
+-- Nine products in one payer group produced THREE outcomes across TWO effective
+-- dates. This is the data that settled Q9, kept as a regression test: it is the
+-- exact shape a uniform-batch model cannot represent.
+insert into credentialing.organization (id, legal_name) values ('a1000000-0000-0000-0000-000000000001','Utah Clinic LLC');
+insert into credentialing.location (id, organization_id, address_line1, city, state, postal_code)
+  values ('b1000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','1 Main','Provo','UT','84601');
+insert into credentialing.provider (id, individual_npi, first_name, last_name)
+  values ('c1000000-0000-0000-0000-000000000001','7777777777','Tracker','Provider');
+insert into credentialing.payer_group (id, name) values ('d1000000-0000-0000-0000-000000000001','SelectHealth Tracker');
+insert into credentialing.payer_product (payer_group_id, name, classification)
+  select 'd1000000-0000-0000-0000-000000000001', n, 'commercial' from unnest(array[
+    'Select Health CC','Select Med','Select Advantage','Select Share','Select Value',
+    'Select Choice','Select Care','Select Care Plus','Select Med Plus']) n;
+
+-- Two batches to the SAME payer group at the SAME location. Batch identity is
+-- captured at submission, never derived from the payer group or the date.
+select pg_temp.expect_ok('two batches to one payer group at one location',
+  $$insert into credentialing.submission_batch (id, location_id, payer_group_id, submitted_to_payer_group_id, submitted_on, decision_received_on, effective_date) values
+      ('41000000-0000-0000-0000-000000000001','b1000000-0000-0000-0000-000000000001','d1000000-0000-0000-0000-000000000001','d1000000-0000-0000-0000-000000000001','2022-03-01','2022-04-20','2022-04-18'),
+      ('41000000-0000-0000-0000-000000000002','b1000000-0000-0000-0000-000000000001','d1000000-0000-0000-0000-000000000001','d1000000-0000-0000-0000-000000000001','2021-12-01','2022-01-05','2022-01-03')$$);
+
+insert into credentialing.enrollment (location_id, provider_id, payer_product_id, credentialing_subject, submission_batch_id, status, effective_date, approved_on)
+select 'b1000000-0000-0000-0000-000000000001','c1000000-0000-0000-0000-000000000001', p.id,'individual_provider',
+       '41000000-0000-0000-0000-000000000001','approved','2022-04-18','2022-04-20'
+from credentialing.payer_product p
+where p.payer_group_id='d1000000-0000-0000-0000-000000000001'
+  and p.name in ('Select Health CC','Select Med','Select Advantage','Select Share','Select Value');
+insert into credentialing.enrollment (location_id, provider_id, payer_product_id, credentialing_subject, submission_batch_id, status, effective_date, approved_on)
+select 'b1000000-0000-0000-0000-000000000001','c1000000-0000-0000-0000-000000000001', p.id,'individual_provider',
+       '41000000-0000-0000-0000-000000000002','approved','2022-01-03','2022-01-05'
+from credentialing.payer_product p
+where p.payer_group_id='d1000000-0000-0000-0000-000000000001'
+  and p.name in ('Select Choice','Select Care');
+insert into credentialing.enrollment (location_id, provider_id, payer_product_id, credentialing_subject, submission_batch_id, status, panel_closed_recorded_on, panel_recheck_due_on)
+select 'b1000000-0000-0000-0000-000000000001','c1000000-0000-0000-0000-000000000001', p.id,'individual_provider',
+       '41000000-0000-0000-0000-000000000001','panel_closed','2022-04-20','2022-10-20'
+from credentialing.payer_product p
+where p.payer_group_id='d1000000-0000-0000-0000-000000000001'
+  and p.name in ('Select Care Plus','Select Med Plus');
+
+select pg_temp.expect_eq('5 products in network 04/18/2022',
+  (select count(*)::text from credentialing.enrollment
+     where location_id='b1000000-0000-0000-0000-000000000001' and effective_date='2022-04-18'), '5');
+select pg_temp.expect_eq('2 products in network 01/03/2022',
+  (select count(*)::text from credentialing.enrollment
+     where location_id='b1000000-0000-0000-0000-000000000001' and effective_date='2022-01-03'), '2');
+select pg_temp.expect_eq('2 products panel_closed in the same group',
+  (select count(*)::text from credentialing.enrollment
+     where location_id='b1000000-0000-0000-0000-000000000001' and status='panel_closed'), '2');
+select pg_temp.expect_eq('mixed outcomes inside a single batch',
+  (select count(distinct status)::text from credentialing.enrollment
+     where submission_batch_id='41000000-0000-0000-0000-000000000001'), '2');
+
 rollback;

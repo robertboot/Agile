@@ -28,32 +28,34 @@ Two distinct needs sit inside this:
 
 ---
 
-## 2. ⚠️ A contradiction between §3 and §4 that must be resolved
+## 2. ✅ A contradiction between §3 and §4 — resolved from source data
 
-**§3 says** every Select product returned "In Network 04/18/2022" together.
+**§3 said** every Select product returned "In Network 04/18/2022" together. **§4 said** Select Care
+Plus and Select Med Plus returned "not accepting new providers." Both could not be true.
 
-**§4 says** Select Care Plus and Select Med Plus returned "not accepting new providers at this
-time."
+**Resolved: §4 is correct and §3 overstated.** The source tracker records three outcomes across two
+effective dates inside the single SelectHealth group, for one provider — five products in network
+04/18/2022, two in network 01/03/2022, and two panel-closed. See `OPEN-QUESTIONS.md` Q9.
 
-These cannot both be true of the same submission. Either:
+The safe reading this document adopted before the answer arrived — that batches can have mixed
+outcomes — was correct, and is now settled fact rather than a defensive assumption. Three
+consequences follow, all of which the schema implements:
 
-- **(a)** "every Select product" means every Select product *that was approved*, and the batch had
-  mixed outcomes; or
-- **(b)** the two statements describe different providers, or the same products at different times.
+1. **Outcomes are per enrollment, never per batch.** A batch carries no status.
+2. **Batch identity is captured at submission time.** It cannot be derived from the payer group —
+   this data disproves that — nor from the effective date, since two unrelated batches could
+   coincidentally share one. So `submission_batch` is an explicit row created when the application
+   is sent, and nothing reconstructs it after the fact.
+3. **The effective date belongs to the batch, not the product.** Five products share 04/18/2022 and
+   two share 01/03/2022 because of when each set was filed, not because of anything intrinsic to
+   them. `payer_product` therefore carries no effective date at all.
 
-**This is not resolved here, and it should not be resolved by guessing.** Flagged as question Q9
-for the clinical reviewer, since it comes from their tracker.
+The tracker rows are kept as a regression test in
+`supabase/tests/credentialing_schema_test.sql` §15 — they are the exact shape a uniform-batch model
+cannot represent.
 
-**The model proceeds on the safe reading — batches can have mixed outcomes — because that reading
-is a superset.** If batches turn out to be all-or-nothing, a partial-capable model still represents
-them correctly (every member simply shares an outcome). If batches are partial and the model assumes
-all-or-nothing, it cannot represent the data at all, and the failure is silent: the two panel-closed
-products would be recorded as in-network, which is worse than any other error available here —
-it would put a provider in front of patients under a plan that has not accepted them.
-
-The Optum evidence independently supports the partial reading. Optum is a UnitedHealthcare product
-and was panel-closed; the other UHC products were not. So at least one payer group demonstrably
-produced mixed outcomes, whatever the SelectHealth answer turns out to be.
+> **A note on the source document.** §3 generalised from a partial view of the data. Where §3 and §4
+> of `DESIGN-CORRECTIONS.md` conflict, §4 reflects what was actually recorded.
 
 ---
 
@@ -167,6 +169,6 @@ A batch records *one submission and its decision*. It is deliberately not:
 
 | # | Question | Blocks |
 |---|---|---|
-| Q9 | ⚠️ Did the SelectHealth submission have mixed outcomes (§2 above)? | Nothing — model handles both — but confirms which reading is real |
+| ~~Q9~~ | ✅ Resolved from source data — §4 correct, §3 overstated. Mixed outcomes confirmed | Settled |
 | Q10 | Can one batch span several locations, or is a multi-site group application filed per site? | Batch key. Currently per location; widening later is a migration |
 | Q11 | Do payers return a batch-level reference number, or one per product? | `reference` cardinality |
