@@ -32,7 +32,7 @@ assume recognition. These documents use "credentialing platform" and avoid the a
 |---|---|
 | Migrations | `supabase/migrations/2026091400000{1..5}_*.sql` — 10 tables in a `credentialing` schema |
 | Tests | `supabase/tests/credentialing_schema_test.sql` — 40 constraint assertions |
-| Seed data | **None.** The payer list waits on Q1 |
+| Seed data | 18 payer groups, 39 products (`20260914000006`). Idempotent |
 | RLS | Enabled everywhere, admin-only. The consent model (§5.3/§5.4) is not designed, and a guessed policy on credentialing data fails toward disclosure |
 
-Next: answer Q1 to seed the payer list. See `04-enrollment-lifecycle.md` §7.
+Nothing blocks schema work. Remaining questions (Q3-Q15) affect features not yet built.

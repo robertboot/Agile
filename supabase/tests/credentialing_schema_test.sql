@@ -45,6 +45,8 @@ end $$;
 begin;
 
 -- ---------- fixtures ----------
+-- Names are TEST-prefixed: payer_group has a unique index on lower(name) and
+-- the real payer list is seeded by 20260914000006.
 insert into credentialing.organization (id, legal_name, ein, primary_organizational_npi) values
   ('a0000000-0000-0000-0000-000000000001','Gulf Coast Wound Care LLC','87-1234567','1111111111'),
   ('a0000000-0000-0000-0000-000000000002','Other Org LLC','87-7654321','2222222222');
@@ -57,9 +59,9 @@ insert into credentialing.provider (id, individual_npi, first_name, last_name) v
   ('c0000000-0000-0000-0000-000000000002','5555555555','Alan','Turing'),
   ('c0000000-0000-0000-0000-000000000003','6666666666','Grace','Hopper');
 insert into credentialing.payer_group (id, name) values
-  ('d0000000-0000-0000-0000-000000000001','SelectHealth'),
-  ('d0000000-0000-0000-0000-000000000002','Health Utah'),
-  ('d0000000-0000-0000-0000-000000000003','CHAMPVA');
+  ('d0000000-0000-0000-0000-000000000001','TEST SelectHealth'),
+  ('d0000000-0000-0000-0000-000000000002','TEST Health Utah'),
+  ('d0000000-0000-0000-0000-000000000003','TEST CHAMPVA');
 
 -- ---------- 1. NPI resolution rule (02 §4) ----------
 select pg_temp.expect_eq('location without own NPI falls back to org',
@@ -211,7 +213,7 @@ insert into credentialing.location (id, organization_id, address_line1, city, st
   values ('b1000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','1 Main','Provo','UT','84601');
 insert into credentialing.provider (id, individual_npi, first_name, last_name)
   values ('c1000000-0000-0000-0000-000000000001','7777777777','Tracker','Provider');
-insert into credentialing.payer_group (id, name) values ('d1000000-0000-0000-0000-000000000001','SelectHealth Tracker');
+insert into credentialing.payer_group (id, name) values ('d1000000-0000-0000-0000-000000000001','TEST SelectHealth Tracker');
 insert into credentialing.payer_product (payer_group_id, name, classification)
   select 'd1000000-0000-0000-0000-000000000001', n, 'commercial' from unnest(array[
     'Select Health CC','Select Med','Select Advantage','Select Share','Select Value',
@@ -255,5 +257,41 @@ select pg_temp.expect_eq('2 products panel_closed in the same group',
 select pg_temp.expect_eq('mixed outcomes inside a single batch',
   (select count(distinct status)::text from credentialing.enrollment
      where submission_batch_id='41000000-0000-0000-0000-000000000001'), '2');
+
+-- ---------- 16. seeded payer list (Q1 confirmed) ----------
+-- Asserted against real seed rows, not fixtures.
+select pg_temp.expect_eq('Altius is absent (defunct Dec 2018)',
+  (select count(*)::text from credentialing.payer_product where name ilike '%altius%'), '0');
+select pg_temp.expect_eq('Select Advantage is Medicare Advantage, not commercial',
+  (select p.classification::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='SelectHealth' and p.name='Select Advantage'), 'medicare_advantage');
+select pg_temp.expect_eq('Select Health CC is a Medicaid MCO, not commercial',
+  (select p.classification::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='SelectHealth' and p.name='Select Health CC'), 'medicaid_mco');
+select pg_temp.expect_eq('Molina spans three classifications',
+  (select count(distinct p.classification)::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id where g.name='Molina'), '3');
+select pg_temp.expect_eq('CHAMPVA credentials the location',
+  (select p.credentialing_subject::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='CHAMPVA' and p.name='CHAMPVA'), 'service_location');
+select pg_temp.expect_eq('DCA delegates to Health Utah',
+  (select d.name from credentialing.payer_product p
+     join credentialing.payer_group d on d.id=p.delegates_to_payer_group_id
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='Direct Care Administrators' and p.name='DCA'), 'Health Utah');
+select pg_temp.expect_eq('every exclusion carries a reason code',
+  (select count(*)::text from credentialing.payer_product
+     where credentialing_requirement='not_required' and not_required_reason_code is null), '0');
+select pg_temp.expect_eq('four exclusions seeded (WCF + three PIP)',
+  (select count(*)::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where p.credentialing_requirement='not_required' and g.name not like 'TEST %'), '4');
+select pg_temp.expect_eq('Utah payers carry a state scope',
+  (select count(*)::text from credentialing.payer_product p join credentialing.payer_group g on g.id=p.payer_group_id
+     where g.name in ('SelectHealth','U of U Health Plans','PEHP','DMBA','Health Choice')
+       and (p.operating_states is null or not ('UT' = any(p.operating_states)))), '0');
 
 rollback;

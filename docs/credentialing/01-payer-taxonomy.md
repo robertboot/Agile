@@ -219,32 +219,32 @@ Three tiers of confidence:
 | Tier | Means |
 |---|---|
 | **authoritative** | Classification stated directly in `DESIGN-CORRECTIONS.md`. Settled. |
-| **evidenced** | Tracker evidence recorded in `OPEN-QUESTIONS.md` Q1. Awaiting the reviewer's confirmation, which is a yes/no rather than research. |
+| **confirmed** | Was *evidenced*; confirmed by the clinical reviewer under Q1. Settled. |
 | **inferred** | Name-based only. No evidence yet. |
 
-> **Status change.** Six of the ⚠️ rows that previously had no evidence now have tracker evidence
-> (Q1) — Select Health CC and Select Advantage among them, the two flagged as most likely to repeat
-> the §1.2 error. Both came back as suspected: `medicaid_mco` and `medicare_advantage`, not
-> commercial. **The SelectHealth family is still not seedable until Q1 is confirmed**, but the
-> question is now a confirmation rather than an open investigation.
+> **Seeded.** Q1 is confirmed and the list is live in
+> `supabase/migrations/20260914000006_credentialing_payer_seed.sql` — 18 groups, 39 products.
+> The remaining SelectHealth products are commercial by elimination, as anticipated below.
+> `Direct Care Administrators` is the one classification still inferred: it was named in §4 only
+> as a delegation example and was not part of Q1. Seeded as commercial.
 
 ### Credentialing required
 
 | Payer group | Product | Classification | Source |
 |---|---|---|---|
-| SelectHealth | Select Health CC | medicaid_mco | **evidenced (Q1)** — "CC" = Community Care |
+| SelectHealth | Select Health CC | medicaid_mco | **confirmed (Q1)** — "CC" = Community Care |
 | SelectHealth | Select Med | commercial | inferred |
-| SelectHealth | Select Advantage | medicare_advantage | **evidenced (Q1)** — grouped with Medicare products |
+| SelectHealth | Select Advantage | medicare_advantage | **confirmed (Q1)** — grouped with Medicare products |
 | SelectHealth | Select Share | commercial | inferred |
 | SelectHealth | Select Value | commercial | inferred |
 | SelectHealth | Select Choice | commercial | inferred |
 | SelectHealth | Select Care | commercial | inferred |
 | SelectHealth | Select Care Plus | commercial | inferred |
-| SelectHealth | Select Med Plus | commercial | **evidenced (Q1)** — tracker annotates "Privately funded" |
-| U of U Health Plans | Advantage U | medicare_advantage | **evidenced (Q1)** |
+| SelectHealth | Select Med Plus | commercial | **confirmed (Q1)** — tracker annotates "Privately funded" |
+| U of U Health Plans | Advantage U | medicare_advantage | **confirmed (Q1)** |
 | U of U Health Plans | Healthy Premier | commercial | inferred |
 | U of U Health Plans | Healthy Preferred | commercial | inferred |
-| U of U Health Plans | Healthy U | medicaid_mco | **evidenced (Q1)** |
+| U of U Health Plans | Healthy U | medicaid_mco | **confirmed (Q1)** |
 | UnitedHealthcare | UHC | commercial | inferred |
 | UnitedHealthcare | UHC Medicare | medicare_advantage | **authoritative (1.2)** |
 | UnitedHealthcare | AARP | medicare_advantage | **authoritative (1.2)** |
@@ -255,7 +255,7 @@ Three tiers of confidence:
 | Molina | Molina Medicare | medicare_advantage | **authoritative (1.2)** |
 | Molina | Molina Medicaid | medicaid_mco | **authoritative (1.3)** |
 | Health Choice | Health Choice Medicaid | medicaid_mco | inferred |
-| Health Choice | Health Choice Generations | medicare_advantage | **evidenced (Q1)** — sibling is explicitly Medicaid |
+| Health Choice | Health Choice Generations | medicare_advantage | **confirmed (Q1)** — sibling is explicitly Medicaid |
 | Cigna | Cigna | commercial | inferred |
 | Cigna | Cigna HealthSprings | medicare_advantage | **authoritative (1.2)** |
 | Humana | Humana | commercial | inferred |

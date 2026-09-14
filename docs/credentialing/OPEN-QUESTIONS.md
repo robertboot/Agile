@@ -36,7 +36,7 @@ rule, pending confirmation in Q3 below.
 
 ---
 
-## Q1 — Confirm six product classifications
+## Q1 — Confirm six product classifications ✅ ANSWERED
 
 `01-payer-taxonomy.md` §8 flags these and correctly says not to seed the SelectHealth family until
 they are confirmed. Tracker evidence:
@@ -332,7 +332,7 @@ per enrollment.
 | # | Question | Audience | Unblocks |
 |---|---|---|---|
 | ~~Q2~~ | ~~`va_champva`, `auto_pip`~~ | clinical reviewer | ✅ **Answered — schema built** |
-| Q1 | Six product classifications | clinical reviewer | Seeding the payer list |
+| ~~Q1~~ | ~~Six product classifications~~ | clinical reviewer | ✅ **Answered — payer list seeded** |
 | Q3 | 855I / 855R — both, or one? | clinical reviewer | Medicare packet *membership* (shape is settled) |
 | Q4 | Availity | clinical reviewer | Whether a second attestation hub exists as recurring work |
 | Q5 | References | clinical reviewer | Whether a provider-intake section exists at all |
