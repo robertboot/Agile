@@ -14,6 +14,7 @@ alter table public.audit_log_2026_05 enable row level security;
 alter table public.audit_log_2026_06 enable row level security;
 alter table public.audit_log_2026_07 enable row level security;
 alter table public.audit_log_2026_08 enable row level security;
+alter table public.audit_log_default  enable row level security;
 
 -- B ─ pin search_path (prevents search_path hijack of unqualified names)
 alter function public.set_updated_at() set search_path = public;

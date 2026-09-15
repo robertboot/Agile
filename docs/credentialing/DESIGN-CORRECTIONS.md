@@ -32,6 +32,13 @@ WCF Insurance does not require provider credentialing. Neither does any PIP (per
 Model this as an **explicit exclusion category with a reason**, not as an omission. A payer absent from the list looks like an oversight; a payer marked "no credentialing required" is an answer, and it stops the question being re-asked on every engagement.
 
 ### 1.6 CMS-855I and CMS-855R are different forms
+
+> **⚠️ Superseded — see `OPEN-QUESTIONS.md`.** The either/or framing below was an error introduced
+> in summarising the reviewer's comment, not a claim the reviewer made. The forms describe two
+> *purposes*, and one enrollment may need **both**. Packet generation assembles a set of forms
+> rather than selecting one. The table below remains correct about what each form is *for*.
+> Resolved design: `01-payer-taxonomy.md` §7.
+
 The earlier design conflated them.
 
 | Form | Use |

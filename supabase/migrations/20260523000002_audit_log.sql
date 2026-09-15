@@ -29,6 +29,17 @@ create table public.audit_log_2026_07 partition of public.audit_log
 create table public.audit_log_2026_08 partition of public.audit_log
     for values from ('2026-08-01') to ('2026-09-01');
 
+-- Default partition. A range-partitioned table REJECTS rows matching no
+-- partition, and fn_audit_write() fires on every audited write — so a month
+-- without a partition does not degrade the audit trail, it takes down the
+-- application's entire write path. The cron job promised above was never
+-- built, and that is exactly what happened from 2026-09-01.
+--
+-- With a default partition a missed month is untidy rather than an outage.
+-- Added retroactively; existing databases get the same fix, plus the
+-- partition top-up function, from 20260914000001_audit_log_partitions.sql.
+create table public.audit_log_default partition of public.audit_log default;
+
 create index audit_log_actor_idx on public.audit_log (actor_id, created_at desc);
 create index audit_log_entity_idx on public.audit_log (entity_table, entity_id, created_at desc);
 

@@ -7,7 +7,9 @@ project_id = "agile"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "storage", "graphql_public"]
+# `credentialing` holds the credentialing platform (docs/credentialing/).
+# Prod needs the same addition in the dashboard: Settings -> API -> Exposed schemas.
+schemas = ["public", "storage", "graphql_public", "credentialing"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
