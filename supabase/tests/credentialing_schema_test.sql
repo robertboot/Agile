@@ -415,4 +415,13 @@ select pg_temp.expect_ok('admin CAN record a batch decision',
       '[{"enrollment_id":"f3000000-0000-4000-8000-000000000001","status":"approved"}]'::jsonb)$$);
 reset role;
 
+-- ---------- 19. the detail view must stay filterable ----------
+-- It was written for display only and had no keys, so "every enrollment for
+-- this organization" could not be expressed and the query failed outright.
+select pg_temp.expect_eq('v_enrollment_detail exposes its foreign keys',
+  (select count(*)::text from information_schema.columns
+    where table_schema='credentialing' and table_name='v_enrollment_detail'
+      and column_name in ('organization_id','location_id','provider_id',
+                          'payer_product_id','payer_group_id','submission_batch_id')), '6');
+
 rollback;

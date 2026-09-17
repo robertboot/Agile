@@ -13,11 +13,36 @@
 --   · PEHP declined by us, with a reason
 --
 -- Demo data, not reference data — hence seed/ rather than migrations/.
+--
+-- Needs an admin profile to exist: recording a batch decision goes through
+-- fn_record_batch_decision, which is guarded by public.is_admin(). Load
+-- supabase/seed/seed.sql first on a fresh database.
+--
 -- Run against a database with all migrations applied:
 --   psql "$DATABASE_URL" -f supabase/seed/credentialing_demo.sql
 -- ============================================================================
 
 begin;
+
+-- ---------- act as an admin ----------
+-- fn_record_batch_decision is guarded by public.is_admin() (20260914000008),
+-- which reads a profile row for auth.uid(). A bare psql session has neither, so
+-- borrow an existing admin identity for this transaction. Without this the
+-- batch-decision calls below fail with "requires admin" and the whole seed
+-- rolls back.
+do $$
+declare v_admin uuid;
+begin
+    select id into v_admin
+      from public.profiles
+     where role = 'admin' and deleted_at is null
+     order by created_at
+     limit 1;
+    if v_admin is null then
+        raise exception 'No admin profile found — this seed needs one to record batch decisions';
+    end if;
+    perform set_config('request.jwt.claim.sub', v_admin::text, true);
+end $$;
 
 -- ---------- organization and its two locations ----------
 insert into credentialing.organization (id, legal_name, dba_name, ein, primary_organizational_npi)
