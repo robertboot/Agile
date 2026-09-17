@@ -424,4 +424,78 @@ select pg_temp.expect_eq('v_enrollment_detail exposes its foreign keys',
       and column_name in ('organization_id','location_id','provider_id',
                           'payer_product_id','payer_group_id','submission_batch_id')), '6');
 
+-- ---------- 20. credentialing staff (migration 20260917000001) ----------
+-- RCM is a separate product with separate people, so access is a
+-- credentialing-owned list rather than a portal role. The assertions here fix
+-- the two halves of that claim: the list is what grants access, and the portal
+-- role is not.
+--
+-- Section 18 already showed a `rep` with no staff row sees nothing. These two
+-- profiles are also `rep` — identical to that one in every way except the staff
+-- row — so anything they can do is the staff row doing it and nothing else.
+insert into auth.users (id, email) values
+  ('9a000000-0000-4000-8000-000000000003','cred-specialist@example.test'),
+  ('9a000000-0000-4000-8000-000000000004','cred-manager@example.test'),
+  ('9a000000-0000-4000-8000-000000000005','cred-removed@example.test');
+insert into public.profiles (id, role, display_name, email) values
+  ('9a000000-0000-4000-8000-000000000003','rep','Cred Specialist','cred-specialist@example.test'),
+  ('9a000000-0000-4000-8000-000000000004','rep','Cred Manager','cred-manager@example.test'),
+  ('9a000000-0000-4000-8000-000000000005','rep','Cred Removed','cred-removed@example.test');
+insert into credentialing.payer_product (id, payer_group_id, name, classification)
+  values ('e4000000-0000-4000-8000-000000000001','d2000000-0000-4000-8000-000000000001','Ops D','commercial');
+insert into credentialing.staff (profile_id, role, deleted_at) values
+  ('9a000000-0000-4000-8000-000000000003','specialist', null),
+  ('9a000000-0000-4000-8000-000000000004','manager',    null),
+  ('9a000000-0000-4000-8000-000000000005','specialist', now());
+
+set local role authenticated;
+
+-- a specialist: full use of the product, no power over who else has it
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000003';
+select pg_temp.expect_eq('a staff row alone grants credentialing access',
+  credentialing.is_staff()::text, 'true');
+select pg_temp.expect_eq('a specialist is not a manager',
+  credentialing.is_manager()::text, 'false');
+select pg_temp.expect_eq('a specialist is not a portal admin',
+  public.is_admin()::text, 'false');
+select pg_temp.expect_eq('a specialist sees the credentialing rows',
+  (select case when count(*) > 0 then 'yes' else 'no' end from credentialing.enrollment), 'yes');
+select pg_temp.expect_ok('a specialist can open an enrollment',
+  $$insert into credentialing.enrollment (location_id, provider_id, payer_product_id, credentialing_subject, status)
+    values ('b2000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001',
+            'e4000000-0000-4000-8000-000000000001','individual_provider','in_preparation')$$);
+select pg_temp.expect_fail('a specialist CANNOT add someone to the staff list',
+  $$insert into credentialing.staff (profile_id, role)
+    values ('9a000000-0000-4000-8000-000000000001','specialist')$$);
+
+-- a manager: the same, plus the list
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000004';
+select pg_temp.expect_eq('a manager is staff too',
+  credentialing.is_staff()::text, 'true');
+select pg_temp.expect_ok('a manager CAN add someone to the staff list',
+  $$insert into credentialing.staff (profile_id, role)
+    values ('9a000000-0000-4000-8000-000000000001','specialist')$$);
+
+-- removal is a soft delete, so it has to actually revoke
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000005';
+select pg_temp.expect_eq('a removed staff member is not staff',
+  credentialing.is_staff()::text, 'false');
+select pg_temp.expect_eq('a removed staff member sees no credentialing rows',
+  (select count(*)::text from credentialing.enrollment), '0');
+
+-- the membership tests must not be redirectable
+reset role;
+select pg_temp.expect_eq('the membership tests pin their search_path',
+  (select count(*)::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'credentialing'
+      and p.proname in ('is_staff','is_manager','fn_guard_staff')
+      and p.proconfig is not null
+      and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')), '3');
+select pg_temp.expect_eq('no admin-only policy survives on the credentialing tables',
+  (select count(*)::text from pg_policies
+    where schemaname = 'credentialing' and policyname like '%_admin_all'), '0');
+select pg_temp.expect_eq('every credentialing table carries a staff policy',
+  (select count(*)::text from pg_policies
+    where schemaname = 'credentialing' and policyname like '%_staff_all'), '10');
+
 rollback;
