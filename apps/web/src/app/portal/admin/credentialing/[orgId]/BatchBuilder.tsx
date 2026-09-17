@@ -6,7 +6,8 @@ import { createBatch } from "../actions";
 
 const INPUT =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none";
-const LABEL = "block text-xs font-semibold uppercase tracking-wide text-slate-500";
+const LABEL =
+  "block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 /**
  * Groups prepared enrollments into one submission.
@@ -28,7 +29,10 @@ export function BatchBuilder({
 }) {
   const router = useRouter();
   const [state, action, pending] = useActionState(
-    async (prev: Awaited<ReturnType<typeof createBatch>> | null, formData: FormData) => {
+    async (
+      prev: Awaited<ReturnType<typeof createBatch>> | null,
+      formData: FormData,
+    ) => {
       const result = await createBatch(prev, formData);
       if (result.ok && result.batchId) {
         router.push(`/portal/admin/credentialing/batches/${result.batchId}`);
@@ -42,8 +46,9 @@ export function BatchBuilder({
     <section className="mt-8 rounded-lg border border-slate-200 bg-white p-5">
       <h2 className="text-lg font-semibold text-navy-900">Submit a batch</h2>
       <p className="mt-1 text-sm text-slate-600">
-        One submission to one payer. Outcomes come back per product, so the decision is recorded
-        against each enrollment rather than the batch as a whole.
+        One submission to one payer. Outcomes come back per product, so the
+        decision is recorded against each enrollment rather than the batch as a
+        whole.
       </p>
 
       <form action={action} className="mt-4 grid gap-4">
@@ -53,7 +58,12 @@ export function BatchBuilder({
             <label className={LABEL} htmlFor="batch_location">
               Location
             </label>
-            <select id="batch_location" name="location_id" className={INPUT} required>
+            <select
+              id="batch_location"
+              name="location_id"
+              className={INPUT}
+              required
+            >
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.label}
@@ -65,7 +75,12 @@ export function BatchBuilder({
             <label className={LABEL} htmlFor="batch_payer">
               Payer
             </label>
-            <select id="batch_payer" name="payer_group_id" className={INPUT} required>
+            <select
+              id="batch_payer"
+              name="payer_group_id"
+              className={INPUT}
+              required
+            >
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
@@ -98,18 +113,25 @@ export function BatchBuilder({
           <legend className={LABEL}>Include</legend>
           <div className="mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 p-2">
             {enrollments.map((e) => (
-              <label key={e.id} className="flex items-baseline gap-2 px-1 py-1 text-sm">
+              <label
+                key={e.id}
+                className="flex items-baseline gap-2 px-1 py-1 text-sm"
+              >
                 <input type="checkbox" name="enrollment_id" value={e.id} />
                 <span className="text-navy-900">{e.label}</span>
                 <span className="text-slate-400">{e.who}</span>
-                <span className="ml-auto text-xs text-slate-400">{e.location}</span>
+                <span className="ml-auto text-xs text-slate-400">
+                  {e.location}
+                </span>
               </label>
             ))}
           </div>
         </fieldset>
 
         {state && !state.ok && state.error ? (
-          <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
+          <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">
+            {state.error}
+          </p>
         ) : null}
 
         <button

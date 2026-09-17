@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { ActionResult } from "@/app/portal/actions";
+import type { CredFormState } from "./state";
 import {
   createLocation,
   createOrganization,
@@ -12,12 +12,18 @@ import {
 
 const INPUT =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none";
-const LABEL = "block text-xs font-semibold uppercase tracking-wide text-slate-500";
-const BTN = "btn-brand rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60";
+const LABEL =
+  "block text-xs font-semibold uppercase tracking-wide text-slate-500";
+const BTN =
+  "btn-brand rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60";
 
-function Err({ state }: { state: ActionResult | null }) {
+function Err({ state }: { state: CredFormState | null }) {
   if (!state || state.ok || !state.error) return null;
-  return <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>;
+  return (
+    <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">
+      {state.error}
+    </p>
+  );
 }
 
 function Panel({
@@ -55,10 +61,16 @@ export function NewOrganization() {
             <label className={LABEL} htmlFor="legal_name">
               Legal name
             </label>
-            <input id="legal_name" name="legal_name" className={INPUT} required />
+            <input
+              id="legal_name"
+              name="legal_name"
+              className={INPUT}
+              required
+              defaultValue={state?.values?.legal_name ?? ""}
+            />
             <p className="mt-1 text-xs text-slate-500">
-              Must match the IRS CP-575 or 147C letter exactly — a mismatch stops enrollment
-              outright.
+              Must match the IRS CP-575 or 147C letter exactly — a mismatch
+              stops enrollment outright.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -66,13 +78,24 @@ export function NewOrganization() {
               <label className={LABEL} htmlFor="dba_name">
                 Trading name (optional)
               </label>
-              <input id="dba_name" name="dba_name" className={INPUT} />
+              <input
+                id="dba_name"
+                name="dba_name"
+                className={INPUT}
+                defaultValue={state?.values?.dba_name ?? ""}
+              />
             </div>
             <div>
               <label className={LABEL} htmlFor="ein">
                 EIN
               </label>
-              <input id="ein" name="ein" placeholder="12-3456789" className={INPUT} />
+              <input
+                id="ein"
+                name="ein"
+                placeholder="12-3456789"
+                className={INPUT}
+                defaultValue={state?.values?.ein ?? ""}
+              />
             </div>
           </div>
           <div>
@@ -84,6 +107,7 @@ export function NewOrganization() {
               name="primary_organizational_npi"
               inputMode="numeric"
               className={INPUT}
+              defaultValue={state?.values?.primary_organizational_npi ?? ""}
             />
             <p className="mt-1 text-xs text-slate-500">
               Locations that bill under their own NPI override this.
@@ -113,32 +137,63 @@ export function NewLocation({ organizationId }: { organizationId: string }) {
             <label className={LABEL} htmlFor="loc_name">
               Name (optional)
             </label>
-            <input id="loc_name" name="name" placeholder="Provo Clinic" className={INPUT} />
+            <input
+              id="loc_name"
+              name="name"
+              placeholder="Provo Clinic"
+              className={INPUT}
+              defaultValue={state?.values?.name ?? ""}
+            />
           </div>
           <div>
             <label className={LABEL} htmlFor="address_line1">
               Street
             </label>
-            <input id="address_line1" name="address_line1" className={INPUT} required />
+            <input
+              id="address_line1"
+              name="address_line1"
+              className={INPUT}
+              required
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="sm:col-span-1">
               <label className={LABEL} htmlFor="city">
                 City
               </label>
-              <input id="city" name="city" className={INPUT} required />
+              <input
+                id="city"
+                name="city"
+                className={INPUT}
+                required
+                defaultValue={state?.values?.city ?? ""}
+              />
             </div>
             <div>
               <label className={LABEL} htmlFor="state">
                 State
               </label>
-              <input id="state" name="state" maxLength={2} placeholder="UT" className={INPUT} required />
+              <input
+                id="state"
+                name="state"
+                maxLength={2}
+                placeholder="UT"
+                className={INPUT}
+                required
+                defaultValue={state?.values?.state ?? ""}
+              />
             </div>
             <div>
               <label className={LABEL} htmlFor="postal_code">
                 ZIP
               </label>
-              <input id="postal_code" name="postal_code" className={INPUT} required />
+              <input
+                id="postal_code"
+                name="postal_code"
+                className={INPUT}
+                required
+                defaultValue={state?.values?.postal_code ?? ""}
+              />
             </div>
           </div>
           <div>
@@ -150,10 +205,12 @@ export function NewLocation({ organizationId }: { organizationId: string }) {
               name="organizational_npi"
               inputMode="numeric"
               className={INPUT}
+              defaultValue={state?.values?.organizational_npi ?? ""}
             />
             <p className="mt-1 text-xs text-slate-500">
-              Leave blank to bill under the organization&rsquo;s NPI. Set it only when this address
-              has its own — the wrong Type 2 NPI is a rejected application.
+              Leave blank to bill under the organization&rsquo;s NPI. Set it
+              only when this address has its own — the wrong Type 2 NPI is a
+              rejected application.
             </p>
           </div>
           <Err state={state} />
@@ -175,7 +232,10 @@ export function NewProvider({
   organizationId: string;
   locations: { id: string; label: string }[];
 }) {
-  const [state, action, pending] = useActionState(createProviderAndEngagement, null);
+  const [state, action, pending] = useActionState(
+    createProviderAndEngagement,
+    null,
+  );
 
   return (
     <Panel label="+ Add provider">
@@ -186,7 +246,12 @@ export function NewProvider({
             <label className={LABEL} htmlFor="location_id">
               Location
             </label>
-            <select id="location_id" name="location_id" className={INPUT} required>
+            <select
+              id="location_id"
+              name="location_id"
+              className={INPUT}
+              required
+            >
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.label}
@@ -199,13 +264,25 @@ export function NewProvider({
               <label className={LABEL} htmlFor="first_name">
                 First name
               </label>
-              <input id="first_name" name="first_name" className={INPUT} required />
+              <input
+                id="first_name"
+                name="first_name"
+                className={INPUT}
+                required
+                defaultValue={state?.values?.first_name ?? ""}
+              />
             </div>
             <div>
               <label className={LABEL} htmlFor="last_name">
                 Last name
               </label>
-              <input id="last_name" name="last_name" className={INPUT} required />
+              <input
+                id="last_name"
+                name="last_name"
+                className={INPUT}
+                required
+                defaultValue={state?.values?.last_name ?? ""}
+              />
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -219,18 +296,25 @@ export function NewProvider({
                 inputMode="numeric"
                 className={INPUT}
                 required
+                defaultValue={state?.values?.individual_npi ?? ""}
               />
             </div>
             <div>
               <label className={LABEL} htmlFor="credentials">
                 Credentials
               </label>
-              <input id="credentials" name="credentials" placeholder="MD" className={INPUT} />
+              <input
+                id="credentials"
+                name="credentials"
+                placeholder="MD"
+                className={INPUT}
+                defaultValue={state?.values?.credentials ?? ""}
+              />
             </div>
           </div>
           <p className="text-xs text-slate-500">
-            An NPI already on file is reused — the provider record travels with the provider across
-            organizations.
+            An NPI already on file is reused — the provider record travels with
+            the provider across organizations.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -241,7 +325,9 @@ export function NewProvider({
                 id="medicare_enrollment_status"
                 name="medicare_enrollment_status"
                 className={INPUT}
-                defaultValue="unknown"
+                defaultValue={
+                  state?.values?.medicare_enrollment_status ?? "unknown"
+                }
               >
                 <option value="unknown">Unknown</option>
                 <option value="not_enrolled">Not enrolled</option>
@@ -256,7 +342,9 @@ export function NewProvider({
                 id="medicare_reassignment_status"
                 name="medicare_reassignment_status"
                 className={INPUT}
-                defaultValue="unknown"
+                defaultValue={
+                  state?.values?.medicare_reassignment_status ?? "unknown"
+                }
               >
                 <option value="unknown">Unknown</option>
                 <option value="not_reassigned">Not reassigned</option>
@@ -265,8 +353,9 @@ export function NewProvider({
             </div>
           </div>
           <p className="text-xs text-slate-500">
-            Unknown blocks Medicare packet generation rather than guessing between 855I and 855R. A
-            wrong form is a rejection that restarts the payer&rsquo;s review clock.
+            Unknown blocks Medicare packet generation rather than guessing
+            between 855I and 855R. A wrong form is a rejection that restarts the
+            payer&rsquo;s review clock.
           </p>
           <Err state={state} />
           <button className={BTN} disabled={pending}>
@@ -303,7 +392,12 @@ export function OpenEnrollments({
               <label className={LABEL} htmlFor="enr_location">
                 Location
               </label>
-              <select id="enr_location" name="location_id" className={INPUT} required>
+              <select
+                id="enr_location"
+                name="location_id"
+                className={INPUT}
+                required
+              >
                 {locations.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.label}
@@ -329,7 +423,10 @@ export function OpenEnrollments({
             <legend className={LABEL}>Payer products</legend>
             <div className="mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 p-2">
               {products.map((p) => (
-                <label key={p.id} className="flex items-baseline gap-2 px-1 py-1 text-sm">
+                <label
+                  key={p.id}
+                  className="flex items-baseline gap-2 px-1 py-1 text-sm"
+                >
                   <input type="checkbox" name="payer_product_id" value={p.id} />
                   <span className="text-slate-400">{p.group}</span>
                   <span className="text-navy-900">{p.name}</span>
@@ -342,8 +439,8 @@ export function OpenEnrollments({
               ))}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              A location-scoped payer gets one enrollment for the address, however many providers
-              work there.
+              A location-scoped payer gets one enrollment for the address,
+              however many providers work there.
             </p>
           </fieldset>
           <Err state={state} />
@@ -376,7 +473,12 @@ export function DeclineEnrollment({ enrollmentId }: { enrollmentId: string }) {
   return (
     <form action={action} className="grid gap-2">
       <input type="hidden" name="enrollment_id" value={enrollmentId} />
-      <select name="declined_reason_code" className={INPUT} required defaultValue="">
+      <select
+        name="declined_reason_code"
+        className={INPUT}
+        required
+        defaultValue=""
+      >
         <option value="" disabled>
           Reason…
         </option>
@@ -385,13 +487,22 @@ export function DeclineEnrollment({ enrollmentId }: { enrollmentId: string }) {
         <option value="client_request">Client asked us not to</option>
         <option value="other">Other</option>
       </select>
-      <input name="declined_note" placeholder="Note (optional)" className={INPUT} />
+      <input
+        name="declined_note"
+        placeholder="Note (optional)"
+        className={INPUT}
+        defaultValue={state?.values?.declined_note ?? ""}
+      />
       <Err state={state} />
       <div className="flex gap-2">
         <button className={BTN} disabled={pending}>
           {pending ? "Saving…" : "Decline"}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="text-sm text-slate-500">
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="text-sm text-slate-500"
+        >
           Cancel
         </button>
       </div>
