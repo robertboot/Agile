@@ -1,18 +1,17 @@
 "use server";
 
-// Credentialing console server actions. Admin-only, every one of them.
+// Credentialing console server actions. Staff-only, every one of them.
 //
 // Reads and writes go through the service-role client because credentialing
-// RLS is deny-by-default with admin-only policies (20260914000005) — the
-// consent model in DESIGN-CORRECTIONS §5.3/§5.4 is specified but not designed,
-// so nothing provider-facing exists yet. requireAdmin() is the gate until it
-// does; see docs/credentialing/README.md.
+// data is not yet reachable by the people it describes: the consent model in
+// DESIGN-CORRECTIONS §5.3/§5.4 is specified but not designed, so there is no
+// provider-facing surface and no policy that could safely serve one.
+// requireStaff() is the gate until there is; see docs/credentialing/README.md.
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ActionResult } from "@/app/portal/actions";
-import { reject, type CredFormState } from "./state";
+import { reject, type ActionResult, type CredFormState } from "./state";
 
 /** Everything here lives in the `credentialing` schema, not `public`. */
 function cred() {
@@ -37,7 +36,7 @@ export async function createOrganization(
   _prev: CredFormState | null,
   formData: FormData,
 ): Promise<CredFormState> {
-  const user = await requireAdmin();
+  const user = await requireStaff();
   const legalName = trim(formData, "legal_name");
   if (!legalName) return reject(formData, "Legal name is required");
 
@@ -56,7 +55,7 @@ export async function createOrganization(
     });
   if (error) return reject(formData, error.message);
 
-  revalidatePath("/portal/admin/credentialing");
+  revalidatePath("/console");
   return { ok: true };
 }
 
@@ -70,7 +69,7 @@ export async function createLocation(
   _prev: CredFormState | null,
   formData: FormData,
 ): Promise<CredFormState> {
-  const user = await requireAdmin();
+  const user = await requireStaff();
   const organizationId = trim(formData, "organization_id");
   const line1 = trim(formData, "address_line1");
   const city = trim(formData, "city");
@@ -103,7 +102,7 @@ export async function createLocation(
     });
   if (error) return reject(formData, error.message);
 
-  revalidatePath(`/portal/admin/credentialing/${organizationId}`);
+  revalidatePath(`/console/${organizationId}`);
   return { ok: true };
 }
 
@@ -124,7 +123,7 @@ export async function createProviderAndEngagement(
   _prev: CredFormState | null,
   formData: FormData,
 ): Promise<CredFormState> {
-  const user = await requireAdmin();
+  const user = await requireStaff();
   const locationId = trim(formData, "location_id");
   const organizationId = trim(formData, "organization_id");
   const npi = trim(formData, "individual_npi");
@@ -189,7 +188,7 @@ export async function createProviderAndEngagement(
     );
   }
 
-  revalidatePath(`/portal/admin/credentialing/${organizationId}`);
+  revalidatePath(`/console/${organizationId}`);
   return { ok: true };
 }
 
@@ -210,7 +209,7 @@ export async function openEnrollments(
   _prev: CredFormState | null,
   formData: FormData,
 ): Promise<CredFormState> {
-  await requireAdmin();
+  await requireStaff();
   const organizationId = trim(formData, "organization_id");
   const locationId = trim(formData, "location_id");
   const providerId = trim(formData, "provider_id");
@@ -270,7 +269,7 @@ export async function openEnrollments(
     );
   }
 
-  revalidatePath(`/portal/admin/credentialing/${organizationId}`);
+  revalidatePath(`/console/${organizationId}`);
   return { ok: true };
 }
 
@@ -286,7 +285,7 @@ export async function createBatch(
   _prev: (CredFormState & { batchId?: string }) | null,
   formData: FormData,
 ): Promise<CredFormState & { batchId?: string }> {
-  const user = await requireAdmin();
+  const user = await requireStaff();
   const organizationId = trim(formData, "organization_id");
   const locationId = trim(formData, "location_id");
   const payerGroupId = trim(formData, "payer_group_id");
@@ -336,7 +335,7 @@ export async function createBatch(
     .in("id", enrollmentIds);
   if (linkError) return reject(formData, linkError.message);
 
-  revalidatePath(`/portal/admin/credentialing/${organizationId}`);
+  revalidatePath(`/console/${organizationId}`);
   return { ok: true, batchId: batch.id as string };
 }
 
@@ -353,7 +352,7 @@ export async function recordBatchDecision(
   _prev: CredFormState | null,
   formData: FormData,
 ): Promise<CredFormState> {
-  await requireAdmin();
+  await requireStaff();
   const batchId = trim(formData, "batch_id");
   const decisionOn = trim(formData, "decision_received_on");
   const effectiveDate = trim(formData, "effective_date");
@@ -388,8 +387,8 @@ export async function recordBatchDecision(
     });
   if (error) return reject(formData, error.message);
 
-  revalidatePath("/portal/admin/credentialing");
-  revalidatePath(`/portal/admin/credentialing/batches/${batchId}`);
+  revalidatePath("/console");
+  revalidatePath(`/console/batches/${batchId}`);
   return { ok: true };
 }
 
@@ -405,7 +404,7 @@ export async function declineEnrollment(
   _prev: CredFormState | null,
   formData: FormData,
 ): Promise<CredFormState> {
-  const user = await requireAdmin();
+  const user = await requireStaff();
   const enrollmentId = trim(formData, "enrollment_id");
   const reasonCode = trim(formData, "declined_reason_code");
   if (!enrollmentId) return reject(formData, "Enrollment is required");
@@ -423,6 +422,6 @@ export async function declineEnrollment(
     .eq("id", enrollmentId);
   if (error) return reject(formData, error.message);
 
-  revalidatePath("/portal/admin/credentialing");
+  revalidatePath("/console");
   return { ok: true };
 }

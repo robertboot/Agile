@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { recordBatchDecision } from "../../actions";
 
 const INPUT =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none";
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rcm-accent focus:outline-none";
 const LABEL =
   "block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
@@ -28,7 +28,7 @@ export function DecisionForm({
 
   return (
     <section className="mt-8 rounded-lg border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-semibold text-navy-900">
+      <h2 className="text-lg font-semibold text-rcm-ink">
         Record the decision
       </h2>
       <p className="mt-1 text-sm text-slate-600">
@@ -73,7 +73,7 @@ export function DecisionForm({
               key={m.id}
               className="flex flex-wrap items-center gap-3 px-3 py-2"
             >
-              <span className="font-medium text-navy-900">{m.product}</span>
+              <span className="font-medium text-rcm-ink">{m.product}</span>
               <span className="text-sm text-slate-500">{m.who}</span>
               <select
                 name={`outcome:${m.id}`}
@@ -100,7 +100,7 @@ export function DecisionForm({
         ) : null}
 
         <button
-          className="btn-brand w-fit rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="btn-rcm w-fit rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           disabled={pending}
         >
           {pending ? "Recording…" : "Record decision"}

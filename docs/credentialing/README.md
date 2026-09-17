@@ -26,13 +26,30 @@ assume recognition. These documents use "credentialing platform" and avoid the a
 
 ## Current state
 
-**The schema is built.** Q2 was confirmed, which was the last migration blocker.
+**The schema is built and the console runs on it.** Q2 was confirmed, which was the last
+migration blocker.
 
 | | |
 |---|---|
-| Migrations | `supabase/migrations/2026091400000{1..5}_*.sql` — 10 tables in a `credentialing` schema |
-| Tests | `supabase/tests/credentialing_schema_test.sql` — 40 constraint assertions |
+| Migrations | `supabase/migrations/202609*_credentialing_*.sql` — 11 tables in a `credentialing` schema |
+| Tests | `supabase/tests/credentialing_schema_test.sql` — 89 constraint assertions |
 | Seed data | 18 payer groups, 39 products (`20260914000006`). Idempotent |
-| RLS | Enabled everywhere, admin-only. The consent model (§5.3/§5.4) is not designed, and a guessed policy on credentialing data fails toward disclosure |
+| Access | `credentialing.staff` (`20260917000001`). Staff or portal admin; nobody else |
+| App | `apps/rcm` — its own site at `rcm.agilemedgroup.com`, its own login. See `apps/rcm/README.md` |
 
-Nothing blocks schema work. Remaining questions (Q3-Q15) affect features not yet built.
+### Why the app is separate
+
+The people who credential providers are not the people who sell wound care. Running the console
+as an admin tab inside the portal meant every credentialing specialist would have needed a portal
+account with a portal role, and would have landed among orders, margins and commissions on the way
+to their own work.
+
+So access is a credentialing-owned list rather than a value added to `public.user_role`. A
+wound-care rep has no row in `credentialing.staff` and therefore no access — absence is the
+default, and nothing has to remember to exclude anyone.
+
+What is still shared is *identity*: one Supabase project, one `auth.users` pool, one `profiles`
+row per person. Robert holds both products without two accounts. Separating the user pools as
+well would mean a second Supabase project, a second Pro plan and a second BAA.
+
+Nothing blocks schema work. Remaining questions (Q3–Q15) affect features not yet built.

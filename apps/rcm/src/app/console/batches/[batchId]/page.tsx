@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DecisionForm } from "./DecisionForm";
 import { embedded } from "../../embedded";
@@ -12,7 +12,7 @@ export default async function BatchPage({
 }: {
   params: Promise<{ batchId: string }>;
 }) {
-  await requireAdmin();
+  await requireStaff();
   const { batchId } = await params;
   const db = createAdminClient().schema("credentialing");
 
@@ -41,15 +41,15 @@ export default async function BatchPage({
   return (
     <div className="max-w-4xl">
       <Link
-        href="/portal/admin/credentialing"
-        className="text-sm text-brand-blue hover:underline"
+        href="/console"
+        className="text-sm text-rcm-accent hover:underline"
       >
-        ← Credentialing console
+        ← Work queue
       </Link>
 
-      <h2 className="mt-2 text-xl font-semibold text-navy-900">
+      <h1 className="mt-2 text-2xl font-semibold text-rcm-ink">
         {payer} submission
-      </h2>
+      </h1>
       <p className="mt-1 text-sm text-slate-600">
         {(loc?.name as string | null) ?? (loc?.address_line1 as string)} ·{" "}
         {loc?.city as string}, {loc?.state as string}
@@ -80,14 +80,14 @@ export default async function BatchPage({
             <dt className="text-xs uppercase tracking-wide text-slate-400">
               {k}
             </dt>
-            <dd className="mt-0.5 font-mono tabular-nums text-navy-900">{v}</dd>
+            <dd className="mt-0.5 font-mono tabular-nums text-rcm-ink">{v}</dd>
           </div>
         ))}
       </dl>
 
       {decided ? (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold text-navy-900">Outcome</h2>
+          <h2 className="text-lg font-semibold text-rcm-ink">Outcome</h2>
           <p className="mt-1 text-sm text-slate-600">
             Recorded per product — one decision can carry several outcomes.
           </p>
@@ -104,7 +104,7 @@ export default async function BatchPage({
                       approved ? "bg-emerald-500" : "bg-violet-500"
                     }`}
                   />
-                  <span className="font-medium text-navy-900">
+                  <span className="font-medium text-rcm-ink">
                     {m.payer_product as string}
                   </span>
                   <span className="text-sm text-slate-500">

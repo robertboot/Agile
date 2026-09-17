@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createBatch } from "../actions";
 
 const INPUT =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none";
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rcm-accent focus:outline-none";
 const LABEL =
   "block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
@@ -35,7 +35,7 @@ export function BatchBuilder({
     ) => {
       const result = await createBatch(prev, formData);
       if (result.ok && result.batchId) {
-        router.push(`/portal/admin/credentialing/batches/${result.batchId}`);
+        router.push(`/console/batches/${result.batchId}`);
       }
       return result;
     },
@@ -44,7 +44,7 @@ export function BatchBuilder({
 
   return (
     <section className="mt-8 rounded-lg border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-semibold text-navy-900">Submit a batch</h2>
+      <h2 className="text-lg font-semibold text-rcm-ink">Submit a batch</h2>
       <p className="mt-1 text-sm text-slate-600">
         One submission to one payer. Outcomes come back per product, so the
         decision is recorded against each enrollment rather than the batch as a
@@ -118,7 +118,7 @@ export function BatchBuilder({
                 className="flex items-baseline gap-2 px-1 py-1 text-sm"
               >
                 <input type="checkbox" name="enrollment_id" value={e.id} />
-                <span className="text-navy-900">{e.label}</span>
+                <span className="text-rcm-ink">{e.label}</span>
                 <span className="text-slate-400">{e.who}</span>
                 <span className="ml-auto text-xs text-slate-400">
                   {e.location}
@@ -135,7 +135,7 @@ export function BatchBuilder({
         ) : null}
 
         <button
-          className="btn-brand w-fit rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="btn-rcm w-fit rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           disabled={pending}
         >
           {pending ? "Submitting…" : "Create batch"}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewOrganization } from "./forms";
 
@@ -60,27 +60,24 @@ function Pill({
 }
 
 export default async function CredentialingConsolePage() {
-  await requireAdmin();
+  await requireStaff();
   const db = createAdminClient().schema("credentialing");
 
-  const [{ data: queue }, { data: organizations }, { data: products }] =
-    await Promise.all([
-      db
-        .from("v_enrollment_detail")
-        .select(
-          "id, organization, location, provider, payer_group, payer_product, status, disposition, panel_recheck_due_on, recredentialing_due_on, submission_batch_id",
-        )
-        .order("organization")
-        .limit(500),
-      db
-        .from("organization")
-        .select("id, legal_name, dba_name, primary_organizational_npi")
-        .is("deleted_at", null)
-        .order("legal_name"),
-      db.from("payer_product").select("id", { count: "exact", head: true }),
-    ]);
+  const [{ data: queue }, { data: organizations }] = await Promise.all([
+    db
+      .from("v_enrollment_detail")
+      .select(
+        "id, organization, location, provider, payer_group, payer_product, status, disposition, panel_recheck_due_on, recredentialing_due_on, submission_batch_id",
+      )
+      .order("organization")
+      .limit(500),
+    db
+      .from("organization")
+      .select("id, legal_name, dba_name, primary_organizational_npi")
+      .is("deleted_at", null)
+      .order("legal_name"),
+  ]);
 
-  void products;
   const rows = (queue ?? []) as QueueRow[];
   const by = (d: string) => rows.filter((r) => r.disposition === d);
 
@@ -124,9 +121,7 @@ export default async function CredentialingConsolePage() {
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-navy-900">
-            Credentialing console
-          </h2>
+          <h1 className="text-2xl font-semibold text-rcm-ink">Work queue</h1>
           <p className="mt-1 text-sm text-slate-600">
             Enrollment attaches to a service location, not to the billing
             entity.
@@ -141,7 +136,7 @@ export default async function CredentialingConsolePage() {
             <div className={`text-2xl font-semibold tabular-nums ${t.cls}`}>
               {t.n}
             </div>
-            <div className="mt-1 text-sm font-medium text-navy-900">
+            <div className="mt-1 text-sm font-medium text-rcm-ink">
               {t.label}
             </div>
             <div className="text-xs text-slate-500">{t.sub}</div>
@@ -179,7 +174,7 @@ export default async function CredentialingConsolePage() {
       />
 
       <section className="mt-10">
-        <h2 className="text-lg font-semibold text-navy-900">Organizations</h2>
+        <h2 className="text-lg font-semibold text-rcm-ink">Organizations</h2>
         <p className="mt-1 text-sm text-slate-600">
           The contracting and billing party. Locations hang off these.
         </p>
@@ -192,10 +187,10 @@ export default async function CredentialingConsolePage() {
             {(organizations ?? []).map((o) => (
               <li key={o.id as string}>
                 <Link
-                  href={`/portal/admin/credentialing/${o.id}`}
+                  href={`/console/${o.id}`}
                   className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 hover:bg-slate-50"
                 >
-                  <span className="font-medium text-navy-900">
+                  <span className="font-medium text-rcm-ink">
                     {o.legal_name as string}
                   </span>
                   {o.dba_name ? (
@@ -232,7 +227,7 @@ function Section({
   return (
     <section className="mt-8">
       <div className="flex flex-wrap items-baseline gap-x-3">
-        <h2 className="text-lg font-semibold text-navy-900">{title}</h2>
+        <h2 className="text-lg font-semibold text-rcm-ink">{title}</h2>
         <p className="text-sm text-slate-500">{caption}</p>
         <span className="ml-auto text-xs tabular-nums text-slate-400">
           {rows.length}
@@ -256,7 +251,7 @@ function Section({
                   <span className="block text-xs text-slate-400">
                     {r.payer_group}
                   </span>
-                  <span className="font-medium text-navy-900">
+                  <span className="font-medium text-rcm-ink">
                     {r.payer_product}
                   </span>
                 </td>
@@ -271,8 +266,8 @@ function Section({
                   <Pill status={r.status} disposition={r.disposition} />
                   {r.submission_batch_id ? (
                     <Link
-                      href={`/portal/admin/credentialing/batches/${r.submission_batch_id}`}
-                      className="ml-2 text-xs text-brand-blue hover:underline"
+                      href={`/console/batches/${r.submission_batch_id}`}
+                      className="ml-2 text-xs text-rcm-accent hover:underline"
                     >
                       batch
                     </Link>

@@ -11,11 +11,11 @@ import {
 } from "./actions";
 
 const INPUT =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none";
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rcm-accent focus:outline-none";
 const LABEL =
   "block text-xs font-semibold uppercase tracking-wide text-slate-500";
 const BTN =
-  "btn-brand rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60";
+  "btn-rcm rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60";
 
 function Err({ state }: { state: CredFormState | null }) {
   if (!state || state.ok || !state.error) return null;
@@ -429,7 +429,7 @@ export function OpenEnrollments({
                 >
                   <input type="checkbox" name="payer_product_id" value={p.id} />
                   <span className="text-slate-400">{p.group}</span>
-                  <span className="text-navy-900">{p.name}</span>
+                  <span className="text-rcm-ink">{p.name}</span>
                   {p.subject === "service_location" ? (
                     <span className="ml-auto rounded bg-violet-100 px-1.5 text-xs font-semibold text-violet-700">
                       location-scoped

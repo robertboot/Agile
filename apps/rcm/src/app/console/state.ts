@@ -1,4 +1,9 @@
-import type { ActionResult } from "@/app/portal/actions";
+/** What a server action returns. Its own type here — the portal's copy stays
+ *  in the portal, because the two apps are not meant to share code. */
+export interface ActionResult {
+  ok: boolean;
+  error?: string;
+}
 
 /**
  * A failed submission carries back what was typed.
