@@ -80,10 +80,19 @@ export async function addStaff(
 }
 
 export async function changeStaffRole(formData: FormData): Promise<void> {
-  await requireManager();
+  const actor = await requireManager();
   const profileId = formData.get("profile_id") as string | null;
   const role = formData.get("role") as string | null;
   if (!profileId || !role || !ROLES.includes(role as StaffRole)) return;
+
+  // Demoting yourself out of a manage-capable role is the same self-lockout
+  // removeStaff refuses, reached a different way: a sole manager who sets their
+  // own role to specialist can no longer open the page that would undo it. A
+  // portal admin keeps access whatever their credentialing role, so this only
+  // binds a manager or owner editing their own row. The UI does not offer the
+  // move either; this is the half that cannot be bypassed.
+  const manageCapable = role === "manager" || role === "owner";
+  if (profileId === actor.id && !actor.isAdmin && !manageCapable) return;
 
   await createAdminClient()
     .schema("credentialing")

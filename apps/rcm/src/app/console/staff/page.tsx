@@ -96,6 +96,10 @@ export default async function StaffPage() {
               )}
               {rows.map((r) => {
                 const isMe = r.profile_id === me.id;
+                // Your own row cannot offer a demotion that would shut you out
+                // of this page — unless you are a portal admin, who gets in
+                // regardless of their credentialing role.
+                const lockedIn = isMe && !me.isAdmin;
                 return (
                   <tr key={r.profile_id}>
                     <td className="px-4 py-2.5 font-medium text-rcm-ink">
@@ -113,7 +117,7 @@ export default async function StaffPage() {
                           defaultValue={r.role}
                           className="rounded border border-slate-300 px-2 py-1 text-sm"
                         >
-                          <option value="specialist">Specialist</option>
+                          {!lockedIn && <option value="specialist">Specialist</option>}
                           <option value="manager">Manager</option>
                           <option value="owner">Owner</option>
                         </select>
@@ -121,7 +125,11 @@ export default async function StaffPage() {
                           Save
                         </button>
                       </form>
-                      <p className="mt-1 text-xs text-slate-400">{ROLE_NOTE[r.role]}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {lockedIn
+                          ? "Another manager has to step you down."
+                          : ROLE_NOTE[r.role]}
+                      </p>
                     </td>
                     <td className="px-4 py-2.5 text-slate-500">
                       {new Date(r.created_at).toLocaleDateString()}
