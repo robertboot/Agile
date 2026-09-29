@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatCents } from "@agile/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { emailConfigured } from "@/lib/email";
+import { EmailStatementButton } from "./EmailStatementButton";
 import { formatDate } from "@/lib/format";
 
 const PRODUCT_NAMES: Record<string, string> = {
@@ -19,9 +21,15 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
     .maybeSingle();
   if (!acct) return null;
 
+  const { data: prov } = await db
+    .from("providers")
+    .select("practice_name, contact_email")
+    .eq("id", providerId)
+    .maybeSingle();
+
   const [{ data: prices }, { data: ledger }, { data: pullOrders }] = await Promise.all([
     db.from("prepurchase_prices").select("product_code, sale_per_cm2_cents, cost_per_cm2_cents").eq("account_id", acct.id),
-    db.from("prepurchase_ledger").select("id, delta_cents, balance_after_cents, note, created_at, order_id").eq("account_id", acct.id).order("created_at", { ascending: false }).order("seq", { ascending: false }).limit(50),
+    db.from("prepurchase_ledger").select("id, seq, delta_cents, balance_after_cents, note, created_at, order_id").eq("account_id", acct.id).order("created_at", { ascending: false }).order("seq", { ascending: false }).limit(50),
     db.from("orders").select("id").eq("prepurchase_account_id", acct.id).not("prepurchase_draw_cents", "is", null).is("deleted_at", null),
   ]);
 
@@ -52,6 +60,21 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
   const netCollected = initial - fee; // cash Agile netted on the bulk payment
   const marginOnDrawn = consumed - costOfDrawn - fee; // product margin less the one-time fee
 
+  // Fallback when Resend isn't configured: a pre-filled draft the sender
+  // attaches the printed PDF to. Balances only — no cost, no margin.
+  const to = prov?.contact_email?.trim();
+  const mailtoHref = to
+    ? `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
+        `Pre-purchased inventory statement — ${prov!.practice_name}`,
+      )}&body=${encodeURIComponent(
+        `Initial credit: ${formatCents(initial)}\n` +
+          `Drawn to date: ${formatCents(consumed)}\n` +
+          `Credit remaining: ${formatCents(remaining)}\n\n` +
+          `Inventory pulls draw against your pre-paid credit and are not separately invoiced.\n\n` +
+          `Thank you,\nAgile Medical Group`,
+      )}`
+    : null;
+
   return (
     <section className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -65,13 +88,20 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
         </h2>
         <span className="flex items-center gap-3 text-xs text-slate-500">
           {acct.qbo_invoice_number && <span>Bulk invoice #{acct.qbo_invoice_number}</span>}
-          <Link
-            href={`/print/prepurchase-statement?provider=${providerId}`}
-            target="_blank"
-            className="font-medium text-brand-blue hover:underline"
-          >
-            Print statement
-          </Link>
+          <span className="flex flex-col items-end gap-0.5">
+            <Link
+              href={`/print/prepurchase-statement?provider=${providerId}`}
+              target="_blank"
+              className="font-medium text-brand-blue hover:underline"
+            >
+              Print statement
+            </Link>
+            <EmailStatementButton
+              providerId={providerId}
+              emailEnabled={emailConfigured()}
+              mailtoHref={mailtoHref}
+            />
+          </span>
         </span>
       </div>
       {isAdmin && fee > 0 && (

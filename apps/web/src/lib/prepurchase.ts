@@ -138,7 +138,7 @@ export async function buildPrepurchaseStatement(providerId: string): Promise<Pre
       .eq("account_id", acct.id),
     db
       .from("prepurchase_ledger")
-      .select("id, delta_cents, balance_after_cents, note, created_at")
+      .select("id, seq, delta_cents, balance_after_cents, note, created_at")
       .eq("account_id", acct.id)
       // now() is per-transaction, so rows written together share a created_at;
       // seq breaks the tie and keeps the running balance in true order.
