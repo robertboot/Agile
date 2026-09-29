@@ -20,8 +20,27 @@
 --   APIS                    A2010   $17.00   $22.00   $22.67
 --
 -- Six of seven rates RISE, so re-pricing the existing pulls INCREASES the
--- amount drawn and REDUCES the remaining credit. Run STEP 1 and read it
--- before running STEP 2.
+-- amount drawn and REDUCES the remaining credit. Applying this retroactively
+-- to all three existing pulls is deliberate and confirmed.
+--
+-- EXPECTED OUTCOME — STEP 1 must match this exactly before you run STEP 2.
+-- Derived from the 10 line items across the 3 pulls:
+--
+--   Pull                          Old draw        New draw       Delta
+--   2026-08-21  (2x A2040)        $ 7,350.00    $ 8,165.85    + $815.85
+--   2026-09-29  (A2040 3x3 x2)    $   540.00    $   599.94    +  $59.94
+--   2026-09-29  (SAM/PG/4x MW)    $ 8,390.00    $ 9,279.94    + $889.94
+--   ----------------------------------------------------------------------
+--   Total drawn                   $16,280.00    $18,045.73    +$1,765.73
+--
+--   Initial credit                              $20,000.00
+--   Credit remaining  (was $3,720.00)           $ 1,954.27
+--
+-- Only A2040, A2005 and Q4205 appear in the pulls; the new Q4290, Q4373,
+-- Q4344 and A2010 rates take effect on future pulls only.
+--
+-- If STEP 1 disagrees with the table above, STOP — the line items or the
+-- current rates are not what this script was built against.
 -- ===========================================================================
 
 
