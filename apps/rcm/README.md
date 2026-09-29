@@ -38,7 +38,17 @@ first real row by hand:
 
 ```sql
 insert into credentialing.staff (profile_id, role)
-select id from public.profiles where email = 'you@agilemedgroup.com';
+select id, 'owner' from public.profiles where email = 'you@agilemedgroup.com';
+```
+
+Check it landed. An `insert ... select` that matches no profile reports success and
+inserts nothing, so "no rows affected" is not confirmation:
+
+```sql
+select p.email, s.role
+from credentialing.staff s
+join public.profiles p on p.id = s.profile_id
+where s.deleted_at is null;
 ```
 
 After that, managers add the rest from `/console/staff`.
