@@ -25,6 +25,18 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
     db.from("orders").select("id").eq("prepurchase_account_id", acct.id).not("prepurchase_draw_cents", "is", null).is("deleted_at", null),
   ]);
 
+  // Rate-change audit (admin-only table). (changed_at, seq) because now() is
+  // fixed per transaction — a multi-product rate change shares one timestamp.
+  const { data: priceHistory } = isAdmin
+    ? await db
+        .from("prepurchase_price_history")
+        .select("id, product_code, operation, old_sale_per_cm2_cents, new_sale_per_cm2_cents, note, changed_at")
+        .eq("account_id", acct.id)
+        .order("changed_at", { ascending: false })
+        .order("seq", { ascending: false })
+        .limit(20)
+    : { data: null };
+
   // Cost of drawn from order_internals (admin-only) — never stored on orders.
   const pullIds = (pullOrders ?? []).map((o) => o.id);
   let costOfDrawn = 0;
@@ -132,6 +144,41 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
           </li>
         ))}
       </ul>
+      {isAdmin && priceHistory && priceHistory.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold text-navy-900">Rate changes</h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {priceHistory.map((h) => {
+              const from = h.old_sale_per_cm2_cents;
+              const to = h.new_sale_per_cm2_cents;
+              return (
+                <li key={h.id} className="flex justify-between gap-3 border-b border-emerald-100 py-1 last:border-0">
+                  <span className="text-slate-600">
+                    {formatDate(h.changed_at)} ·{" "}
+                    {PRODUCT_NAMES[h.product_code] ?? h.product_code}{" "}
+                    <span className="font-mono text-xs text-slate-400">{h.product_code}</span>
+                  </span>
+                  <span className="text-slate-600">
+                    {h.operation === "update" && from != null && to != null ? (
+                      <>
+                        {formatCents(Number(from))} →{" "}
+                        <span className="font-semibold text-navy-900">{formatCents(Number(to))}</span>
+                      </>
+                    ) : h.operation === "delete" ? (
+                      <span className="text-red-600">removed</span>
+                    ) : (
+                      <>
+                        {h.operation === "baseline" ? "baseline " : "added "}
+                        <span className="font-semibold text-navy-900">{formatCents(Number(to ?? 0))}</span>
+                      </>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
       {isAdmin && (
         <p className="mt-2 text-[11px] text-slate-400">Agile cost + margin are internal (admins only).</p>
       )}
