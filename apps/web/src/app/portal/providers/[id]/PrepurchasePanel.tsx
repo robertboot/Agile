@@ -21,7 +21,7 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
 
   const [{ data: prices }, { data: ledger }, { data: pullOrders }] = await Promise.all([
     db.from("prepurchase_prices").select("product_code, sale_per_cm2_cents, cost_per_cm2_cents").eq("account_id", acct.id),
-    db.from("prepurchase_ledger").select("id, delta_cents, balance_after_cents, note, created_at, order_id").eq("account_id", acct.id).order("created_at", { ascending: false }).limit(50),
+    db.from("prepurchase_ledger").select("id, delta_cents, balance_after_cents, note, created_at, order_id").eq("account_id", acct.id).order("created_at", { ascending: false }).order("seq", { ascending: false }).limit(50),
     db.from("orders").select("id").eq("prepurchase_account_id", acct.id).not("prepurchase_draw_cents", "is", null).is("deleted_at", null),
   ]);
 
