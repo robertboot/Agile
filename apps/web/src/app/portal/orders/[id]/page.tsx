@@ -24,6 +24,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     .maybeSingle();
   if (!order) notFound();
 
+  // Named custom pricing set (e.g. WESTBROOK) for pulls; null for normal orders.
+  let pricingCode: string | null = null;
+  if (order.prepurchase_account_id) {
+    const { data: acct } = await createAdminClient()
+      .from("prepurchase_accounts")
+      .select("pricing_code")
+      .eq("id", order.prepurchase_account_id)
+      .maybeSingle();
+    pricingCode = (acct?.pricing_code as string | null) ?? null;
+  }
+
   const items = order.order_items as {
     id: string;
     product_code: string;
@@ -229,7 +240,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         <div className="grid grid-cols-2 gap-4 border-t border-slate-200 px-4 py-4 sm:grid-cols-4">
           {order.prepurchase_account_id ? (
             <>
-              <Summary label="Pricing" value="Bulk order discount" />
+              <Summary label="Pricing" value={pricingCode ?? "Bulk order"} />
               <Summary
                 label="Drawn from credit"
                 value={formatCents(Number(order.prepurchase_draw_cents ?? 0))}

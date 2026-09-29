@@ -14,7 +14,7 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
   const db = createAdminClient();
   const { data: acct } = await db
     .from("prepurchase_accounts")
-    .select("id, credit_cents, initial_cents, qbo_invoice_number, processing_fee_cents, note")
+    .select("id, credit_cents, initial_cents, qbo_invoice_number, processing_fee_cents, note, pricing_code")
     .eq("provider_id", providerId)
     .maybeSingle();
   if (!acct) return null;
@@ -43,7 +43,14 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
   return (
     <section className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-semibold text-navy-900">Pre-purchased inventory</h2>
+        <h2 className="flex flex-wrap items-center gap-2 font-semibold text-navy-900">
+          Pre-purchased inventory
+          {acct.pricing_code && (
+            <span className="rounded border border-emerald-300 bg-white px-2 py-0.5 font-mono text-xs font-semibold tracking-wide text-emerald-700">
+              {acct.pricing_code}
+            </span>
+          )}
+        </h2>
         <span className="flex items-center gap-3 text-xs text-slate-500">
           {acct.qbo_invoice_number && <span>Bulk invoice #{acct.qbo_invoice_number}</span>}
           <Link
@@ -71,6 +78,9 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
       </div>
 
       {/* Price list (admin sees Agile cost) */}
+      <h3 className="mt-4 text-sm font-semibold text-navy-900">
+        {acct.pricing_code ? `${acct.pricing_code} pricing` : "Deal pricing"}
+      </h3>
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 text-left text-slate-500">

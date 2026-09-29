@@ -65,6 +65,9 @@ export default async function PrepurchaseStatementPrint({
         <div className="text-right">
           <h1 className="text-xl font-bold text-navy-900">Pre-Purchased Inventory</h1>
           <div className="text-sm text-slate-500">Statement of account</div>
+          {stmt.pricingCode && (
+            <div className="text-sm text-slate-500">Pricing set {stmt.pricingCode}</div>
+          )}
           {stmt.bulkInvoiceNumber && (
             <div className="text-sm text-slate-500">Bulk invoice #{stmt.bulkInvoiceNumber}</div>
           )}
@@ -83,7 +86,9 @@ export default async function PrepurchaseStatementPrint({
         <Sum label="Credit remaining" value={formatCents(stmt.remainingCents)} />
       </div>
 
-      <h2 className="mt-7 text-sm font-semibold text-navy-900">Agreed pricing</h2>
+      <h2 className="mt-7 text-sm font-semibold text-navy-900">
+        Agreed pricing{stmt.pricingCode ? ` — ${stmt.pricingCode}` : ""}
+      </h2>
       <table className="mt-2 w-full text-sm">
         <thead>
           <tr className="border-b border-slate-300 text-left text-slate-500">

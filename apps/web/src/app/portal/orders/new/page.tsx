@@ -31,11 +31,14 @@ export default async function NewOrderPage({
   // the pull action re-checks provider ownership before drawing.
   const admin = createAdminClient();
   const provIds = (providers ?? []).map((p) => p.id);
-  const prepurchaseByProvider: Record<string, { balanceCents: number; prices: Record<string, number> }> = {};
+  const prepurchaseByProvider: Record<
+    string,
+    { balanceCents: number; pricingCode: string | null; prices: Record<string, number> }
+  > = {};
   if (provIds.length > 0) {
     const { data: accts } = await admin
       .from("prepurchase_accounts")
-      .select("id, provider_id, credit_cents")
+      .select("id, provider_id, credit_cents, pricing_code")
       .in("provider_id", provIds);
     for (const a of accts ?? []) {
       const { data: prices } = await admin
@@ -44,7 +47,11 @@ export default async function NewOrderPage({
         .eq("account_id", a.id);
       const pm: Record<string, number> = {};
       for (const p of prices ?? []) pm[p.product_code] = Number(p.sale_per_cm2_cents);
-      prepurchaseByProvider[a.provider_id] = { balanceCents: Number(a.credit_cents), prices: pm };
+      prepurchaseByProvider[a.provider_id] = {
+        balanceCents: Number(a.credit_cents),
+        pricingCode: (a.pricing_code as string | null) ?? null,
+        prices: pm,
+      };
     }
   }
 

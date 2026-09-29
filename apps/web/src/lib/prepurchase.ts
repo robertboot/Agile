@@ -10,6 +10,8 @@ export interface PrepurchaseAccount {
   providerId: string;
   creditCents: number;
   initialCents: number;
+  /** Short label for this custom pricing set (e.g. WESTBROOK); null = generic. */
+  pricingCode: string | null;
   prices: Record<string, { sale: number; cost: number }>; // product_code → per-cm² cents
 }
 
@@ -17,7 +19,7 @@ export async function getPrepurchaseAccount(providerId: string): Promise<Prepurc
   const db = createAdminClient();
   const { data: acct } = await db
     .from("prepurchase_accounts")
-    .select("id, provider_id, credit_cents, initial_cents")
+    .select("id, provider_id, credit_cents, initial_cents, pricing_code")
     .eq("provider_id", providerId)
     .maybeSingle();
   if (!acct) return null;
@@ -34,6 +36,7 @@ export async function getPrepurchaseAccount(providerId: string): Promise<Prepurc
     providerId: acct.provider_id,
     creditCents: Number(acct.credit_cents),
     initialCents: Number(acct.initial_cents),
+    pricingCode: (acct.pricing_code as string | null) ?? null,
     prices: priceMap,
   };
 }
@@ -103,6 +106,7 @@ export interface StatementEntry {
 
 export interface PrepurchaseStatement {
   accountId: string;
+  pricingCode: string | null;
   bulkInvoiceNumber: string | null;
   initialCents: number;
   remainingCents: number;
@@ -122,7 +126,7 @@ export async function buildPrepurchaseStatement(providerId: string): Promise<Pre
   const db = createAdminClient();
   const { data: acct } = await db
     .from("prepurchase_accounts")
-    .select("id, credit_cents, initial_cents, qbo_invoice_number")
+    .select("id, credit_cents, initial_cents, qbo_invoice_number, pricing_code")
     .eq("provider_id", providerId)
     .maybeSingle();
   if (!acct) return null;
@@ -151,6 +155,7 @@ export async function buildPrepurchaseStatement(providerId: string): Promise<Pre
 
   return {
     accountId: acct.id,
+    pricingCode: (acct.pricing_code as string | null) ?? null,
     bulkInvoiceNumber: acct.qbo_invoice_number ?? null,
     initialCents: initial,
     remainingCents: remaining,
