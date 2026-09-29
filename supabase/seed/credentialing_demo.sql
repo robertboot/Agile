@@ -24,24 +24,37 @@
 
 begin;
 
--- ---------- act as an admin ----------
--- fn_record_batch_decision is guarded by public.is_admin() (20260914000008),
+-- ---------- act as someone with credentialing access ----------
+-- fn_record_batch_decision is guarded by fn_guard_staff() (20260917000001),
 -- which reads a profile row for auth.uid(). A bare psql session has neither, so
--- borrow an existing admin identity for this transaction. Without this the
--- batch-decision calls below fail with "requires admin" and the whole seed
--- rolls back.
+-- borrow an existing identity for this transaction. Without this the
+-- batch-decision calls below fail with "requires credentialing access" and the
+-- whole seed rolls back.
+--
+-- Credentialing staff first, a portal admin second: on a database that has both
+-- the staff row is the identity this data actually belongs to.
 do $$
-declare v_admin uuid;
+declare v_actor uuid;
 begin
-    select id into v_admin
-      from public.profiles
-     where role = 'admin' and deleted_at is null
-     order by created_at
+    select s.profile_id into v_actor
+      from credentialing.staff s
+      join public.profiles p on p.id = s.profile_id
+     where s.deleted_at is null and p.deleted_at is null
+     order by s.created_at
      limit 1;
-    if v_admin is null then
-        raise exception 'No admin profile found — this seed needs one to record batch decisions';
+
+    if v_actor is null then
+        select id into v_actor
+          from public.profiles
+         where role = 'admin' and deleted_at is null
+         order by created_at
+         limit 1;
     end if;
-    perform set_config('request.jwt.claim.sub', v_admin::text, true);
+
+    if v_actor is null then
+        raise exception 'No credentialing staff or admin profile found — this seed needs one to record batch decisions';
+    end if;
+    perform set_config('request.jwt.claim.sub', v_actor::text, true);
 end $$;
 
 -- ---------- organization and its two locations ----------

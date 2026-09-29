@@ -8,6 +8,7 @@
  */
 export function embedded(value: unknown): Record<string, unknown> | null {
   if (value == null) return null;
-  if (Array.isArray(value)) return (value[0] as Record<string, unknown> | undefined) ?? null;
+  if (Array.isArray(value))
+    return (value[0] as Record<string, unknown> | undefined) ?? null;
   return value as Record<string, unknown>;
 }

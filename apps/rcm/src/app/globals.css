@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  /* Same company, different product. The palette is deliberately cooler and
+     darker than the wound-care portal's brochure blue so that a glance at the
+     screen tells you which system you are in — these are different datasets
+     with different people in them, and mistaking one for the other is the
+     failure mode worth designing against. */
+  --color-rcm-ink: #0f2233;      /* headers, primary surfaces */
+  --color-rcm-ink-soft: #1b3a52;   /* nav, secondary surfaces */
+  --color-rcm-accent: #2f7d72;   /* primary action — teal, not brand blue */
+  --color-rcm-accent-dark: #25635b;
+  --color-rcm-line: #d7dee4;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    @apply bg-slate-100 text-slate-800 antialiased;
+  }
+}
+
+@utility btn-rcm {
+  @apply bg-rcm-accent text-white hover:bg-rcm-accent-dark transition-colors;
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  @apply text-[11px] uppercase tracking-widest;
+}

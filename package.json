@@ -27,6 +27,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "dev:web": "npm run dev --workspace=@agile/web",
     "build:web": "npm run build --workspace=@agile/web",
+    "dev:rcm": "npm run dev --workspace=@agile/rcm",
+    "build:rcm": "npm run build --workspace=@agile/rcm",
     "postinstall": "node scripts/ensure-web-styled-jsx.cjs"
   },
   "devDependencies": {

@@ -4,8 +4,9 @@ import { useActionState } from "react";
 import { recordBatchDecision } from "../../actions";
 
 const INPUT =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none";
-const LABEL = "block text-xs font-semibold uppercase tracking-wide text-slate-500";
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rcm-accent focus:outline-none";
+const LABEL =
+  "block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 /**
  * Records the payer's decision.
@@ -27,7 +28,9 @@ export function DecisionForm({
 
   return (
     <section className="mt-8 rounded-lg border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-semibold text-navy-900">Record the decision</h2>
+      <h2 className="text-lg font-semibold text-rcm-ink">
+        Record the decision
+      </h2>
       <p className="mt-1 text-sm text-slate-600">
         Set an outcome per product. Anything left pending stays submitted.
       </p>
@@ -51,17 +54,26 @@ export function DecisionForm({
             <label className={LABEL} htmlFor="effective_date">
               Shared effective date
             </label>
-            <input id="effective_date" name="effective_date" type="date" className={INPUT} />
+            <input
+              id="effective_date"
+              name="effective_date"
+              type="date"
+              className={INPUT}
+            />
             <p className="mt-1 text-xs text-slate-500">
-              Applies to approved products. Often earlier than the decision date.
+              Applies to approved products. Often earlier than the decision
+              date.
             </p>
           </div>
         </div>
 
         <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
           {members.map((m) => (
-            <li key={m.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
-              <span className="font-medium text-navy-900">{m.product}</span>
+            <li
+              key={m.id}
+              className="flex flex-wrap items-center gap-3 px-3 py-2"
+            >
+              <span className="font-medium text-rcm-ink">{m.product}</span>
               <span className="text-sm text-slate-500">{m.who}</span>
               <select
                 name={`outcome:${m.id}`}
@@ -73,18 +85,22 @@ export function DecisionForm({
                 <option value="approved">In network</option>
                 <option value="panel_closed">Panel closed</option>
                 <option value="denied_by_payer">Denied</option>
-                <option value="additional_info_requested">More info requested</option>
+                <option value="additional_info_requested">
+                  More info requested
+                </option>
               </select>
             </li>
           ))}
         </ul>
 
         {state && !state.ok && state.error ? (
-          <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
+          <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">
+            {state.error}
+          </p>
         ) : null}
 
         <button
-          className="btn-brand w-fit rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="btn-rcm w-fit rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           disabled={pending}
         >
           {pending ? "Recording…" : "Record decision"}
