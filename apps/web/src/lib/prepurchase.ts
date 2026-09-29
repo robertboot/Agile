@@ -80,3 +80,102 @@ export async function resolvePull(
   }
   return { drawCents, costCents, lines };
 }
+
+// ---------------------------------------------------------------------------
+// Provider-facing statement
+// ---------------------------------------------------------------------------
+
+export interface StatementPull {
+  orderId: string;
+  date: string;
+  status: string;
+  drawCents: number;
+  lines: { productCode: string; sizeLabel: string; cm2: number; qty: number }[];
+}
+
+export interface StatementEntry {
+  id: string;
+  date: string;
+  note: string | null;
+  deltaCents: number;
+  balanceAfterCents: number;
+}
+
+export interface PrepurchaseStatement {
+  accountId: string;
+  bulkInvoiceNumber: string | null;
+  initialCents: number;
+  remainingCents: number;
+  drawnCents: number;
+  /** product_code → sale cents per cm². Agile cost is deliberately absent. */
+  prices: { productCode: string; saleCents: number }[];
+  pulls: StatementPull[];
+  ledger: StatementEntry[];
+}
+
+/**
+ * Build the provider-facing pre-purchase statement. Sale prices and balances
+ * only — Agile's cost and deal margin are admin-internal and never included,
+ * so this is safe to hand to the provider.
+ */
+export async function buildPrepurchaseStatement(providerId: string): Promise<PrepurchaseStatement | null> {
+  const db = createAdminClient();
+  const { data: acct } = await db
+    .from("prepurchase_accounts")
+    .select("id, credit_cents, initial_cents, qbo_invoice_number")
+    .eq("provider_id", providerId)
+    .maybeSingle();
+  if (!acct) return null;
+
+  const [{ data: prices }, { data: ledger }, { data: orders }] = await Promise.all([
+    db
+      .from("prepurchase_prices")
+      .select("product_code, sale_per_cm2_cents")
+      .eq("account_id", acct.id),
+    db
+      .from("prepurchase_ledger")
+      .select("id, delta_cents, balance_after_cents, note, created_at")
+      .eq("account_id", acct.id)
+      .order("created_at", { ascending: true }),
+    db
+      .from("orders")
+      .select("id, created_at, status, prepurchase_draw_cents, order_items(product_code, size_label, cm2, qty)")
+      .eq("prepurchase_account_id", acct.id)
+      .not("prepurchase_draw_cents", "is", null)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  const initial = Number(acct.initial_cents);
+  const remaining = Number(acct.credit_cents);
+
+  return {
+    accountId: acct.id,
+    bulkInvoiceNumber: acct.qbo_invoice_number ?? null,
+    initialCents: initial,
+    remainingCents: remaining,
+    drawnCents: initial - remaining,
+    prices: (prices ?? [])
+      .map((p) => ({ productCode: p.product_code as string, saleCents: Number(p.sale_per_cm2_cents) }))
+      .sort((a, b) => a.productCode.localeCompare(b.productCode)),
+    pulls: (orders ?? []).map((o) => ({
+      orderId: o.id as string,
+      date: o.created_at as string,
+      status: o.status as string,
+      drawCents: Number(o.prepurchase_draw_cents),
+      lines: ((o.order_items ?? []) as { product_code: string; size_label: string; cm2: number; qty: number }[]).map((i) => ({
+        productCode: i.product_code,
+        sizeLabel: i.size_label,
+        cm2: Number(i.cm2),
+        qty: Number(i.qty),
+      })),
+    })),
+    ledger: (ledger ?? []).map((l) => ({
+      id: l.id as string,
+      date: l.created_at as string,
+      note: (l.note as string | null) ?? null,
+      deltaCents: Number(l.delta_cents),
+      balanceAfterCents: Number(l.balance_after_cents),
+    })),
+  };
+}

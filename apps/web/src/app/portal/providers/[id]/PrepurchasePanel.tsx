@@ -44,9 +44,16 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
     <section className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-semibold text-navy-900">Pre-purchased inventory</h2>
-        {acct.qbo_invoice_number && (
-          <span className="text-xs text-slate-500">Bulk invoice #{acct.qbo_invoice_number}</span>
-        )}
+        <span className="flex items-center gap-3 text-xs text-slate-500">
+          {acct.qbo_invoice_number && <span>Bulk invoice #{acct.qbo_invoice_number}</span>}
+          <Link
+            href={`/print/prepurchase-statement?provider=${providerId}`}
+            target="_blank"
+            className="font-medium text-brand-blue hover:underline"
+          >
+            Print statement
+          </Link>
+        </span>
       </div>
       {isAdmin && fee > 0 && (
         <p className="mt-1 text-xs text-slate-500">
