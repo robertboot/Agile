@@ -17,7 +17,8 @@ import { getIvrSubmission, registerProvider, submitIvr } from "@/lib/integration
 import { notifySlack, sendSlackMessage, GENERAL_CHANNEL_ID } from "@/lib/integrations/slack";
 import { resolveLineInputs, type QuoteItemInput } from "@/lib/pricing-resolver";
 import { qboUpdateInvoiceForOrder } from "@/lib/integrations/quickbooks";
-import { getPrepurchaseAccount, resolvePull } from "@/lib/prepurchase";
+import { getPrepurchaseAccount, resolvePull, buildPrepurchaseStatement } from "@/lib/prepurchase";
+import { renderPrepurchaseStatementPdf } from "@/lib/prepurchase-statement-pdf";
 import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 import { buildProviderSummary } from "@/app/portal/orders/provider-summary";
 import { renderProviderSummaryPdf } from "@/lib/provider-summary-pdf";
@@ -308,6 +309,64 @@ export async function emailProviderSummary(
     attachments: [{ filename: `provider-summary-${slug}-${period}.pdf`, content: base64 }],
   });
   if (!sent.ok) return { ok: false, error: sent.error };
+  return { ok: true };
+}
+
+/**
+ * Email a provider their pre-purchased inventory statement with the PDF
+ * attached. Provider-facing, so the statement carries sale prices and balances
+ * only — cost and margin are never in the payload.
+ */
+export async function emailPrepurchaseStatement(
+  providerId: string,
+): Promise<ActionResult & { notConfigured?: boolean }> {
+  const user = await requirePortalUser();
+  if (!emailConfigured()) return { ok: false, notConfigured: true, error: "Email isn't set up yet" };
+
+  // RLS-scoped read first: a rep can only reach a provider they own.
+  const supabase = await createClient();
+  const { data: provider } = await supabase
+    .from("providers")
+    .select("id, practice_name, provider_first, provider_last, contact_email")
+    .eq("id", providerId)
+    .maybeSingle();
+  if (!provider) return { ok: false, error: "Provider not found" };
+
+  const to = provider.contact_email?.trim();
+  if (!to) return { ok: false, error: "This provider has no contact email on file" };
+
+  const stmt = await buildPrepurchaseStatement(provider.id);
+  if (!stmt) return { ok: false, error: "This provider has no pre-purchased inventory" };
+
+  const pdf = await renderPrepurchaseStatementPdf(stmt, provider);
+  const base64 = Buffer.from(pdf).toString("base64");
+  const slug = provider.practice_name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+  const name = [provider.provider_first, provider.provider_last].filter(Boolean).join(" ").trim();
+
+  const sent = await sendEmail({
+    to,
+    subject: `Pre-purchased inventory statement — ${provider.practice_name}`,
+    text:
+      `Hi${name ? ` ${name}` : ""},\n\n` +
+      `Please find your pre-purchased inventory statement attached.\n\n` +
+      `Initial credit: $${(stmt.initialCents / 100).toFixed(2)}\n` +
+      `Drawn to date: $${(stmt.drawnCents / 100).toFixed(2)}\n` +
+      `Credit remaining: $${(stmt.remainingCents / 100).toFixed(2)}\n\n` +
+      `Inventory pulls draw against your pre-paid credit and are not separately invoiced.\n\n` +
+      `Thank you,\nAgile Medical Group`,
+    attachments: [{ filename: `prepurchase-statement-${slug}.pdf`, content: base64 }],
+  });
+  if (!sent.ok) return { ok: false, error: sent.error };
+
+  // Record the send against the provider, same as any other outreach.
+  await createAdminClient().from("provider_touchpoints").insert({
+    provider_id: provider.id,
+    kind: "email",
+    body: `Pre-purchased inventory statement emailed to ${to}`,
+    created_by: user.id,
+    auto: true,
+  });
+
   return { ok: true };
 }
 
