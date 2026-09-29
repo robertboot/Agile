@@ -538,6 +538,27 @@ export async function editOrder(
   if (items.length === 0) return { ok: false, error: "Add at least one line item" };
   if (![30, 35, 40].includes(tier)) return { ok: false, error: "Invalid discount tier" };
 
+  const supabase = await createClient();
+
+  // Pre-purchased inventory pulls are priced from the account's agreed deal
+  // rates (resolvePull), not from a discount tier. Re-pricing one here would
+  // bill it at reimbursement x tier, accrue commission and raise a QuickBooks
+  // invoice for product the provider already pre-paid — so refuse outright.
+  // The edit page hides the form for pulls; this guards direct action calls.
+  const { data: existing } = await supabase
+    .from("orders")
+    .select("prepurchase_account_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (existing?.prepurchase_account_id) {
+    return {
+      ok: false,
+      error:
+        "This is a pull from pre-purchased inventory — its prices are firm under the bulk " +
+        "agreement and can't be changed here. Delete the pull to restore the credit, then create it again.",
+    };
+  }
+
   let resolved;
   try {
     resolved = await resolveLineInputs(items);
@@ -546,7 +567,6 @@ export async function editOrder(
   }
   const econ = priceOrder(resolved.lineInputs, resolved.reimbursement, tier, resolved.cogsMultiplier);
 
-  const supabase = await createClient();
   const { error } = await supabase.rpc("fn_edit_order", {
     p_order_id: orderId,
     p_discount_tier: tier,
