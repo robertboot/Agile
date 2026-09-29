@@ -227,7 +227,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           </tbody>
         </table>
         <div className="grid grid-cols-2 gap-4 border-t border-slate-200 px-4 py-4 sm:grid-cols-4">
-          <Summary label="Discount tier" value={`${order.discount_tier}%`} />
+          {order.prepurchase_account_id ? (
+            <>
+              <Summary label="Pricing" value="Bulk order discount" />
+              <Summary
+                label="Drawn from credit"
+                value={formatCents(Number(order.prepurchase_draw_cents ?? 0))}
+              />
+            </>
+          ) : (
+            <Summary label="Discount tier" value={`${order.discount_tier}%`} />
+          )}
           <Summary label="Billed to provider" value={formatCents(billed)} />
           <Summary label="Rep commission" value={formatCents(commission)} />
           <Summary label="Provider keeps*" value={formatCents(providerKeeps)} />
