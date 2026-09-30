@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatCents } from "@agile/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { emailConfigured } from "@/lib/email";
+import { EmailStatementButton } from "./EmailStatementButton";
 import { formatDate } from "@/lib/format";
 
 const PRODUCT_NAMES: Record<string, string> = {
@@ -14,16 +16,34 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
   const db = createAdminClient();
   const { data: acct } = await db
     .from("prepurchase_accounts")
-    .select("id, credit_cents, initial_cents, qbo_invoice_number, processing_fee_cents, note")
+    .select("id, credit_cents, initial_cents, qbo_invoice_number, processing_fee_cents, note, pricing_code")
     .eq("provider_id", providerId)
     .maybeSingle();
   if (!acct) return null;
 
+  const { data: prov } = await db
+    .from("providers")
+    .select("practice_name, contact_email")
+    .eq("id", providerId)
+    .maybeSingle();
+
   const [{ data: prices }, { data: ledger }, { data: pullOrders }] = await Promise.all([
     db.from("prepurchase_prices").select("product_code, sale_per_cm2_cents, cost_per_cm2_cents").eq("account_id", acct.id),
-    db.from("prepurchase_ledger").select("id, delta_cents, balance_after_cents, note, created_at, order_id").eq("account_id", acct.id).order("created_at", { ascending: false }).limit(50),
+    db.from("prepurchase_ledger").select("id, seq, delta_cents, balance_after_cents, note, created_at, order_id").eq("account_id", acct.id).order("created_at", { ascending: false }).order("seq", { ascending: false }).limit(50),
     db.from("orders").select("id").eq("prepurchase_account_id", acct.id).not("prepurchase_draw_cents", "is", null).is("deleted_at", null),
   ]);
+
+  // Rate-change audit (admin-only table). (changed_at, seq) because now() is
+  // fixed per transaction — a multi-product rate change shares one timestamp.
+  const { data: priceHistory } = isAdmin
+    ? await db
+        .from("prepurchase_price_history")
+        .select("id, product_code, operation, old_sale_per_cm2_cents, new_sale_per_cm2_cents, note, changed_at")
+        .eq("account_id", acct.id)
+        .order("changed_at", { ascending: false })
+        .order("seq", { ascending: false })
+        .limit(20)
+    : { data: null };
 
   // Cost of drawn from order_internals (admin-only) — never stored on orders.
   const pullIds = (pullOrders ?? []).map((o) => o.id);
@@ -40,13 +60,49 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
   const netCollected = initial - fee; // cash Agile netted on the bulk payment
   const marginOnDrawn = consumed - costOfDrawn - fee; // product margin less the one-time fee
 
+  // Fallback when Resend isn't configured: a pre-filled draft the sender
+  // attaches the printed PDF to. Balances only — no cost, no margin.
+  const to = prov?.contact_email?.trim();
+  const mailtoHref = to
+    ? `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
+        `Pre-purchased inventory statement — ${prov!.practice_name}`,
+      )}&body=${encodeURIComponent(
+        `Initial credit: ${formatCents(initial)}\n` +
+          `Drawn to date: ${formatCents(consumed)}\n` +
+          `Credit remaining: ${formatCents(remaining)}\n\n` +
+          `Inventory pulls draw against your pre-paid credit and are not separately invoiced.\n\n` +
+          `Thank you,\nAgile Medical Group`,
+      )}`
+    : null;
+
   return (
     <section className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-semibold text-navy-900">Pre-purchased inventory</h2>
-        {acct.qbo_invoice_number && (
-          <span className="text-xs text-slate-500">Bulk invoice #{acct.qbo_invoice_number}</span>
-        )}
+        <h2 className="flex flex-wrap items-center gap-2 font-semibold text-navy-900">
+          Pre-purchased inventory
+          {acct.pricing_code && (
+            <span className="rounded border border-emerald-300 bg-white px-2 py-0.5 font-mono text-xs font-semibold tracking-wide text-emerald-700">
+              {acct.pricing_code}
+            </span>
+          )}
+        </h2>
+        <span className="flex items-center gap-3 text-xs text-slate-500">
+          {acct.qbo_invoice_number && <span>Bulk invoice #{acct.qbo_invoice_number}</span>}
+          <span className="flex flex-col items-end gap-0.5">
+            <Link
+              href={`/print/prepurchase-statement?provider=${providerId}`}
+              target="_blank"
+              className="font-medium text-brand-blue hover:underline"
+            >
+              Print statement
+            </Link>
+            <EmailStatementButton
+              providerId={providerId}
+              emailEnabled={emailConfigured()}
+              mailtoHref={mailtoHref}
+            />
+          </span>
+        </span>
       </div>
       {isAdmin && fee > 0 && (
         <p className="mt-1 text-xs text-slate-500">
@@ -64,6 +120,9 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
       </div>
 
       {/* Price list (admin sees Agile cost) */}
+      <h3 className="mt-4 text-sm font-semibold text-navy-900">
+        {acct.pricing_code ? `${acct.pricing_code} pricing` : "Deal pricing"}
+      </h3>
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 text-left text-slate-500">
@@ -115,6 +174,41 @@ export async function PrepurchasePanel({ providerId, isAdmin }: { providerId: st
           </li>
         ))}
       </ul>
+      {isAdmin && priceHistory && priceHistory.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold text-navy-900">Rate changes</h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {priceHistory.map((h) => {
+              const from = h.old_sale_per_cm2_cents;
+              const to = h.new_sale_per_cm2_cents;
+              return (
+                <li key={h.id} className="flex justify-between gap-3 border-b border-emerald-100 py-1 last:border-0">
+                  <span className="text-slate-600">
+                    {formatDate(h.changed_at)} ·{" "}
+                    {PRODUCT_NAMES[h.product_code] ?? h.product_code}{" "}
+                    <span className="font-mono text-xs text-slate-400">{h.product_code}</span>
+                  </span>
+                  <span className="text-slate-600">
+                    {h.operation === "update" && from != null && to != null ? (
+                      <>
+                        {formatCents(Number(from))} →{" "}
+                        <span className="font-semibold text-navy-900">{formatCents(Number(to))}</span>
+                      </>
+                    ) : h.operation === "delete" ? (
+                      <span className="text-red-600">removed</span>
+                    ) : (
+                      <>
+                        {h.operation === "baseline" ? "baseline " : "added "}
+                        <span className="font-semibold text-navy-900">{formatCents(Number(to ?? 0))}</span>
+                      </>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
       {isAdmin && (
         <p className="mt-2 text-[11px] text-slate-400">Agile cost + margin are internal (admins only).</p>
       )}

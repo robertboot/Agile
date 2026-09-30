@@ -13,15 +13,19 @@ Live at **https://agilemedgroup.com**. This doc is the master handoff — read i
 - GitHub: `https://github.com/robertboot/Agile.git`
 - Monorepo. The portal is **`apps/web`** (Next.js 15 App Router). `packages/shared` = pricing/commission engine.
   Phase 1 (`apps/*` Expo wound-measurement app) is separate — don't disturb.
-- **Active branch:** `claude/wound-care-platform-redesign-Jp5FQ` (all portal work is here; not yet merged to main).
+- **Work on `main`.** Portal and credentialing work is merged there (the old `claude/*` feature branches
+  are historical — `claude/wound-care-platform-redesign-Jp5FQ` was the portal branch and is merged).
+- `apps/rcm` is the second site (credentialing/RCM), deployed separately — see §2 and §3b.
 - New machine: clone, then `gh auth login` (HTTPS, browser) so `git push` works.
 
 ## 2. Live infrastructure
 
 | Thing | Value |
 |---|---|
-| Public URL | https://agilemedgroup.com (DNS on Vercel; apex A → Vercel edge) |
+| Public URL | https://agilemedgroup.com (apex A `76.76.21.21` → Vercel edge) |
+| DNS | **Authoritative nameservers are GoDaddy** (`pdns05/pdns06.domaincontrol.com`) — NOT Vercel. See §3a. |
 | Vercel project | `agile-portal` (team `robertboots-projects`, rootDirectory `apps/web`) |
+| RCM site | https://rcm.agilemedgroup.com — Vercel project `agile-credentialing`, rootDirectory `apps/rcm` |
 | Supabase project | ref `lqrrmlmeagpgwlyijeyd` (Pro plan, org "Agile Medical Group") |
 | QuickBooks (prod) | realm **9341452697656714** — "Agile Medical Group, LLC" |
 | Slack | bot "Stitch" posting to private channel `agile-admins` |
@@ -35,6 +39,52 @@ NOT aliased to the domain):
 cd ~/Developer/Agile
 npx vercel deploy --prod --yes --archive=tgz
 ```
+
+## 3b. Deploying the RCM site (`apps/rcm`)
+
+RCM is a **second Vercel project**, `agile-credentialing`
+(`prj_t8Az050LNsDrxlbCeGHxOozCGTcR`), with **Root Directory `apps/rcm`** and its own three
+Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`). Same Supabase project as the portal.
+
+Deploy from the **repo root**, same as the portal — the root directory setting picks
+`apps/rcm` out of the uploaded tree. The catch is that `.vercel/project.json` at the root is
+linked to `agile-portal`, so it has to be pointed at the RCM project for the deploy and put
+back afterwards:
+
+```bash
+cd ~/Developer/Agile
+cp .vercel/project.json /tmp/portal-project.json          # keep the portal link
+cat > .vercel/project.json <<'EOF'
+{"projectId":"prj_t8Az050LNsDrxlbCeGHxOozCGTcR","orgId":"team_q6woVYvfdJ4TFkCP8L1kz5tJ","projectName":"agile-credentialing"}
+EOF
+npx vercel deploy --prod --yes --archive=tgz
+cp /tmp/portal-project.json .vercel/project.json          # restore it
+```
+
+Do **not** run `npx vercel` from inside `apps/rcm`: that directory has no `.vercel` link, so
+the CLI creates a brand-new stray project (the same way the unused `web` project came to
+exist).
+
+## 3a. DNS (read before touching any domain)
+
+agilemedgroup.com is registered and **hosted at GoDaddy**; `dig NS agilemedgroup.com`
+returns `pdns05.domaincontrol.com` / `pdns06.domaincontrol.com`. Vercel also holds a zone for
+the domain, and `npx vercel dns ls agilemedgroup.com` will happily list records in it —
+**those records are inert**, because Vercel is not authoritative. That zone contains an
+`app` CNAME and a `*` wildcard ALIAS; neither resolves. Don't trust it, and don't add
+records there expecting them to take effect.
+
+New subdomains must be added **at GoDaddy**: a CNAME pointing at `cname.vercel-dns.com`,
+plus attaching the domain to the Vercel project:
+
+```bash
+# after the GoDaddy CNAME exists
+npx vercel domains add <sub>.agilemedgroup.com <vercel-project>
+```
+
+Currently configured and actually resolving: the apex (A → `76.76.21.21`) and `www`
+(CNAME → `cname.vercel-dns.com`).
 
 ## 4. Env vars
 
@@ -116,4 +166,8 @@ curl -s -X POST "https://api.supabase.com/v1/projects/lqrrmlmeagpgwlyijeyd/datab
 - HIPAA: Supabase BAA + MedNecessity BAA before live PHI (MedNecessity currently simulated).
 - **Rotate** the Slack app-configuration token that was pasted in chat during setup.
 - Stand up **Resend** to enable portal-sent provider emails with PDF attached.
-- Prod admin logins: `robert@agilemedgroup.com`, `clark@agilemedgroup.com` (both admin).
+- Prod admin logins: `robert@agilemedgroup.com`, `clark@agilemedgroup.com`, `avery@agilemedgroup.com` (all admin).
+- **No password self-service:** the portal login has no "forgot password" link and no change-password
+  screen. Resets are done with the Supabase Admin API (`PATCH /auth/v1/admin/users/{id}`) using the
+  service-role key. Custom SMTP is not configured on the Supabase project, so the built-in sender is
+  capped at 2 emails/hour — standing up Resend is a prerequisite for a real recovery flow.

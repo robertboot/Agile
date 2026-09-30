@@ -6,6 +6,7 @@ import { createOrder, editOrder, createInventoryPull, quoteOrder, type QuoteItem
 import { useServerQuote } from "@/lib/use-server-quote";
 
 interface PrepurchaseInfo {
+  pricingCode?: string | null;
   balanceCents: number;
   prices: Record<string, number>; // product_code → sale per-cm² cents
 }
@@ -200,10 +201,16 @@ export function OrderForm({
             <label className="flex items-center gap-2 text-sm font-medium text-emerald-800">
               <input type="checkbox" checked={drawMode} onChange={(e) => setDrawMode(e.target.checked)} />
               Pull from pre-purchased inventory
+              {pp!.pricingCode && (
+                <span className="rounded border border-emerald-300 bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold tracking-wide text-emerald-700">
+                  {pp!.pricingCode}
+                </span>
+              )}
             </label>
             <p className="mt-1 text-xs text-emerald-700">
-              {formatCents(pp!.balanceCents)} credit remaining. Draws inventory at the deal price —
-              not billed, no commission.
+              {formatCents(pp!.balanceCents)} credit remaining. Draws at the
+              {pp!.pricingCode ? ` ${pp!.pricingCode} ` : " agreed deal "}
+              price — firm, not discountable, not billed, no commission.
             </p>
           </div>
         )}
