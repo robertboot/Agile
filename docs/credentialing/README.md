@@ -9,6 +9,7 @@ Read in this order.
 | `02-location-model.md` | §2 — organization / location / provider / engagement, NPI resolution, enrollment grain, billing decoupling | resolved |
 | `03-batch-submission.md` | §3 — batch submission and shared effective dates | resolved |
 | `04-enrollment-lifecycle.md` | §4 — enrollment states, follow-up queue, recredentialing, contract negotiation | resolved |
+| `05-submission-routes.md` | Where each payer's application actually goes, and what must be in hand first | desk research, 30 Sep 2026 — confirm on first use |
 | `OPEN-QUESTIONS.md` | Everything still open — Q1–Q15, with evidence and audience | **start here to unblock work** |
 
 Sections 5–7 of `DESIGN-CORRECTIONS.md` are settled context and need no resolution document.
