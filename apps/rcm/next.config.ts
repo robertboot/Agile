@@ -32,15 +32,33 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
-  // Credentialing screens carry NPIs, EINs and payer decisions. Nothing here
-  // should ever appear in a search index or an archive.
+];
+
+// Credentialing screens carry NPIs, EINs and payer decisions, and must never
+// reach a search index or an archive.
+//
+// Scoped to the signed-in routes rather than applied globally. It used to cover
+// everything, which was right when the app was only a console — but this header
+// overrides the per-page robots metadata, so once the public marketing site
+// landed it was silently un-indexable. A marketing site nobody can find is the
+// whole point of the site, lost to a header.
+//
+// Kept as a header rather than relying on the pages' own metadata alone,
+// because a header does not depend on a crawler parsing the HTML, and these are
+// the routes where being missed matters.
+const noIndexHeader = [
   { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
 ];
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      { source: "/console/:path*", headers: noIndexHeader },
+      { source: "/console", headers: noIndexHeader },
+      { source: "/login", headers: noIndexHeader },
+    ];
   },
 };
 
