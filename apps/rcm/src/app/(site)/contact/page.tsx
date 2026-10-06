@@ -36,46 +36,46 @@ export default function ContactPage() {
 
       <section className="mx-auto max-w-5xl px-6 py-16">
         <div className="max-w-3xl">
-          {/* One column until there is a phone number to sit beside the email —
-              a half-width column against an empty half reads as a broken layout. */}
+          {/* One column until there is a phone number to sit beside the email — a
+              half-width column against an empty half reads as a broken layout. */}
           <div className={PHONE ? "grid gap-12 sm:grid-cols-2" : ""}>
-          <div>
-          <h2 className="text-xl">Email</h2>
-          <a
-          href={`mailto:${EMAIL}`}
-          className="mt-3 inline-block text-credence-navy underline underline-offset-4"
-          >
-          {EMAIL}
-          </a>
-          <p className="mt-3 text-sm leading-relaxed text-slate-500">
-          The fastest start is a month of remittances and a list of your providers.
-          Nothing identifying the patients — we only need the denial reasons and
-          the dates.
-          </p>
-        </div>
-
-          {PHONE && (
             <div>
-              <h2 className="text-xl">Phone</h2>
+              <h2 className="text-xl">Email</h2>
               <a
-                href={`tel:${PHONE.replace(/[^\d+]/g, "")}`}
+                href={`mailto:${EMAIL}`}
                 className="mt-3 inline-block text-credence-navy underline underline-offset-4"
               >
-                {PHONE}
+                {EMAIL}
               </a>
+              <p className="mt-3 text-sm leading-relaxed text-slate-500">
+                The fastest start is a month of remittances and a list of your
+                providers. Nothing identifying the patients — we only need the denial
+                reasons and the dates.
+              </p>
             </div>
-          )}
-        </div>
 
-        <div className="mt-14 rounded-lg border border-credence-line bg-credence-paper p-7">
-          <h2 className="text-lg">Before you send patient information</h2>
-          <p className="mt-3 text-sm leading-relaxed text-slate-600">
-            We will have a business associate agreement in place before we handle
-            anything identifying a patient. Until that is signed, send de-identified
-            material only — denial reason codes, dates and dollar amounts are enough
-            for us to tell you whether there is work worth doing.
-          </p>
-        </div>
+            {PHONE && (
+              <div>
+                <h2 className="text-xl">Phone</h2>
+                <a
+                  href={`tel:${PHONE.replace(/[^\d+]/g, "")}`}
+                  className="mt-3 inline-block text-credence-navy underline underline-offset-4"
+                >
+                  {PHONE}
+                </a>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-14 rounded-lg border border-credence-line bg-credence-paper p-7">
+            <h2 className="text-lg">Before you send patient information</h2>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              We will have a business associate agreement in place before we handle
+              anything identifying a patient. Until that is signed, send de-identified
+              material only — denial reason codes, dates and dollar amounts are enough
+              for us to tell you whether there is work worth doing.
+            </p>
+          </div>
         </div>
       </section>
     </>

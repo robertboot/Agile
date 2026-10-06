@@ -93,33 +93,37 @@ export default function AppealsPage() {
       {/* What we do */}
       <section className="border-y border-credence-line bg-credence-paper">
         <div className="mx-auto max-w-5xl px-6 py-16">
-        <div className="max-w-3xl">
-          <h2 className="text-2xl">What we actually do</h2>
-          <div className="mt-8 space-y-7 text-slate-600">
-          <p className="leading-relaxed">
-          <strong className="text-credence-navy">Read the remittances.</strong> Every
-          denial gets classified by reason, and sorted into appealable, fixable by
-          resubmission, and genuinely dead. Most practices appeal the loud ones and
-          never see the rest.
-          </p>
-          <p className="leading-relaxed">
-          <strong className="text-credence-navy">Build the argument from the
-          record.</strong> The coverage rule, the documentation that satisfies it,
-          and the specific point where the payer was wrong. Where the record does
-          not support an appeal, we say so rather than filing anyway.
-          </p>
-          <p className="leading-relaxed">
-          <strong className="text-credence-navy">File, and escalate.</strong> A
-          Level 1 refusal is not the end. Level 2 is a different reviewer, and
-          Level 3 is a judge.
-          </p>
-          <p className="leading-relaxed">
-          <strong className="text-credence-navy">Tell you what it taught us.</strong>{" "}
-          Denials repeat. If the same reason keeps appearing, the fix is upstream in
-          documentation, not downstream in appeals — and that is worth more than
-          the recovery.
-          </p>
-        </div>
+          <div className="max-w-3xl">
+            <h2 className="text-2xl">What we actually do</h2>
+            <div className="mt-8 space-y-7 text-slate-600">
+              <p className="leading-relaxed">
+                <strong className="text-credence-navy">Read the remittances.</strong>{" "}
+                Every denial gets classified by reason, and sorted into appealable,
+                fixable by resubmission, and genuinely dead. Most practices appeal the
+                loud ones and never see the rest.
+              </p>
+              <p className="leading-relaxed">
+                <strong className="text-credence-navy">
+                  Build the argument from the record.
+                </strong>{" "}
+                The coverage rule, the documentation that satisfies it, and the
+                specific point where the payer was wrong. Where the record does not
+                support an appeal, we say so rather than filing anyway.
+              </p>
+              <p className="leading-relaxed">
+                <strong className="text-credence-navy">File, and escalate.</strong> A
+                Level 1 refusal is not the end. Level 2 is a different reviewer, and
+                Level 3 is a judge.
+              </p>
+              <p className="leading-relaxed">
+                <strong className="text-credence-navy">
+                  Tell you what it taught us.
+                </strong>{" "}
+                Denials repeat. If the same reason keeps appearing, the fix is upstream
+                in documentation, not downstream in appeals — and that is worth more
+                than the recovery.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -128,19 +132,19 @@ export default function AppealsPage() {
         <div className="max-w-3xl">
           <h2 className="text-2xl">Honest about the limits</h2>
           <p className="mt-5 leading-relaxed text-slate-600">
-          We cannot win an appeal the documentation does not support, and we will not
-          write one that says otherwise. What we can do is make sure every claim that
-          should be appealed is appealed, inside the window, with the evidence that
-          actually exists attached to it.
+            We cannot win an appeal the documentation does not support, and we will
+            not write one that says otherwise. What we can do is make sure every claim
+            that should be appealed is appealed, inside the window, with the evidence
+            that actually exists attached to it.
           </p>
           <Link
-          href="/contact"
-          className="btn-credence mt-9 inline-block rounded-md px-6 py-3 text-sm font-semibold"
+            href="/contact"
+            className="btn-credence mt-9 inline-block rounded-md px-6 py-3 text-sm font-semibold"
           >
-          Send us a month of denials
+            Send us a month of denials
           </Link>
-          </div>
-          </section>
-          </>
-          );
-          }
+        </div>
+      </section>
+    </>
+  );
+}
