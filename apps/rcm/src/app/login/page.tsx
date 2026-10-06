@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "./actions";
@@ -26,6 +27,14 @@ function LoginForm() {
           id="password" name="password" type="password" autoComplete="current-password" required
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 outline-none focus:border-credence-navy"
         />
+      </div>
+      <div className="text-right">
+        <Link
+          href="/forgot-password"
+          className="text-xs text-credence-navy-soft hover:underline"
+        >
+          Forgotten your password?
+        </Link>
       </div>
       <label className="flex items-center gap-2 text-sm text-slate-600">
         <input type="checkbox" name="remember" defaultChecked className="accent-credence-navy" />
