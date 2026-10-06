@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   },
   description: "Credentialing and denial appeals for specialty practices.",
   robots: { index: false, follow: false },
+  icons: { icon: "/credence-mark.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

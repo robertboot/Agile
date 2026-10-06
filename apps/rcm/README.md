@@ -8,6 +8,17 @@ Credentialing and denial appeals. Deployed at **rcm.agilemedgroup.com**.
 > portal. Both are scoped — see the database-split notes before adding anything that deepens
 > the coupling.
 
+## Brand
+
+| | |
+|---|---|
+| Navy | `#022347` — sampled from the artwork, defined once in `globals.css` |
+| `public/credence-logo.png` | Full lockup, transparent. Used on the login screen |
+| `public/credence-mark.png` | CHP monogram, 512×512. Console header and favicon |
+
+Both were extracted from a raster original. **If vector artwork turns up, replace them** —
+the monogram in particular will show its edges on a high-density screen at large sizes.
+
 A separate site from the wound-care portal (`apps/web`), on purpose: separate people,
 separate login, separate data. The design reasoning is in
 [`docs/credentialing/README.md`](../../docs/credentialing/README.md).

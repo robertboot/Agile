@@ -10,8 +10,12 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
     <div className="min-h-screen">
       <header className="bg-credence-navy">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
-          <Link href="/console" className="wordmark shrink-0 text-xl text-white">
-            CREDENCE
+          <Link href="/console" className="flex shrink-0 items-center gap-2.5">
+            {/* The monogram, not the full lockup — a 56px bar cannot hold three
+                stacked lines legibly, and the wordmark beside it says the name. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/credence-mark.png" alt="" width={26} height={26} className="brightness-0 invert" />
+            <span className="wordmark text-xl text-white">CREDENCE</span>
           </Link>
           <ConsoleNav canManageStaff={user.canManageStaff} />
           <div className="ml-auto flex items-center gap-3">

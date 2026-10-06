@@ -52,17 +52,16 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-6">
       <div className="w-full max-w-sm rounded-xl border border-credence-line bg-white p-8 shadow-sm">
-        {/* The logo lockup, set in type. Swap the wordmark for the artwork
-            once the brand files are in public/ — the three layers (name,
-            descriptor, tagline) stay as they are. */}
-        <div className="mb-6 text-center">
-          <p className="wordmark text-3xl leading-none text-credence-navy">CREDENCE</p>
-          <p className="wordmark mt-1 text-[0.7rem] uppercase tracking-[0.25em] text-credence-navy">
-            Health Partners
-          </p>
-          <p className="mt-3 border-t border-credence-line pt-3 text-xs tracking-wide text-credence-navy-soft">
-            Credentialing &amp; Appeals
-          </p>
+        {/* The logo carries the name, the descriptor and the rule beneath it,
+            so the page adds none of them. */}
+        <div className="mb-6 flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/credence-logo.png"
+            alt="Credence Health Partners — Credentialing &amp; Appeals"
+            width={248}
+            height={131}
+          />
         </div>
         <Suspense>
           <LoginForm />

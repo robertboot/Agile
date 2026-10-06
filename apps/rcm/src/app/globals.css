@@ -1,16 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  /* Credence Health Partners. The navy is the logo's; everything else is built
-     around it. Deliberately nothing like the wound-care portal's brochure blue
-     — these are different companies now, with different data and different
+  /* Credence Health Partners. The navy is sampled from the logo artwork
+     (public/credence-logo.png) — #022347, a near-black blue. Everything else is
+     built around it. Deliberately nothing like the wound-care portal's brochure
+     blue: these are different companies, with different data and different
      people in them, and a glance at the screen should say which one you are in.
 
-     TODO: --color-credence-navy is sampled from the logo artwork by eye.
-     Replace with the exact brand hex when the brand files land. */
-  --color-credence-navy: #1b3a5c;       /* the logo navy — headers, headings */
-  --color-credence-navy-deep: #132b45;  /* hover and pressed states */
-  --color-credence-navy-soft: #35587a;  /* secondary text on light surfaces */
+     The navy is dark enough to carry white text at any weight, so it does the
+     work of both a brand colour and a surface. */
+  --color-credence-navy: #022347;       /* the logo navy — headers, headings */
+  --color-credence-navy-deep: #01172f;  /* hover and pressed states */
+  --color-credence-navy-soft: #3c577a;  /* secondary text on light surfaces */
   --color-credence-line: #d7dee4;       /* hairlines and table rules */
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
