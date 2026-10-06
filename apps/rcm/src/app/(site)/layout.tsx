@@ -39,6 +39,12 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
               </Link>
             ))}
             <Link
+              href="/console"
+              className="text-slate-500 transition-colors hover:text-credence-navy"
+            >
+              Sign in
+            </Link>
+            <Link
               href="/contact"
               className="btn-credence rounded-md px-4 py-2 text-sm font-semibold"
             >
