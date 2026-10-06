@@ -1,11 +1,10 @@
 # Credence Health Partners
 
-Credentialing and denial appeals. Deployed at **rcm.agilemedgroup.com**.
+Credentialing and denial appeals. Deployed at **credencehp.com**.
 
-> **Credence is becoming a separate company from Agile Medical Group**, and this app is the
-> first thing to carry the name. Two pieces of that separation are not done yet: the domain
-> still sits under `agilemedgroup.com`, and the database is still shared with the wound-care
-> portal. Both are scoped — see the database-split notes before adding anything that deepens
+> **Credence is becoming a separate company from Agile Medical Group**, and this app carries
+> the name. The domain is its own now; the database is not — it is still shared with the
+> wound-care portal. That split is scoped, so check it before adding anything that deepens
 > the coupling.
 
 ## Brand
@@ -103,6 +102,10 @@ The portal runs on 3100, so both can run at once.
 
 This is a second Vercel project pointing at the same repository, with
 **Root Directory = `apps/rcm`**. It needs its own environment variables (the three above)
-and a `rcm.agilemedgroup.com` domain with the CNAME Vercel gives you.
+and the `credencehp.com` domain.
+
+`rcm.agilemedgroup.com` was the original address and should stay pointed here as a redirect
+rather than being removed — anything already bookmarked under it keeps working, and a dead
+host is a worse first impression than an old one.
 
 Nothing here changes how `apps/web` deploys.

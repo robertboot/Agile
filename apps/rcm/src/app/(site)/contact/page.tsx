@@ -4,8 +4,7 @@ export const metadata = {
 };
 
 /**
- * TODO (Robert): replace the two placeholders below with the real address and
- * number once Credence has them.
+ * TODO (Robert): add the phone number when there is one.
  *
  * This is deliberately not a form. A contact form needs somewhere to send the
  * message, and email is not wired up yet — a form that silently drops enquiries
@@ -14,7 +13,7 @@ export const metadata = {
  * enquiry to the database as well as sending it, so nothing depends on one
  * inbox being read.
  */
-const EMAIL = "hello@credencehealthpartners.com";
+const EMAIL = "support@credencehp.com";
 // Typed as string rather than inferred from "" — an empty literal narrows to
 // `never` inside the guard below, and this is meant to be filled in.
 const PHONE: string = "";
@@ -37,21 +36,23 @@ export default function ContactPage() {
 
       <section className="mx-auto max-w-5xl px-6 py-16">
         <div className="max-w-3xl">
-        <div className="grid gap-12 sm:grid-cols-2">
+          {/* One column until there is a phone number to sit beside the email —
+              a half-width column against an empty half reads as a broken layout. */}
+          <div className={PHONE ? "grid gap-12 sm:grid-cols-2" : ""}>
           <div>
-            <h2 className="text-xl">Email</h2>
-            <a
-              href={`mailto:${EMAIL}`}
-              className="mt-3 inline-block text-credence-navy underline underline-offset-4"
-            >
-              {EMAIL}
-            </a>
-            <p className="mt-3 text-sm leading-relaxed text-slate-500">
-              The fastest start is a month of remittances and a list of your providers.
-              Nothing identifying the patients — we only need the denial reasons and
-              the dates.
-            </p>
-          </div>
+          <h2 className="text-xl">Email</h2>
+          <a
+          href={`mailto:${EMAIL}`}
+          className="mt-3 inline-block text-credence-navy underline underline-offset-4"
+          >
+          {EMAIL}
+          </a>
+          <p className="mt-3 text-sm leading-relaxed text-slate-500">
+          The fastest start is a month of remittances and a list of your providers.
+          Nothing identifying the patients — we only need the denial reasons and
+          the dates.
+          </p>
+        </div>
 
           {PHONE && (
             <div>

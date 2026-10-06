@@ -47,39 +47,39 @@ export default function CredentialingPage() {
 
       <section className="mx-auto max-w-5xl px-6 py-16">
         <div className="max-w-3xl">
-        <div className="space-y-10">
+          <div className="space-y-10">
           {WHAT.map((item) => (
-            <div key={item.title} className="border-l-2 border-credence-line pl-6">
-              <h2 className="text-xl">{item.title}</h2>
-              <p className="mt-3 leading-relaxed text-slate-600">{item.body}</p>
-            </div>
+          <div key={item.title} className="border-l-2 border-credence-line pl-6">
+          <h2 className="text-xl">{item.title}</h2>
+          <p className="mt-3 leading-relaxed text-slate-600">{item.body}</p>
+          </div>
           ))}
-        </div>
-        </div>
-      </section>
+          </div>
+          </div>
+          </section>
 
-      <section className="border-t border-credence-line bg-credence-paper">
-        <div className="mx-auto max-w-5xl px-6 py-16">
-        <div className="max-w-3xl">
-          <h2 className="text-2xl">What you get, that you probably don&apos;t have now</h2>
-          <p className="mt-5 leading-relaxed text-slate-600">
+          <section className="border-t border-credence-line bg-credence-paper">
+          <div className="mx-auto max-w-5xl px-6 py-16">
+          <div className="max-w-3xl">
+            <h2 className="text-2xl">What you get, that you probably don&apos;t have now</h2>
+            <p className="mt-5 leading-relaxed text-slate-600">
             One page showing every provider, every payer, and the state of each
             application — submitted, waiting, approved, panel closed, or never started.
             With the date each one is due a response and who to chase.
-          </p>
-          <p className="mt-4 leading-relaxed text-slate-600">
+            </p>
+            <p className="mt-4 leading-relaxed text-slate-600">
             Every submission is logged with how it was sent, so when a payer says they
             never received it there is an answer rather than an argument.
-          </p>
-          <Link
+            </p>
+            <Link
             href="/contact"
             className="btn-credence mt-9 inline-block rounded-md px-6 py-3 text-sm font-semibold"
-          >
+            >
             Talk to us
-          </Link>
+            </Link>
           </div>
-        </div>
-      </section>
-    </>
-  );
-}
+          </div>
+          </section>
+          </>
+          );
+          }

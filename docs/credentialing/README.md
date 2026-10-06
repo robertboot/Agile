@@ -36,7 +36,7 @@ migration blocker.
 | Tests | `supabase/tests/credentialing_schema_test.sql` — 89 constraint assertions |
 | Seed data | 18 payer groups, 39 products (`20260914000006`). Idempotent |
 | Access | `credentialing.staff` (`20260917000001`). Staff or portal admin; nobody else |
-| App | `apps/rcm` — its own site at `rcm.agilemedgroup.com`, its own login. See `apps/rcm/README.md` |
+| App | `apps/rcm` — public site and console at `credencehp.com`, its own login. See `apps/rcm/README.md` |
 
 ### Why the app is separate
 
