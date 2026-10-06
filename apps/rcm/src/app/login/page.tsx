@@ -17,7 +17,7 @@ function LoginForm() {
         <input
           id="email" name="email" type="email" autoComplete="email" required
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 placeholder-slate-400 outline-none focus:border-credence-navy"
-          placeholder="you@agilemedgroup.com"
+          placeholder="you@yourpractice.com"
         />
       </div>
       <div>

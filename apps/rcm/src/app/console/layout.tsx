@@ -3,6 +3,9 @@ import { requireStaff } from "@/lib/auth";
 import { signOut } from "@/app/login/actions";
 import { ConsoleNav } from "./ConsoleNav";
 
+// The public site is indexable; everything behind the sign-in is not.
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const user = await requireStaff();
 

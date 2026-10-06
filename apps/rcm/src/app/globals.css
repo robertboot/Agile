@@ -14,15 +14,25 @@
   --color-credence-navy-soft: #3c577a;  /* secondary text on light surfaces */
   --color-credence-line: #d7dee4;       /* hairlines and table rules */
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+  /* Warm off-white. The console's slate reads as software; the public site
+     should not. */
+  --color-credence-paper: #f7f5f1;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Source Serif matches the logo's transitional serif closely enough that the
+     headings and the wordmark read as one family. */
+  --font-serif: "Source Serif 4", ui-serif, Georgia, "Times New Roman", serif;
   --font-mono: ui-mono, ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer base {
   body {
     font-family: var(--font-sans);
-    @apply bg-slate-100 text-slate-800 antialiased;
+    @apply bg-white text-slate-700 antialiased;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    @apply text-credence-navy;
   }
 }
 
@@ -40,4 +50,16 @@
 @utility label-mono {
   font-family: var(--font-mono);
   @apply text-[11px] uppercase tracking-widest;
+}
+
+/* Display heading. Tight leading because these run to two or three lines and
+   the serif's own spacing is generous. */
+@utility display {
+  font-family: var(--font-serif);
+  @apply leading-[1.08] tracking-[-0.01em] text-credence-navy;
+}
+
+/* The small caps rule used under the logo, reused as a section marker. */
+@utility eyebrow {
+  @apply text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-credence-navy-soft;
 }

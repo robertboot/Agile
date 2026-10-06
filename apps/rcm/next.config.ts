@@ -3,10 +3,8 @@ import type { NextConfig } from "next";
 // Content-Security-Policy: self plus the Supabase API. 'unsafe-inline' and
 // 'unsafe-eval' are required by Next.js hydration and dev mode.
 //
-// Deliberately narrower than the portal's: no Google Fonts origins, because
-// this app has no webfont. A console people keep open all day should not block
-// first paint on a third-party request, and it means one less origin to trust
-// on a site that displays provider identifiers.
+// Google Fonts is allowed because the public site sets its headings in Source
+// Serif, which has to match the logo. The console pages do not load it.
 const supabaseOrigin = (() => {
   try {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin;
@@ -18,8 +16,8 @@ const supabaseOrigin = (() => {
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "font-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
   `connect-src 'self' ${supabaseOrigin} https://*.supabase.co wss://*.supabase.co`,
   "frame-ancestors 'none'",
