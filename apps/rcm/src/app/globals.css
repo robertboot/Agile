@@ -1,19 +1,21 @@
 @import "tailwindcss";
 
 @theme {
-  /* Same company, different product. The palette is deliberately cooler and
-     darker than the wound-care portal's brochure blue so that a glance at the
-     screen tells you which system you are in — these are different datasets
-     with different people in them, and mistaking one for the other is the
-     failure mode worth designing against. */
-  --color-rcm-ink: #0f2233;      /* headers, primary surfaces */
-  --color-rcm-ink-soft: #1b3a52;   /* nav, secondary surfaces */
-  --color-rcm-accent: #2f7d72;   /* primary action — teal, not brand blue */
-  --color-rcm-accent-dark: #25635b;
-  --color-rcm-line: #d7dee4;
+  /* Credence Health Partners. The navy is the logo's; everything else is built
+     around it. Deliberately nothing like the wound-care portal's brochure blue
+     — these are different companies now, with different data and different
+     people in them, and a glance at the screen should say which one you are in.
+
+     TODO: --color-credence-navy is sampled from the logo artwork by eye.
+     Replace with the exact brand hex when the brand files land. */
+  --color-credence-navy: #1b3a5c;       /* the logo navy — headers, headings */
+  --color-credence-navy-deep: #132b45;  /* hover and pressed states */
+  --color-credence-navy-soft: #35587a;  /* secondary text on light surfaces */
+  --color-credence-line: #d7dee4;       /* hairlines and table rules */
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: ui-mono, ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer base {
@@ -23,8 +25,15 @@
   }
 }
 
-@utility btn-rcm {
-  @apply bg-rcm-accent text-white hover:bg-rcm-accent-dark transition-colors;
+@utility btn-credence {
+  @apply bg-credence-navy text-white hover:bg-credence-navy-deep transition-colors;
+}
+
+/* The wordmark, set in a serif to echo the logo. Used where the logo artwork
+   itself is not available as a file. */
+@utility wordmark {
+  font-family: var(--font-serif);
+  @apply tracking-wide;
 }
 
 @utility label-mono {

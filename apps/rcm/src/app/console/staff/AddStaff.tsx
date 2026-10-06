@@ -5,7 +5,7 @@ import type { CredFormState } from "../state";
 import { addStaff } from "./actions";
 
 const INPUT =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rcm-accent focus:outline-none";
+  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-credence-navy focus:outline-none";
 const LABEL = "block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 export function AddStaff() {
@@ -45,7 +45,7 @@ export function AddStaff() {
       <button
         type="submit"
         disabled={pending}
-        className="btn-rcm h-[38px] rounded-lg px-4 text-sm font-semibold disabled:opacity-60"
+        className="btn-credence h-[38px] rounded-lg px-4 text-sm font-semibold disabled:opacity-60"
       >
         {pending ? "Adding…" : "Add"}
       </button>
@@ -56,8 +56,7 @@ export function AddStaff() {
       )}
       {state?.ok && (
         <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800 sm:col-span-3">
-          Added. They can sign in at this address with their existing Agile
-          password.
+          Added. They can sign in at this address with their existing password.
         </p>
       )}
     </form>

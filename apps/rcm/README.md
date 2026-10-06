@@ -1,6 +1,12 @@
-# Agile RCM
+# Credence Health Partners
 
-Provider credentialing and payer enrollment. Deployed at **rcm.agilemedgroup.com**.
+Credentialing and denial appeals. Deployed at **rcm.agilemedgroup.com**.
+
+> **Credence is becoming a separate company from Agile Medical Group**, and this app is the
+> first thing to carry the name. Two pieces of that separation are not done yet: the domain
+> still sits under `agilemedgroup.com`, and the database is still shared with the wound-care
+> portal. Both are scoped — see the database-split notes before adding anything that deepens
+> the coupling.
 
 A separate site from the wound-care portal (`apps/web`), on purpose: separate people,
 separate login, separate data. The design reasoning is in

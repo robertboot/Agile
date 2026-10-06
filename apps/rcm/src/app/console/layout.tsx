@@ -8,10 +8,10 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen">
-      <header className="bg-rcm-ink">
+      <header className="bg-credence-navy">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
-          <Link href="/console" className="shrink-0 text-lg font-semibold tracking-tight text-white">
-            Agile <span className="text-rcm-accent">RCM</span>
+          <Link href="/console" className="wordmark shrink-0 text-xl text-white">
+            CREDENCE
           </Link>
           <ConsoleNav canManageStaff={user.canManageStaff} />
           <div className="ml-auto flex items-center gap-3">

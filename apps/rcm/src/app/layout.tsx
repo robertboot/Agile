@@ -3,10 +3,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Agile RCM",
-    template: "%s · Agile RCM",
+    default: "Credence Health Partners",
+    template: "%s · Credence",
   },
-  description: "Provider credentialing and payer enrollment.",
+  description: "Credentialing and denial appeals for specialty practices.",
   robots: { index: false, follow: false },
 };
 

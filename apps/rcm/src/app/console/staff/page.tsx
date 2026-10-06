@@ -53,28 +53,28 @@ export default async function StaffPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-rcm-ink">Team</h1>
+        <h1 className="text-2xl font-semibold text-credence-navy">Team</h1>
         <p className="mt-1 max-w-2xl text-sm text-slate-600">
-          Who can use Agile RCM. This is separate from the wound-care portal:
+          Who can use Credence. This is separate from the wound-care portal:
           being a rep there grants nothing here, and being on this list grants
           nothing there.
         </p>
       </div>
 
-      <section className="rounded-lg border border-rcm-line bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-rcm-ink">Add someone</h2>
+      <section className="rounded-lg border border-credence-line bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-credence-navy">Add someone</h2>
         <p className="mb-3 mt-1 text-sm text-slate-600">
-          They need an Agile account already — this grants access, it does not
-          create a login.
+          They need an account already — this grants access, it does not create a
+          login.
         </p>
         <AddStaff />
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold text-rcm-ink">
+        <h2 className="text-lg font-semibold text-credence-navy">
           On the list ({rows.length})
         </h2>
-        <div className="mt-3 overflow-x-auto rounded-lg border border-rcm-line bg-white shadow-sm">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-credence-line bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -102,7 +102,7 @@ export default async function StaffPage() {
                 const lockedIn = isMe && !me.isAdmin;
                 return (
                   <tr key={r.profile_id}>
-                    <td className="px-4 py-2.5 font-medium text-rcm-ink">
+                    <td className="px-4 py-2.5 font-medium text-credence-navy">
                       {r.profile?.display_name ?? "—"}
                       {isMe && <span className="ml-2 text-xs text-slate-400">you</span>}
                     </td>
@@ -121,7 +121,7 @@ export default async function StaffPage() {
                           <option value="manager">Manager</option>
                           <option value="owner">Owner</option>
                         </select>
-                        <button className="text-xs text-rcm-accent hover:underline">
+                        <button className="text-xs text-credence-navy-soft hover:underline">
                           Save
                         </button>
                       </form>
