@@ -9,6 +9,7 @@ Read in this order.
 | `02-location-model.md` | §2 — organization / location / provider / engagement, NPI resolution, enrollment grain, billing decoupling | resolved |
 | `03-batch-submission.md` | §3 — batch submission and shared effective dates | resolved |
 | `04-enrollment-lifecycle.md` | §4 — enrollment states, follow-up queue, recredentialing, contract negotiation | resolved |
+| `05-submission-routes.md` | Where each payer's application actually goes, and what must be in hand first | desk research, 30 Sep 2026 — confirm on first use |
 | `OPEN-QUESTIONS.md` | Everything still open — Q1–Q15, with evidence and audience | **start here to unblock work** |
 
 Sections 5–7 of `DESIGN-CORRECTIONS.md` are settled context and need no resolution document.
@@ -35,7 +36,7 @@ migration blocker.
 | Tests | `supabase/tests/credentialing_schema_test.sql` — 89 constraint assertions |
 | Seed data | 18 payer groups, 39 products (`20260914000006`). Idempotent |
 | Access | `credentialing.staff` (`20260917000001`). Staff or portal admin; nobody else |
-| App | `apps/rcm` — its own site at `rcm.agilemedgroup.com`, its own login. See `apps/rcm/README.md` |
+| App | `apps/rcm` — public site and console at `credencehp.com`, its own login. See `apps/rcm/README.md` |
 
 ### Why the app is separate
 

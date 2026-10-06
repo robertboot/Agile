@@ -1,33 +1,65 @@
 @import "tailwindcss";
 
 @theme {
-  /* Same company, different product. The palette is deliberately cooler and
-     darker than the wound-care portal's brochure blue so that a glance at the
-     screen tells you which system you are in — these are different datasets
-     with different people in them, and mistaking one for the other is the
-     failure mode worth designing against. */
-  --color-rcm-ink: #0f2233;      /* headers, primary surfaces */
-  --color-rcm-ink-soft: #1b3a52;   /* nav, secondary surfaces */
-  --color-rcm-accent: #2f7d72;   /* primary action — teal, not brand blue */
-  --color-rcm-accent-dark: #25635b;
-  --color-rcm-line: #d7dee4;
+  /* Credence Health Partners. The navy is sampled from the logo artwork
+     (public/credence-logo.png) — #022347, a near-black blue. Everything else is
+     built around it. Deliberately nothing like the wound-care portal's brochure
+     blue: these are different companies, with different data and different
+     people in them, and a glance at the screen should say which one you are in.
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+     The navy is dark enough to carry white text at any weight, so it does the
+     work of both a brand colour and a surface. */
+  --color-credence-navy: #022347;       /* the logo navy — headers, headings */
+  --color-credence-navy-deep: #01172f;  /* hover and pressed states */
+  --color-credence-navy-soft: #3c577a;  /* secondary text on light surfaces */
+  --color-credence-line: #d7dee4;       /* hairlines and table rules */
+
+  /* Warm off-white. The console's slate reads as software; the public site
+     should not. */
+  --color-credence-paper: #f7f5f1;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Source Serif matches the logo's transitional serif closely enough that the
+     headings and the wordmark read as one family. */
+  --font-serif: "Source Serif 4", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: ui-mono, ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer base {
   body {
     font-family: var(--font-sans);
-    @apply bg-slate-100 text-slate-800 antialiased;
+    @apply bg-white text-slate-700 antialiased;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    @apply text-credence-navy;
   }
 }
 
-@utility btn-rcm {
-  @apply bg-rcm-accent text-white hover:bg-rcm-accent-dark transition-colors;
+@utility btn-credence {
+  @apply bg-credence-navy text-white hover:bg-credence-navy-deep transition-colors;
+}
+
+/* The wordmark, set in a serif to echo the logo. Used where the logo artwork
+   itself is not available as a file. */
+@utility wordmark {
+  font-family: var(--font-serif);
+  @apply tracking-wide;
 }
 
 @utility label-mono {
   font-family: var(--font-mono);
   @apply text-[11px] uppercase tracking-widest;
+}
+
+/* Display heading. Tight leading because these run to two or three lines and
+   the serif's own spacing is generous. */
+@utility display {
+  font-family: var(--font-serif);
+  @apply leading-[1.08] tracking-[-0.01em] text-credence-navy;
+}
+
+/* The small caps rule used under the logo, reused as a section marker. */
+@utility eyebrow {
+  @apply text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-credence-navy-soft;
 }

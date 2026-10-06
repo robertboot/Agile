@@ -1,6 +1,6 @@
 "use server";
 
-// Who may use Agile RCM.
+// Who may use Credence.
 //
 // Access is a credentialing-owned list (credentialing.staff, migration
 // 20260917000001), not a value on the portal's user_role. A wound-care rep has
@@ -47,7 +47,7 @@ export async function addStaff(
   if (!profile) {
     return reject(
       formData,
-      `No Agile account for ${email}. They need an account before they can be given credentialing access.`,
+      `No account for ${email}. They need one before they can be given credentialing access.`,
     );
   }
   if (profile.status !== "active") {

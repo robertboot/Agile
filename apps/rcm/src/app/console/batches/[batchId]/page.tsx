@@ -42,12 +42,12 @@ export default async function BatchPage({
     <div className="max-w-4xl">
       <Link
         href="/console"
-        className="text-sm text-rcm-accent hover:underline"
+        className="text-sm text-credence-navy-soft hover:underline"
       >
         ← Work queue
       </Link>
 
-      <h1 className="mt-2 text-2xl font-semibold text-rcm-ink">
+      <h1 className="mt-2 text-2xl font-semibold text-credence-navy">
         {payer} submission
       </h1>
       <p className="mt-1 text-sm text-slate-600">
@@ -80,14 +80,14 @@ export default async function BatchPage({
             <dt className="text-xs uppercase tracking-wide text-slate-400">
               {k}
             </dt>
-            <dd className="mt-0.5 font-mono tabular-nums text-rcm-ink">{v}</dd>
+            <dd className="mt-0.5 font-mono tabular-nums text-credence-navy">{v}</dd>
           </div>
         ))}
       </dl>
 
       {decided ? (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold text-rcm-ink">Outcome</h2>
+          <h2 className="text-lg font-semibold text-credence-navy">Outcome</h2>
           <p className="mt-1 text-sm text-slate-600">
             Recorded per product — one decision can carry several outcomes.
           </p>
@@ -104,7 +104,7 @@ export default async function BatchPage({
                       approved ? "bg-emerald-500" : "bg-violet-500"
                     }`}
                   />
-                  <span className="font-medium text-rcm-ink">
+                  <span className="font-medium text-credence-navy">
                     {m.payer_product as string}
                   </span>
                   <span className="text-sm text-slate-500">

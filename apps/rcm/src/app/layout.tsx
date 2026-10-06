@@ -3,16 +3,24 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Agile RCM",
-    template: "%s · Agile RCM",
+    default: "Credence Health Partners",
+    template: "%s · Credence",
   },
-  description: "Provider credentialing and payer enrollment.",
-  robots: { index: false, follow: false },
+  description: "Credentialing and denial appeals for specialty practices.",
+  icons: { icon: "/credence-mark.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

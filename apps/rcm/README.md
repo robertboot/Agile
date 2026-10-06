@@ -1,6 +1,22 @@
-# Agile RCM
+# Credence Health Partners
 
-Provider credentialing and payer enrollment. Deployed at **rcm.agilemedgroup.com**.
+Credentialing and denial appeals. Deployed at **credencehp.com**.
+
+> **Credence is becoming a separate company from Agile Medical Group**, and this app carries
+> the name. The domain is its own now; the database is not — it is still shared with the
+> wound-care portal. That split is scoped, so check it before adding anything that deepens
+> the coupling.
+
+## Brand
+
+| | |
+|---|---|
+| Navy | `#022347` — sampled from the artwork, defined once in `globals.css` |
+| `public/credence-logo.png` | Full lockup, transparent. Used on the login screen |
+| `public/credence-mark.png` | CHP monogram, 512×512. Console header and favicon |
+
+Both were extracted from a raster original. **If vector artwork turns up, replace them** —
+the monogram in particular will show its edges on a high-density screen at large sizes.
 
 A separate site from the wound-care portal (`apps/web`), on purpose: separate people,
 separate login, separate data. The design reasoning is in
@@ -38,7 +54,17 @@ first real row by hand:
 
 ```sql
 insert into credentialing.staff (profile_id, role)
-select id from public.profiles where email = 'you@agilemedgroup.com';
+select id, 'owner' from public.profiles where email = 'you@agilemedgroup.com';
+```
+
+Check it landed. An `insert ... select` that matches no profile reports success and
+inserts nothing, so "no rows affected" is not confirmation:
+
+```sql
+select p.email, s.role
+from credentialing.staff s
+join public.profiles p on p.id = s.profile_id
+where s.deleted_at is null;
 ```
 
 After that, managers add the rest from `/console/staff`.
@@ -76,6 +102,10 @@ The portal runs on 3100, so both can run at once.
 
 This is a second Vercel project pointing at the same repository, with
 **Root Directory = `apps/rcm`**. It needs its own environment variables (the three above)
-and a `rcm.agilemedgroup.com` domain with the CNAME Vercel gives you.
+and the `credencehp.com` domain.
+
+`rcm.agilemedgroup.com` was the original address and should stay pointed here as a redirect
+rather than being removed — anything already bookmarked under it keeps working, and a dead
+host is a worse first impression than an old one.
 
 Nothing here changes how `apps/web` deploys.

@@ -25,7 +25,7 @@ Live at **https://agilemedgroup.com**. This doc is the master handoff — read i
 | Public URL | https://agilemedgroup.com (apex A `76.76.21.21` → Vercel edge) |
 | DNS | **Authoritative nameservers are GoDaddy** (`pdns05/pdns06.domaincontrol.com`) — NOT Vercel. See §3a. |
 | Vercel project | `agile-portal` (team `robertboots-projects`, rootDirectory `apps/web`) |
-| RCM site | https://rcm.agilemedgroup.com — Vercel project `agile-credentialing`, rootDirectory `apps/rcm` |
+| Credence site | https://credencehp.com — Vercel project `agile-credentialing`, rootDirectory `apps/rcm`. Separate company; `rcm.agilemedgroup.com` redirects here |
 | Supabase project | ref `lqrrmlmeagpgwlyijeyd` (Pro plan, org "Agile Medical Group") |
 | QuickBooks (prod) | realm **9341452697656714** — "Agile Medical Group, LLC" |
 | Slack | bot "Stitch" posting to private channel `agile-admins` |

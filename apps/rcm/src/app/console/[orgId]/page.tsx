@@ -122,14 +122,14 @@ export default async function OrganizationPage({
     <div>
       <Link
         href="/console"
-        className="text-sm text-rcm-accent hover:underline"
+        className="text-sm text-credence-navy-soft hover:underline"
       >
         ← Work queue
       </Link>
 
       <header className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-rcm-ink">
+          <h1 className="text-2xl font-semibold text-credence-navy">
             {org.legal_name as string}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
@@ -144,7 +144,7 @@ export default async function OrganizationPage({
       </header>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold text-rcm-ink">Locations</h2>
+        <h2 className="text-lg font-semibold text-credence-navy">Locations</h2>
         <p className="mt-1 text-sm text-slate-600">
           Enrollment attaches here. A location bills under its own Type 2 NPI
           when it has one, otherwise the organization&rsquo;s.
@@ -163,7 +163,7 @@ export default async function OrganizationPage({
               return (
                 <li key={l.id as string} className="px-4 py-3">
                   <div className="flex flex-wrap items-baseline gap-x-3">
-                    <span className="font-medium text-rcm-ink">
+                    <span className="font-medium text-credence-navy">
                       {locationLabel(l)}
                     </span>
                     <span className="text-sm text-slate-500">
@@ -186,7 +186,7 @@ export default async function OrganizationPage({
                             key={e.id as string}
                             className="rounded border border-slate-200 px-2 py-1 text-xs"
                           >
-                            <span className="text-rcm-ink">
+                            <span className="text-credence-navy">
                               {p.first_name as string} {p.last_name as string}
                             </span>{" "}
                             <span className="text-slate-400">
@@ -242,7 +242,7 @@ export default async function OrganizationPage({
       )}
 
       <section className="mt-10">
-        <h2 className="text-lg font-semibold text-rcm-ink">Enrollments</h2>
+        <h2 className="text-lg font-semibold text-credence-navy">Enrollments</h2>
         {(enrollments ?? []).length === 0 ? (
           <p className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
             None yet.
@@ -267,7 +267,7 @@ export default async function OrganizationPage({
                       <span className="block text-xs text-slate-400">
                         {e.payer_group as string}
                       </span>
-                      <span className="font-medium text-rcm-ink">
+                      <span className="font-medium text-credence-navy">
                         {e.payer_product as string}
                       </span>
                     </td>
@@ -282,7 +282,7 @@ export default async function OrganizationPage({
                       {e.submission_batch_id ? (
                         <Link
                           href={`/console/batches/${e.submission_batch_id}`}
-                          className="ml-2 text-xs text-rcm-accent hover:underline"
+                          className="ml-2 text-xs text-credence-navy-soft hover:underline"
                         >
                           batch
                         </Link>
