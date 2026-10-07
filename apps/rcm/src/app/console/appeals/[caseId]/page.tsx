@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AddDeadline, RecordLevel } from "../forms";
+import { StartCheck } from "../../checks/forms";
 import {
   closeCase,
   linkProvider,
@@ -113,9 +114,15 @@ export default async function AppealCasePage({
   const appeal = appealRow as AppealRow | null;
   if (!appeal) notFound();
 
-  const [{ data: org }, { data: levelRows }, { data: deadlineRows }, { data: linkRows }, { data: roster }] =
-    await Promise.all([
-      db.from("organization").select("legal_name").eq("id", caseFile.organization_id).maybeSingle(),
+  const [
+    { data: org },
+    { data: levelRows },
+    { data: deadlineRows },
+    { data: linkRows },
+    { data: roster },
+    { data: checkRows },
+  ] = await Promise.all([
+      db.from("organization").select("id, legal_name").eq("id", caseFile.organization_id).maybeSingle(),
       db
         .from("appeal_level")
         .select("id, level, notice_date, filed_on, filed_via, decision_due_on, decided_on, outcome, outcome_note")
@@ -135,6 +142,11 @@ export default async function AppealCasePage({
         .select("id, first_name, last_name, credentials, individual_npi")
         .is("deleted_at", null)
         .order("last_name"),
+      db
+        .from("v_checklist_run_status")
+        .select("id, subject_reference, service_date, item_count, answered_count, outstanding_count, missing_count, status")
+        .eq("case_file_id", caseId)
+        .order("created_at", { ascending: false }),
     ]);
 
   const levels = (levelRows ?? []) as LevelRow[];
@@ -146,6 +158,17 @@ export default async function AppealCasePage({
     last_name: string;
     credentials: string | null;
     individual_npi: string;
+  }[];
+
+  const checks = (checkRows ?? []) as {
+    id: string;
+    subject_reference: string;
+    service_date: string | null;
+    item_count: number;
+    answered_count: number;
+    outstanding_count: number;
+    missing_count: number;
+    status: string;
   }[];
 
   const linkedIds = new Set(linked.map((l) => l.provider_id));
@@ -391,6 +414,71 @@ export default async function AppealCasePage({
               </li>
             ))}
           </ol>
+        )}
+      </section>
+
+      {/* Evidence — the same checklist, run backwards */}
+      <section>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-credence-navy">Evidence</h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              One run per claim in the sample. The same questions the pre-submission check
+              asks, run the other way: what the record holds, and what has to be found before
+              it closes. Everything has to be in the file before the QIC decides —{" "}
+              <span className="whitespace-nowrap">42 CFR §405.966(a)(2)</span>.
+            </p>
+          </div>
+          {!closed && org && (
+            <StartCheck
+              organizations={[org as { id: string; legal_name: string }]}
+              providers={allProviders}
+              caseFileId={caseId}
+              purpose="appeal_evidence"
+              label="Start an evidence run"
+            />
+          )}
+        </div>
+
+        {checks.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-dashed border-credence-line px-5 py-8 text-sm text-slate-500">
+            No evidence runs yet.
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {checks.map((c) => (
+              <li
+                key={c.id}
+                className="rounded-lg border border-credence-line bg-white px-4 py-3"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <Link
+                    href={`/console/checks/${c.id}`}
+                    className="font-semibold text-credence-navy hover:underline"
+                  >
+                    {c.subject_reference}
+                  </Link>
+                  <span className="text-xs text-slate-500">
+                    {c.answered_count} of {c.item_count} answered
+                  </span>
+                </div>
+                <p className="mt-1 text-sm">
+                  {c.missing_count > 0 ? (
+                    <span className="text-red-700">
+                      {c.missing_count} document{c.missing_count === 1 ? " does" : "s do"} not exist
+                    </span>
+                  ) : c.outstanding_count > 0 ? (
+                    <span className="text-amber-700">{c.outstanding_count} still to check</span>
+                  ) : (
+                    <span className="text-emerald-700">Record complete</span>
+                  )}
+                  {c.service_date && (
+                    <span className="ml-2 text-slate-500">{onDate(c.service_date)}</span>
+                  )}
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

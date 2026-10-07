@@ -496,7 +496,7 @@ select pg_temp.expect_eq('no admin-only policy survives on the credentialing tab
     where schemaname = 'credentialing' and policyname like '%_admin_all'), '0');
 select pg_temp.expect_eq('every credentialing table carries a staff policy',
   (select count(*)::text from pg_policies
-    where schemaname = 'credentialing' and policyname like '%_staff_all'), '16');
+    where schemaname = 'credentialing' and policyname like '%_staff_all'), '20');
 
 -- ---------- 21. cases: service lines, shared providers, the clock ----------
 -- 20261007000001. Two services, one provider roster, one deadline calculator.
@@ -700,6 +700,148 @@ select pg_temp.expect_ok('so the console can record an appeal level',
       'f2000000-0000-4000-8000-000000000001', 3::smallint, date '2026-11-17')$$);
 select pg_temp.expect_ok('and the batch-decision RPC it has always needed',
   $$select credentialing.fn_guard_staff()$$);
+reset role;
+
+-- ---------- 22. the evidence checklist ----------
+-- 20261007000002/3. A run snapshots its questions, blocking items stop a
+-- release, and an override is a thing someone did on the record.
+
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000004';
+
+select pg_temp.expect_eq('the skin substitute template seeded 34 questions',
+  (select count(*)::text from credentialing.checklist_item i
+    join credentialing.checklist_template t on t.id = i.template_id
+    where t.code = 'skin_substitute_presubmission'), '34');
+select pg_temp.expect_eq('every question cites the rule it answers',
+  (select count(*)::text from credentialing.checklist_item i
+    join credentialing.checklist_template t on t.id = i.template_id
+    where t.code = 'skin_substitute_presubmission' and i.authority is null), '0');
+select pg_temp.expect_eq('only one current version of a template code',
+  (select count(*)::text from credentialing.checklist_template
+    where code = 'skin_substitute_presubmission' and retired_at is null), '1');
+
+-- starting a run copies the questions in
+select credentialing.fn_start_checklist_run(
+  'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+  'pre_submission', 'CHART-1042', date '2026-10-01',
+  'c0000000-0000-0000-0000-000000000001', null,
+  '9a000000-0000-4000-8000-000000000004') as run_id \gset
+
+select pg_temp.expect_eq('the run snapshotted every question',
+  (select count(*)::text from credentialing.checklist_response where run_id = :'run_id'), '34');
+select pg_temp.expect_eq('and the question text came with it',
+  (select count(*)::text from credentialing.checklist_response
+    where run_id = :'run_id' and (prompt is null or prompt = '')), '0');
+select pg_temp.expect_fail('an unknown template code',
+  $$select credentialing.fn_start_checklist_run(
+      'a0000000-0000-0000-0000-000000000001', 'no_such_template',
+      'pre_submission', 'CHART-X')$$);
+
+-- the snapshot is a snapshot: revising the template does not rewrite history
+update credentialing.checklist_item set prompt = 'REVISED PROMPT'
+  where code = 'nec_conservative'
+    and template_id = (select id from credentialing.checklist_template
+                        where code = 'skin_substitute_presubmission' and version = 1);
+select pg_temp.expect_eq('a run already started still says what it said',
+  (select count(*)::text from credentialing.checklist_response
+    where run_id = :'run_id' and prompt = 'REVISED PROMPT'), '0');
+
+-- answers are stamped, and "not applicable" is a claim that needs a reason
+select pg_temp.expect_fail('an answer without a timestamp',
+  $$update credentialing.checklist_response set answer = 'have'
+     where run_id = (select id from credentialing.checklist_run
+                      where subject_reference = 'CHART-1042') and position = 10$$);
+select pg_temp.expect_fail('not applicable without saying why',
+  $$update credentialing.checklist_response
+      set answer = 'not_applicable', answered_at = now()
+     where run_id = (select id from credentialing.checklist_run
+                      where subject_reference = 'CHART-1042') and position = 10$$);
+select pg_temp.expect_ok('not applicable, with a reason',
+  $$update credentialing.checklist_response
+      set answer = 'not_applicable', answered_at = now(), note = 'no debridement performed'
+     where run_id = (select id from credentialing.checklist_run
+                      where subject_reference = 'CHART-1042') and position = 80$$);
+
+-- blocking items stop a release
+select pg_temp.expect_eq('23 blocking questions, 22 still outstanding',
+  credentialing.fn_checklist_outstanding(:'run_id')::text, '22');
+select pg_temp.expect_fail('releasing with blocking items outstanding',
+  $$select credentialing.fn_release_checklist_run(
+      (select id from credentialing.checklist_run where subject_reference = 'CHART-1042'))$$);
+select pg_temp.expect_fail('an override with a reason but nobody''s name',
+  $$select credentialing.fn_release_checklist_run(
+      (select id from credentialing.checklist_run where subject_reference = 'CHART-1042'),
+      null, 'in a hurry')$$);
+
+-- partial does not satisfy a blocking item: a consent that exists but is
+-- unsigned IS the denial
+update credentialing.checklist_response
+  set answer = 'partial', answered_at = now(), note = 'consent on file but unsigned'
+  where run_id = :'run_id' and position = 170;
+select pg_temp.expect_eq('partial does not clear a blocking item',
+  credentialing.fn_checklist_outstanding(:'run_id')::text, '22');
+update credentialing.checklist_response
+  set answer = 'have', answered_at = now()
+  where run_id = :'run_id' and position = 170;
+select pg_temp.expect_eq('have does',
+  credentialing.fn_checklist_outstanding(:'run_id')::text, '21');
+
+-- an override is allowed, and is recorded
+select pg_temp.expect_eq('the override reports what it overrode',
+  credentialing.fn_release_checklist_run(:'run_id', current_date,
+    'biller released under protest; chart being corrected',
+    '9a000000-0000-4000-8000-000000000004')::text, '21');
+select pg_temp.expect_eq('and the reason is on the run',
+  (select override_reason from credentialing.checklist_run where id = :'run_id'),
+  'biller released under protest; chart being corrected');
+select pg_temp.expect_eq('with the released date set',
+  (select case when released_on is not null then 'yes' else 'no' end
+     from credentialing.checklist_run where id = :'run_id'), 'yes');
+select pg_temp.expect_fail('a released run without a date',
+  $$update credentialing.checklist_run set released_on = null where subject_reference = 'CHART-1042'$$);
+select pg_temp.expect_fail('an override reason with nobody attached',
+  $$update credentialing.checklist_run set override_by = null where subject_reference = 'CHART-1042'$$);
+
+-- a clean run releases with no override at all
+select credentialing.fn_start_checklist_run(
+  'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+  'pre_submission', 'CHART-2000') as clean_id \gset
+update credentialing.checklist_response
+  set answer = 'have', answered_at = now() where run_id = :'clean_id' and is_blocking;
+select pg_temp.expect_eq('nothing outstanding',
+  credentialing.fn_checklist_outstanding(:'clean_id')::text, '0');
+select pg_temp.expect_eq('so it releases clean',
+  credentialing.fn_release_checklist_run(:'clean_id')::text, '0');
+select pg_temp.expect_eq('and records no override',
+  coalesce((select override_reason from credentialing.checklist_run where id = :'clean_id'), 'NULL'),
+  'NULL');
+
+-- the status view counts what the console shows
+select pg_temp.expect_eq('the view counts blocking questions',
+  (select blocking_count::text from credentialing.v_checklist_run_status where id = :'clean_id'), '23');
+select pg_temp.expect_eq('and the whole question set',
+  (select item_count::text from credentialing.v_checklist_run_status where id = :'clean_id'), '34');
+select pg_temp.expect_eq('and what is still outstanding',
+  (select outstanding_count::text from credentialing.v_checklist_run_status where id = :'run_id'), '21');
+
+-- an evidence run belongs to the appeal case it is building the record for
+select credentialing.fn_start_checklist_run(
+  'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+  'appeal_evidence', 'DOS 2025-01-14', date '2025-01-14', null,
+  'f1000000-0000-4000-8000-000000000001') as evidence_id \gset
+select pg_temp.expect_eq('an evidence run is tied to its case',
+  (select case_file_id::text from credentialing.checklist_run where id = :'evidence_id'),
+  'f1000000-0000-4000-8000-000000000001');
+
+-- and the RPCs are staff-gated like the rest
+set local role authenticated;
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000005';
+select pg_temp.expect_fail('a non-staff user cannot start a run',
+  $$select credentialing.fn_start_checklist_run(
+      'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+      'pre_submission', 'CHART-X')$$);
+select pg_temp.expect_eq('and sees no runs',
+  (select count(*)::text from credentialing.checklist_run), '0');
 reset role;
 
 rollback;

@@ -35,11 +35,12 @@ migration blocker.
 
 | | |
 |---|---|
-| Migrations | `supabase/migrations/2026*_credentialing_*.sql` — 17 tables in a `credentialing` schema |
-| Tests | `supabase/tests/credentialing_schema_test.sql` — 137 constraint assertions |
+| Migrations | `supabase/migrations/2026*_credentialing_*.sql` — 21 tables in a `credentialing` schema |
+| Tests | `supabase/tests/credentialing_schema_test.sql` — 166 constraint assertions |
 | Seed data | 18 payer groups, 39 products (`20260914000006`). Idempotent |
 | Access | `credentialing.staff` (`20260917000001`). Staff or portal admin; nobody else |
 | Cases | `credentialing.case_file` (`20261007000001`) — work split by service line, providers shared |
+| Checklist | `credentialing.checklist_*` (`20261007000002/3`) — 34 pre-submission checks, 23 blocking |
 | App | `apps/rcm` — public site and console at `credencehp.com`, its own login. See `apps/rcm/README.md` |
 
 ### Why the app is separate
@@ -79,8 +80,25 @@ date, the 30-day date that stops recoupment after a demand letter, the 60-day da
 stopped after a Level 1 denial, and when to chase a decision. Every stored deadline carries the
 date it was computed from, because a deadline nobody can check is worse than none.
 
-Tier 2, the per-denial evidence checklist in `07-skin-substitute-documentation.md` §5, is **not
-built**. It is the next piece of value and the one that prevents demand letters rather than
-appealing them.
+### The checklist
+
+Tier 2 is built too, and it is the piece worth the most. `07-skin-substitute-documentation.md` §5
+is seeded as a 34-question template — 23 of them blocking — each carrying the authority it answers,
+so the screen says `21 CFR Part 1271` rather than "required field".
+
+Three properties that matter more than the questions:
+
+- **A run snapshots its questions.** `checklist_response` copies the prompt, the authority and the
+  blocking flag when the run starts. Asked in 2028 what the checklist said in 2025, the answer is
+  in the row. A compliance record that can be edited retrospectively is not a record, so revising
+  the checklist means a new template version, never an update in place.
+- **`partial` does not satisfy a blocking item.** A consent that exists but is unsigned is the
+  denial, not the mitigation.
+- **An override is a thing someone did.** Releasing with blocking items outstanding needs a stated
+  reason and a name, both recorded against the claim. The override list is the list of what to fix
+  first, and the console shows it first.
+
+The same template runs backwards as `appeal_evidence` against an appeals case — the same questions
+asking what the record holds, rather than what it needs before the claim goes out.
 
 Nothing blocks schema work. Remaining questions (Q3–Q15) affect features not yet built.
