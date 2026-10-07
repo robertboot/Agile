@@ -738,6 +738,28 @@ select pg_temp.expect_eq('is_owner pins its search_path',
   (select count(*)::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'credentialing' and p.proname = 'is_owner'
       and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')), '1');
+-- A function is executable by PUBLIC the moment it is created, so a function
+-- that grants without revoking leaves anon holding EXECUTE. is_staff(),
+-- is_manager() and every helper in 20260724000004 revoke first; is_owner() and
+-- fn_appeal_deadlines() now do too.
+--
+-- Six functions from 20260914000002/7/8 never did, and this assertion names
+-- them rather than fixing them: tightening grants on the enrollment RPCs is
+-- not this PR's change and would widen it well past a deadline calculator.
+-- Pinning the list is still worth it — a seventh cannot appear unnoticed, and
+-- the debt is written down where the next person will see it. All six check
+-- auth.uid() internally, so an anonymous caller gets nothing back; the
+-- objection is that the protection lives in the body rather than the grant.
+select pg_temp.expect_eq('no NEW credentialing function is executable by anon',
+  (select coalesce(string_agg(p.proname, ', ' order by p.proname), 'none')
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'credentialing'
+      and has_function_privilege('anon', p.oid, 'execute')
+      and p.proname not in (
+        'effective_organizational_npi', 'enrollment_disposition',
+        'fn_check_superseded_pointer', 'fn_guard_staff',
+        'fn_record_batch_decision', 'fn_supersede_for_location_scope')), 'none');
+
 -- Every rule must be traceable to a regulation, or the number on screen is
 -- just a number.
 select pg_temp.expect_eq('every deadline rule cites its authority',

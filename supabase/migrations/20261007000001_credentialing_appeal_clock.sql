@@ -548,6 +548,12 @@ as $$
           and s.role = 'owner'
     )
 $$;
+-- Revoke before granting, like is_staff() and is_manager() and every helper
+-- predicate in 20260724000004. A function is executable by PUBLIC the moment
+-- it is created, so granting without revoking leaves anon holding EXECUTE on a
+-- SECURITY DEFINER function. It would return false for an anonymous caller,
+-- but relying on that is relying on the body rather than on the grant.
+revoke all on function credentialing.is_owner() from public, anon;
 grant execute on function credentialing.is_owner() to authenticated, service_role;
 
 alter table credentialing.appeal_case enable row level security;
@@ -579,6 +585,7 @@ grant select, insert, update, delete on credentialing.appeal_deadline_rule to au
 grant all on credentialing.appeal_case, credentialing.appeal,
              credentialing.appeal_deadline_rule to service_role;
 grant select on credentialing.appeal_clock to authenticated, service_role;
+revoke all on function credentialing.fn_appeal_deadlines(uuid) from public, anon;
 grant execute on function credentialing.fn_appeal_deadlines(uuid)
     to authenticated, service_role;
 
