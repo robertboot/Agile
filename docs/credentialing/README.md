@@ -35,10 +35,11 @@ migration blocker.
 
 | | |
 |---|---|
-| Migrations | `supabase/migrations/202609*_credentialing_*.sql` — 11 tables in a `credentialing` schema |
-| Tests | `supabase/tests/credentialing_schema_test.sql` — 89 constraint assertions |
+| Migrations | `supabase/migrations/2026*_credentialing_*.sql` — 17 tables in a `credentialing` schema |
+| Tests | `supabase/tests/credentialing_schema_test.sql` — 137 constraint assertions |
 | Seed data | 18 payer groups, 39 products (`20260914000006`). Idempotent |
 | Access | `credentialing.staff` (`20260917000001`). Staff or portal admin; nobody else |
+| Cases | `credentialing.case_file` (`20261007000001`) — work split by service line, providers shared |
 | App | `apps/rcm` — public site and console at `credencehp.com`, its own login. See `apps/rcm/README.md` |
 
 ### Why the app is separate
@@ -56,12 +57,30 @@ What is still shared is *identity*: one Supabase project, one `auth.users` pool,
 row per person. Robert holds both products without two accounts. Separating the user pools as
 well would mean a second Supabase project, a second Pro plan and a second BAA.
 
+### Two service lines, one provider roster
+
+`credentialing.case_file` is the unit of work and carries a `service_line` of `credentialing` or
+`appeals`. The console tabs are that column. A case hangs off the **organization**, because an
+appeal is normally a practice-level matter — one review, one extrapolated demand, several
+physicians' claims.
+
+Providers are **linked** to cases through `case_provider`, never copied. `credentialing.provider`
+stays the single roster across both services, so a provider who picks up a second service is not
+re-keyed and a corrected NPI is corrected everywhere. The database enforces the split: an appeal
+can only attach to an appeals case, an enrollment only to a credentialing one, both through
+composite foreign keys rather than application rules.
+
 ### Appeals
 
-The appeals side of the business is **researched and specified, not built**. Nothing in
-`credentialing` stores an appeal yet. `06-medicare-appeals.md` §8 ranks what a portal would do: the
-deadline clock first, the evidence checklist second, generated forms third, electronic delivery
-last. `07-skin-substitute-documentation.md` is the first concrete checklist, and the one with the
-clearest value — it prevents demand letters rather than appealing them.
+Tier 1 of `06-medicare-appeals.md` §8 — **the clock** — is built. `appeal`, `appeal_level` and
+`appeal_deadline` record a case through the five levels, and
+`credentialing.fn_open_appeal_level()` seeds the deadlines each level creates: the next filing
+date, the 30-day date that stops recoupment after a demand letter, the 60-day date that keeps it
+stopped after a Level 1 denial, and when to chase a decision. Every stored deadline carries the
+date it was computed from, because a deadline nobody can check is worse than none.
+
+Tier 2, the per-denial evidence checklist in `07-skin-substitute-documentation.md` §5, is **not
+built**. It is the next piece of value and the one that prevents demand letters rather than
+appealing them.
 
 Nothing blocks schema work. Remaining questions (Q3–Q15) affect features not yet built.
