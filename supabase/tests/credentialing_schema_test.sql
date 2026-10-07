@@ -494,8 +494,254 @@ select pg_temp.expect_eq('the membership tests pin their search_path',
 select pg_temp.expect_eq('no admin-only policy survives on the credentialing tables',
   (select count(*)::text from pg_policies
     where schemaname = 'credentialing' and policyname like '%_admin_all'), '0');
+-- This was a hardcoded 10 and went stale the moment 20261006000001 added
+-- credentialing.enquiry: an eleventh _staff_all policy made a correct schema
+-- fail the suite. The count is now derived, so a new table either carries a
+-- staff policy or is named here as a deliberate exception.
 select pg_temp.expect_eq('every credentialing table carries a staff policy',
-  (select count(*)::text from pg_policies
-    where schemaname = 'credentialing' and policyname like '%_staff_all'), '10');
+  (select coalesce(string_agg(c.relname, ', ' order by c.relname), 'none')
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'credentialing'
+      and c.relkind = 'r'
+      -- Two deliberate exceptions, both split read from write rather than
+      -- granting staff everything:
+      --   staff              — staff read the list, only a manager edits it
+      --   appeal_deadline_rule — staff read the deadlines, only an owner
+      --                          amends them (they are statutory reference
+      --                          data, and an edit moves every case's dates)
+      and c.relname not in ('staff', 'appeal_deadline_rule')
+      and not exists (
+        select 1 from pg_policies pol
+         where pol.schemaname = 'credentialing'
+           and pol.tablename = c.relname
+           and pol.policyname like '%\_staff\_all')), 'none');
+
+-- ---------- 21. appeals: the Tier 1 clock (migration 20261007000001) ----------
+-- docs/credentialing/06-medicare-appeals.md §2 is the whole reason this exists:
+-- a demand letter starts three clocks and the filing deadline is the least
+-- urgent of them. Every assertion below pins one of those dates, because a
+-- deadline calculator that is quietly wrong is worse than no calculator.
+
+reset role;
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000002';   -- admin
+
+insert into auth.users (id, email) values
+  ('9a000000-0000-4000-8000-000000000006','cred-owner@example.test'),
+  ('9a000000-0000-4000-8000-000000000007','appeals-outsider@example.test');
+insert into public.profiles (id, role, display_name, email) values
+  ('9a000000-0000-4000-8000-000000000006','rep','Cred Owner','cred-owner@example.test'),
+  ('9a000000-0000-4000-8000-000000000007','rep','Appeals Outsider','appeals-outsider@example.test');
+insert into credentialing.staff (profile_id, role) values
+  ('9a000000-0000-4000-8000-000000000006','owner');
+-- ...0007 deliberately gets NO staff row. §20's rep cannot serve as the
+-- outsider here: that section added it to the staff list, so by this point it
+-- has access and an assertion using it would pass for the wrong reason.
+
+-- Two cases from the same notice date so the two case kinds can be compared
+-- directly: the only difference between them is what started the clock.
+insert into credentialing.appeal_case
+    (id, organization_id, case_kind, notice_date, overpayment_cents, extrapolated)
+values
+  ('f1000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000001',
+   'post_payment_overpayment','2026-03-02', 4500000, true),
+  ('f1000000-0000-4000-8000-000000000002','a2000000-0000-4000-8000-000000000001',
+   'claim_denial','2026-03-02', null, false);
+
+create or replace function pg_temp.due(p_case uuid, p_code text) returns text
+language sql as $$
+  select due_on::text from credentialing.fn_appeal_deadlines(p_case) where code = p_code
+$$;
+
+-- §2, the table that decides cases. Dates are calendar days from the notice.
+select pg_temp.expect_eq('the rebuttal falls on notice + 15',
+  pg_temp.due('f1000000-0000-4000-8000-000000000001','rebuttal'), '2026-03-17');
+select pg_temp.expect_eq('the operative deadline — Level 1 to stop recoupment — is notice + 30',
+  pg_temp.due('f1000000-0000-4000-8000-000000000001','level1_stop_recoupment'), '2026-04-01');
+select pg_temp.expect_eq('recoupment begins on notice + 41',
+  pg_temp.due('f1000000-0000-4000-8000-000000000001','recoupment_begins'), '2026-04-12');
+select pg_temp.expect_eq('the statutory Level 1 filing deadline is notice + 120',
+  pg_temp.due('f1000000-0000-4000-8000-000000000001','level1_filing'), '2026-06-30');
+
+-- The day-30 deadline is an incident and the rebuttal is not. §8: "Nothing
+-- dismissible: an unmet appeal deadline is not a notification, it is an
+-- incident" — but 405.374 makes the rebuttal genuinely optional, and marking
+-- it an incident too would flatten the distinction that makes the rest useful.
+select pg_temp.expect_eq('the day-30 deadline is an incident',
+  (select severity::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000001')
+    where code = 'level1_stop_recoupment'), 'incident');
+select pg_temp.expect_eq('the rebuttal is advisory, not an incident',
+  (select severity::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000001')
+    where code = 'rebuttal'), 'advisory');
+
+-- A plain claim denial has no money being recouped, so the three money clocks
+-- must not exist on it. Inventing a day-30 deadline here would train staff to
+-- ignore the one case where it is real.
+select pg_temp.expect_eq('a claim denial carries only the filing clock',
+  (select string_agg(code, ',' order by code) from
+    credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000002')), 'level1_filing');
+
+-- A rule is live only once its anchor exists. Level 3's date is meaningless
+-- until Level 2 has answered, and a blank row next to real dates is worse than
+-- no row.
+select pg_temp.expect_eq('no Level 2 clock before the Level 1 decision arrives',
+  (select count(*)::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000001')
+    where code like 'level2%'), '0');
+
+-- Filed on day 30 exactly: recoupment is stopped, so day 41 never happens and
+-- must disappear from the clock rather than sit there as a false alarm.
+insert into credentialing.appeal (id, appeal_case_id, level, filed_on)
+  values ('f3000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001',1,'2026-04-01');
+select pg_temp.expect_eq('filing on day 30 meets the day-30 deadline',
+  (select is_met::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000001')
+    where code = 'level1_stop_recoupment'), 'true');
+select pg_temp.expect_eq('recoupment-begins disappears once recoupment is stopped',
+  (select count(*)::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000001')
+    where code = 'recoupment_begins'), '0');
+
+-- The next level anchors on the date the decision was RECEIVED, not the date
+-- it was issued and not the date the level below was filed. 2026-05-04 + 60.
+update credentialing.appeal
+   set decision = 'unfavorable', decision_received_on = '2026-05-04'
+ where id = 'f3000000-0000-4000-8000-000000000001';
+select pg_temp.expect_eq('Level 2 anchors on when the Level 1 decision was received',
+  pg_temp.due('f1000000-0000-4000-8000-000000000001','level2_keep_recoupment_stopped'), '2026-07-03');
+select pg_temp.expect_eq('the Level 2 filing deadline is that decision + 180',
+  pg_temp.due('f1000000-0000-4000-8000-000000000001','level2_filing'), '2026-10-31');
+select pg_temp.expect_eq('Level 3 stays hidden until Level 2 answers',
+  (select count(*)::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000001')
+    where code = 'level3_filing'), '0');
+
+-- Late is not met. This is the day-35 case the whole tier exists to prevent:
+-- the same legal document, filed six days later, with the money consequence
+-- attached.
+insert into credentialing.appeal_case
+    (id, organization_id, case_kind, notice_date)
+  values ('f1000000-0000-4000-8000-000000000003','a2000000-0000-4000-8000-000000000001',
+          'post_payment_overpayment','2026-03-02');
+insert into credentialing.appeal (appeal_case_id, level, filed_on)
+  values ('f1000000-0000-4000-8000-000000000003', 1, '2026-04-06');   -- day 35
+select pg_temp.expect_eq('an appeal filed on day 35 does NOT meet the day-30 deadline',
+  (select is_met::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000003')
+    where code = 'level1_stop_recoupment'), 'false');
+select pg_temp.expect_eq('filing late leaves recoupment-begins on the clock',
+  (select count(*)::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000003')
+    where code = 'recoupment_begins'), '1');
+-- Day 41 arriving is not a task anyone failed; the failure was day 30.
+select pg_temp.expect_eq('a consequence is never flagged overdue',
+  (select is_overdue::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000003')
+    where code = 'recoupment_begins'), 'false');
+select pg_temp.expect_eq('a missed action IS flagged overdue',
+  (select is_overdue::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000003')
+    where code = 'level1_stop_recoupment'), 'true');
+
+-- The notice in hand governs. An override replaces the computed statutory
+-- filing deadline and must NOT touch the day-30 recoupment rule, which comes
+-- from a different regulation and is not what the letter is stating.
+update credentialing.appeal_case set filing_deadline_override_on = '2026-06-01'
+ where id = 'f1000000-0000-4000-8000-000000000003';
+select pg_temp.expect_eq('the deadline stated on the notice wins',
+  pg_temp.due('f1000000-0000-4000-8000-000000000003','level1_filing'), '2026-06-01');
+select pg_temp.expect_eq('an override is flagged as one',
+  (select overridden::text from credentialing.fn_appeal_deadlines('f1000000-0000-4000-8000-000000000003')
+    where code = 'level1_filing'), 'true');
+select pg_temp.expect_eq('an override does not move the day-30 recoupment deadline',
+  pg_temp.due('f1000000-0000-4000-8000-000000000003','level1_stop_recoupment'), '2026-04-01');
+
+-- ---- constraints ----
+select pg_temp.expect_fail('a notice cannot be received before it was written',
+  $$insert into credentialing.appeal_case (organization_id, case_kind, notice_date, notice_received_on)
+    values ('a2000000-0000-4000-8000-000000000001','claim_denial','2026-03-02','2026-03-01')$$);
+select pg_temp.expect_fail('a claim denial has nothing to rebut',
+  $$insert into credentialing.appeal_case (organization_id, case_kind, notice_date, rebuttal_filed_on)
+    values ('a2000000-0000-4000-8000-000000000001','claim_denial','2026-03-02','2026-03-10')$$);
+select pg_temp.expect_fail('there is no Level 6',
+  $$insert into credentialing.appeal (appeal_case_id, level)
+    values ('f1000000-0000-4000-8000-000000000002', 6)$$);
+select pg_temp.expect_fail('two live appeals at the same level on one case',
+  $$insert into credentialing.appeal (appeal_case_id, level)
+    values ('f1000000-0000-4000-8000-000000000001', 1)$$);
+select pg_temp.expect_fail('a decision cannot predate the filing that asked for it',
+  $$insert into credentialing.appeal (appeal_case_id, level, filed_on, decision, decision_received_on)
+    values ('f1000000-0000-4000-8000-000000000002', 1, '2026-04-01','unfavorable','2026-03-20')$$);
+-- A pending decision carrying a date would start the next level's clock from a
+-- decision that has not arrived.
+select pg_temp.expect_fail('a pending decision cannot carry a decision date',
+  $$insert into credentialing.appeal (appeal_case_id, level, decision, decision_received_on)
+    values ('f1000000-0000-4000-8000-000000000002', 2, 'pending','2026-04-01')$$);
+select pg_temp.expect_fail('a decided appeal must say when the decision arrived',
+  $$insert into credentialing.appeal (appeal_case_id, level, decision)
+    values ('f1000000-0000-4000-8000-000000000002', 3, 'unfavorable')$$);
+
+-- ---- the console view ----
+select pg_temp.expect_eq('the clock view shows only unmet deadlines',
+  (select count(*)::text from credentialing.appeal_clock
+    where appeal_case_id = 'f1000000-0000-4000-8000-000000000001'
+      and code = 'level1_stop_recoupment'), '0');
+-- Severity outranks lateness: an overdue advisory must not sort above a live
+-- incident, or the top row of the page becomes the ignorable one.
+select pg_temp.expect_eq('an incident outranks an overdue advisory in the view',
+  (select severity::text from credentialing.appeal_clock
+    where appeal_case_id = 'f1000000-0000-4000-8000-000000000003' limit 1), 'incident');
+
+-- ---- RLS ----
+set local role authenticated;
+
+-- a specialist runs cases but must not be able to rewrite the deadlines
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000003';
+select pg_temp.expect_ok('a specialist can open an appeal case',
+  $$insert into credentialing.appeal_case (organization_id, case_kind, notice_date)
+    values ('a2000000-0000-4000-8000-000000000001','claim_denial','2026-03-02')$$);
+select pg_temp.expect_eq('a specialist can read the deadline rules',
+  (select count(*)::text from credentialing.appeal_deadline_rule), '9');
+-- RLS blocks an UPDATE by matching no rows, not by raising, so this asserts
+-- the row is unchanged rather than expecting an error. A test that looked for
+-- an exception here would pass against a policy that did nothing.
+update credentialing.appeal_deadline_rule set days = 999 where code = 'level1_filing';
+select pg_temp.expect_eq('a specialist CANNOT change a statutory deadline',
+  (select days::text from credentialing.appeal_deadline_rule where code = 'level1_filing'), '120');
+
+-- an owner may, because the rules are reference data and 20260917000001 says
+-- that is the owner's job. Until now no function enforced it.
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000006';
+select pg_temp.expect_eq('an owner is an owner',
+  credentialing.is_owner()::text, 'true');
+select pg_temp.expect_eq('a manager is not an owner',
+  (select credentialing.is_owner()::text from (select set_config('request.jwt.claim.sub',
+     '9a000000-0000-4000-8000-000000000004', true)) _), 'false');
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000006';
+select pg_temp.expect_ok('an owner CAN amend a deadline rule',
+  $$update credentialing.appeal_deadline_rule set authority = '42 CFR 405.942 (amended)'
+     where code = 'level1_filing'$$);
+
+-- a rep with no staff row at all. Absence is the default: nothing had to
+-- remember to exclude them.
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000007';
+select pg_temp.expect_eq('a non-staff rep sees no appeal cases',
+  (select count(*)::text from credentialing.appeal_case), '0');
+select pg_temp.expect_eq('a non-staff rep sees an empty clock',
+  (select count(*)::text from credentialing.appeal_clock), '0');
+
+reset role;
+-- The clock must not be SECURITY DEFINER: it takes a case id, so a definer
+-- version would hand every organization's deadlines to anyone who can guess a
+-- uuid. The membership test must pin its search_path like its siblings.
+select pg_temp.expect_eq('the clock runs as its caller, not as its definer',
+  (select case when p.prosecdef then 'definer' else 'invoker' end
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'credentialing' and p.proname = 'fn_appeal_deadlines'), 'invoker');
+select pg_temp.expect_eq('the appeal_clock view runs as its caller',
+  (select case when 'security_invoker=true' = any(c.reloptions) then 'invoker' else 'definer' end
+     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'credentialing' and c.relname = 'appeal_clock'), 'invoker');
+select pg_temp.expect_eq('is_owner pins its search_path',
+  (select count(*)::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'credentialing' and p.proname = 'is_owner'
+      and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')), '1');
+-- Every rule must be traceable to a regulation, or the number on screen is
+-- just a number.
+select pg_temp.expect_eq('every deadline rule cites its authority',
+  (select count(*)::text from credentialing.appeal_deadline_rule where authority is null), '0');
+
 
 rollback;
