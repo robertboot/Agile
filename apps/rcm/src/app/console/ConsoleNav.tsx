@@ -3,8 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Service lines first, then the roster both of them draw on, then the rest.
+// Credentialing and appeals are separate businesses to the people doing them;
+// providers are shared, which is the whole reason the roster is its own tab.
 const TABS = [
-  { href: "/console", label: "Work queue" },
+  { href: "/console", label: "Credentialing" },
+  { href: "/console/appeals", label: "Appeals" },
+  { href: "/console/checks", label: "Checks" },
+  { href: "/console/providers", label: "Providers" },
   { href: "/console/enquiries", label: "Enquiries" },
   { href: "/console/staff", label: "Team" },
 ];
