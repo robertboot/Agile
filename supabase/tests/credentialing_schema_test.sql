@@ -496,6 +496,352 @@ select pg_temp.expect_eq('no admin-only policy survives on the credentialing tab
     where schemaname = 'credentialing' and policyname like '%_admin_all'), '0');
 select pg_temp.expect_eq('every credentialing table carries a staff policy',
   (select count(*)::text from pg_policies
-    where schemaname = 'credentialing' and policyname like '%_staff_all'), '10');
+    where schemaname = 'credentialing' and policyname like '%_staff_all'), '20');
+
+-- ---------- 21. cases: service lines, shared providers, the clock ----------
+-- 20261007000001. Two services, one provider roster, one deadline calculator.
+
+insert into credentialing.case_file (id, organization_id, service_line, title, reference) values
+  ('f1000000-0000-4000-8000-000000000001','a0000000-0000-0000-0000-000000000001',
+   'appeals','UPIC post-payment review 2025','TEST-CSE-0001'),
+  ('f1000000-0000-4000-8000-000000000002','a0000000-0000-0000-0000-000000000001',
+   'credentialing','Open the Orem location', null);
+
+-- a case is closed on a date or it is not closed
+select pg_temp.expect_fail('closed without a date',
+  $$update credentialing.case_file set status = 'closed'
+     where id = 'f1000000-0000-4000-8000-000000000001'$$);
+select pg_temp.expect_fail('a closing date on an open case',
+  $$update credentialing.case_file set closed_on = current_date
+     where id = 'f1000000-0000-4000-8000-000000000001'$$);
+select pg_temp.expect_fail('closed before it was opened',
+  $$update credentialing.case_file set status = 'closed', closed_on = opened_on - 1
+     where id = 'f1000000-0000-4000-8000-000000000001'$$);
+
+-- providers are LINKED, never copied: the roster count must not move
+select pg_temp.expect_ok('a provider joins an appeals case',
+  $$insert into credentialing.case_provider (case_file_id, provider_id)
+    values ('f1000000-0000-4000-8000-000000000001','c0000000-0000-0000-0000-000000000001')$$);
+select pg_temp.expect_ok('the same provider joins a credentialing case',
+  $$insert into credentialing.case_provider (case_file_id, provider_id)
+    values ('f1000000-0000-4000-8000-000000000002','c0000000-0000-0000-0000-000000000001')$$);
+select pg_temp.expect_eq('one provider, two services, still one roster row',
+  (select count(*)::text from credentialing.provider
+    where id = 'c0000000-0000-0000-0000-000000000001'), '1');
+select pg_temp.expect_fail('the same provider cannot be linked twice to one case',
+  $$insert into credentialing.case_provider (case_file_id, provider_id)
+    values ('f1000000-0000-4000-8000-000000000001','c0000000-0000-0000-0000-000000000001')$$);
+
+-- the service line is structural, not a convention
+select pg_temp.expect_ok('an appeal attaches to an appeals case',
+  $$insert into credentialing.appeal (id, case_file_id, mac, qic, amount_demanded, amount_at_issue,
+                                      is_extrapolated, claim_count, demand_letter_on)
+    values ('f2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001',
+            'TEST MAC','TEST QIC', 134633.10, 11008.01, true, 10, date '2026-05-08')$$);
+select pg_temp.expect_fail('an appeal CANNOT attach to a credentialing case',
+  $$insert into credentialing.appeal (case_file_id)
+    values ('f1000000-0000-4000-8000-000000000002')$$);
+select pg_temp.expect_fail('a case cannot carry two appeals',
+  $$insert into credentialing.appeal (case_file_id)
+    values ('f1000000-0000-4000-8000-000000000001')$$);
+select pg_temp.expect_fail('an appeal cannot claim to be a credentialing matter',
+  $$update credentialing.appeal set service_line = 'credentialing'
+     where id = 'f2000000-0000-4000-8000-000000000001'$$);
+select pg_temp.expect_fail('an enrollment CANNOT be grouped under an appeals case',
+  $$update credentialing.enrollment set case_file_id = 'f1000000-0000-4000-8000-000000000001'
+     where id = (select id from credentialing.enrollment limit 1)$$);
+select pg_temp.expect_ok('an enrollment CAN be grouped under a credentialing case',
+  $$update credentialing.enrollment set case_file_id = 'f1000000-0000-4000-8000-000000000002'
+     where id = (select id from credentialing.enrollment limit 1)$$);
+
+-- amounts and counts are facts about money, so they cannot be negative
+select pg_temp.expect_fail('a negative demand',
+  $$update credentialing.appeal set amount_demanded = -1
+     where id = 'f2000000-0000-4000-8000-000000000001'$$);
+select pg_temp.expect_fail('zero claims',
+  $$update credentialing.appeal set claim_count = 0
+     where id = 'f2000000-0000-4000-8000-000000000001'$$);
+select pg_temp.expect_fail('service dates running backwards',
+  $$update credentialing.appeal set service_date_from = date '2025-12-02',
+                                    service_date_to   = date '2025-01-14'
+     where id = 'f2000000-0000-4000-8000-000000000001'$$);
+
+-- the deadline arithmetic, against 42 CFR Part 405 Subpart I
+select pg_temp.expect_eq('30 days to stop recoupment',
+  credentialing.fn_appeal_deadline_days('stop_recoupment_l1')::text, '30');
+select pg_temp.expect_eq('120 days to file Level 1',
+  credentialing.fn_appeal_deadline_days('file_level_1')::text, '120');
+select pg_temp.expect_eq('180 days to file Level 2',
+  credentialing.fn_appeal_deadline_days('file_level_2')::text, '180');
+select pg_temp.expect_eq('60 days to file Level 3',
+  credentialing.fn_appeal_deadline_days('file_level_3')::text, '60');
+select pg_temp.expect_eq('a contractor sets its own evidence window',
+  coalesce(credentialing.fn_appeal_deadline_days('evidence_window')::text,'NULL'), 'NULL');
+
+-- recording a level seeds the deadlines that level creates.
+-- The RPCs are staff-gated, so act as the manager fixture from §20.
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000004';
+select credentialing.fn_open_appeal_level(
+  'f2000000-0000-4000-8000-000000000001', 1::smallint, date '2026-05-08', date '2026-06-05', 'certified_mail');
+select pg_temp.expect_eq('filing Level 1 sets the 120-day deadline from the determination',
+  (select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'file_level_1'),
+  (date '2026-05-08' + 120)::text);
+select pg_temp.expect_eq('and records what the date was computed from',
+  (select source_date::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'file_level_1'),
+  '2026-05-08');
+select pg_temp.expect_eq('the demand letter starts the 30-day recoupment clock',
+  (select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'stop_recoupment_l1'),
+  (date '2026-05-08' + 30)::text);
+select pg_temp.expect_eq('and the 15-day rebuttal window',
+  (select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'rebuttal'),
+  (date '2026-05-08' + 15)::text);
+select pg_temp.expect_eq('the recoupment clock is NOT 60 days from the demand letter',
+  coalesce((select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'stop_recoupment_l2'), 'NULL'),
+  'NULL');
+select pg_temp.expect_eq('a Level 1 decision is expected in 60 days',
+  (select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'decision_expected'),
+  (date '2026-06-05' + 60)::text);
+
+select credentialing.fn_open_appeal_level(
+  'f2000000-0000-4000-8000-000000000001', 2::smallint, date '2026-07-31', date '2026-09-18', 'certified_mail');
+select pg_temp.expect_eq('a Level 1 denial starts the 60-day recoupment clock',
+  (select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'stop_recoupment_l2'),
+  (date '2026-07-31' + 60)::text);
+select pg_temp.expect_eq('and the 180-day deadline to file Level 2',
+  (select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'file_level_2'),
+  (date '2026-07-31' + 180)::text);
+
+-- a letter that states its own date beats the arithmetic
+select credentialing.fn_set_appeal_deadline(
+  'f2000000-0000-4000-8000-000000000001', 'evidence_window', date '2026-09-30',
+  date '2026-10-30', 'the letter asked for documentation, without stating a date');
+select pg_temp.expect_eq('an explicit date wins over the computed one',
+  (select due_on::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and kind = 'evidence_window'),
+  '2026-10-30');
+select pg_temp.expect_fail('a deadline with neither a due date nor a source date',
+  $$select credentialing.fn_set_appeal_deadline(
+      'f2000000-0000-4000-8000-000000000001', 'evidence_window', null, null)$$);
+
+-- a level is pending or decided, never both and never neither
+select pg_temp.expect_fail('an outcome without a decision date',
+  $$update credentialing.appeal_level set outcome = 'unfavorable'
+     where appeal_id = 'f2000000-0000-4000-8000-000000000001' and level = 1$$);
+select pg_temp.expect_fail('a decision date while still pending',
+  $$update credentialing.appeal_level set decided_on = current_date
+     where appeal_id = 'f2000000-0000-4000-8000-000000000001' and level = 1$$);
+select pg_temp.expect_ok('decided, with a date and an outcome',
+  $$update credentialing.appeal_level set outcome = 'unfavorable', decided_on = date '2026-07-31'
+     where appeal_id = 'f2000000-0000-4000-8000-000000000001' and level = 1$$);
+select pg_temp.expect_fail('filed before the determination it appeals',
+  $$update credentialing.appeal_level set filed_on = date '2026-05-07'
+     where appeal_id = 'f2000000-0000-4000-8000-000000000001' and level = 1$$);
+select pg_temp.expect_fail('a level attempted twice',
+  $$insert into credentialing.appeal_level (appeal_id, level)
+    values ('f2000000-0000-4000-8000-000000000001', 2)$$);
+select pg_temp.expect_fail('a sixth level',
+  $$insert into credentialing.appeal_level (appeal_id, level)
+    values ('f2000000-0000-4000-8000-000000000001', 6)$$);
+
+-- the overview carries the next unmet deadline, not just any deadline
+select pg_temp.expect_eq('the overview shows the earliest unmet deadline',
+  (select next_deadline_on::text from credentialing.v_case_overview
+    where id = 'f1000000-0000-4000-8000-000000000001'),
+  (select min(due_on)::text from credentialing.appeal_deadline
+    where appeal_id = 'f2000000-0000-4000-8000-000000000001' and met_on is null));
+select pg_temp.expect_eq('the overview counts linked providers',
+  (select provider_count::text from credentialing.v_case_overview
+    where id = 'f1000000-0000-4000-8000-000000000001'), '1');
+select pg_temp.expect_eq('a credentialing case carries no appeal',
+  coalesce((select appeal_id::text from credentialing.v_case_overview
+    where id = 'f1000000-0000-4000-8000-000000000002'), 'NULL'), 'NULL');
+
+-- the appeal RPCs are staff-gated like everything else
+select pg_temp.expect_eq('the appeal RPCs pin their search_path',
+  (select count(*)::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'credentialing'
+      and p.proname in ('fn_set_appeal_deadline','fn_open_appeal_level')
+      and p.proconfig is not null
+      and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')), '2');
+
+-- ...0005 is the removed staff member from §20: a `rep`, so not a portal
+-- admin, and revoked, so not staff. ...0001 and ...0002 are no longer usable
+-- here — §20 made the first a specialist and the second is the admin fixture.
+set local role authenticated;
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000005';
+select pg_temp.expect_fail('a non-staff user cannot record an appeal level',
+  $$select credentialing.fn_open_appeal_level(
+      'f2000000-0000-4000-8000-000000000001', 3::smallint, date '2026-11-17')$$);
+select pg_temp.expect_fail('a non-staff user cannot set a deadline',
+  $$select credentialing.fn_set_appeal_deadline(
+      'f2000000-0000-4000-8000-000000000001', 'file_level_3', date '2026-11-17')$$);
+select pg_temp.expect_eq('a non-staff user sees no cases',
+  (select count(*)::text from credentialing.case_file), '0');
+reset role;
+
+-- The server's own path. A service-role JWT carries no sub, so auth.uid() is
+-- null and both membership checks return false; before 20261007000001 the
+-- guard rejected the only caller the console actually has.
+set local role service_role;
+select pg_temp.expect_eq('the service role is not an admin, and still gets through',
+  public.is_admin()::text, 'false');
+select pg_temp.expect_ok('the service role passes the staff guard',
+  $$select credentialing.fn_guard_staff()$$);
+select pg_temp.expect_ok('so the console can record an appeal level',
+  $$select credentialing.fn_open_appeal_level(
+      'f2000000-0000-4000-8000-000000000001', 3::smallint, date '2026-11-17')$$);
+select pg_temp.expect_ok('and the batch-decision RPC it has always needed',
+  $$select credentialing.fn_guard_staff()$$);
+reset role;
+
+-- ---------- 22. the evidence checklist ----------
+-- 20261007000002/3. A run snapshots its questions, blocking items stop a
+-- release, and an override is a thing someone did on the record.
+
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000004';
+
+select pg_temp.expect_eq('the skin substitute template seeded 34 questions',
+  (select count(*)::text from credentialing.checklist_item i
+    join credentialing.checklist_template t on t.id = i.template_id
+    where t.code = 'skin_substitute_presubmission'), '34');
+select pg_temp.expect_eq('every question cites the rule it answers',
+  (select count(*)::text from credentialing.checklist_item i
+    join credentialing.checklist_template t on t.id = i.template_id
+    where t.code = 'skin_substitute_presubmission' and i.authority is null), '0');
+select pg_temp.expect_eq('only one current version of a template code',
+  (select count(*)::text from credentialing.checklist_template
+    where code = 'skin_substitute_presubmission' and retired_at is null), '1');
+
+-- starting a run copies the questions in
+select credentialing.fn_start_checklist_run(
+  'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+  'pre_submission', 'CHART-1042', date '2026-10-01',
+  'c0000000-0000-0000-0000-000000000001', null,
+  '9a000000-0000-4000-8000-000000000004') as run_id \gset
+
+select pg_temp.expect_eq('the run snapshotted every question',
+  (select count(*)::text from credentialing.checklist_response where run_id = :'run_id'), '34');
+select pg_temp.expect_eq('and the question text came with it',
+  (select count(*)::text from credentialing.checklist_response
+    where run_id = :'run_id' and (prompt is null or prompt = '')), '0');
+select pg_temp.expect_fail('an unknown template code',
+  $$select credentialing.fn_start_checklist_run(
+      'a0000000-0000-0000-0000-000000000001', 'no_such_template',
+      'pre_submission', 'CHART-X')$$);
+
+-- the snapshot is a snapshot: revising the template does not rewrite history
+update credentialing.checklist_item set prompt = 'REVISED PROMPT'
+  where code = 'nec_conservative'
+    and template_id = (select id from credentialing.checklist_template
+                        where code = 'skin_substitute_presubmission' and version = 1);
+select pg_temp.expect_eq('a run already started still says what it said',
+  (select count(*)::text from credentialing.checklist_response
+    where run_id = :'run_id' and prompt = 'REVISED PROMPT'), '0');
+
+-- answers are stamped, and "not applicable" is a claim that needs a reason
+select pg_temp.expect_fail('an answer without a timestamp',
+  $$update credentialing.checklist_response set answer = 'have'
+     where run_id = (select id from credentialing.checklist_run
+                      where subject_reference = 'CHART-1042') and position = 10$$);
+select pg_temp.expect_fail('not applicable without saying why',
+  $$update credentialing.checklist_response
+      set answer = 'not_applicable', answered_at = now()
+     where run_id = (select id from credentialing.checklist_run
+                      where subject_reference = 'CHART-1042') and position = 10$$);
+select pg_temp.expect_ok('not applicable, with a reason',
+  $$update credentialing.checklist_response
+      set answer = 'not_applicable', answered_at = now(), note = 'no debridement performed'
+     where run_id = (select id from credentialing.checklist_run
+                      where subject_reference = 'CHART-1042') and position = 80$$);
+
+-- blocking items stop a release
+select pg_temp.expect_eq('23 blocking questions, 22 still outstanding',
+  credentialing.fn_checklist_outstanding(:'run_id')::text, '22');
+select pg_temp.expect_fail('releasing with blocking items outstanding',
+  $$select credentialing.fn_release_checklist_run(
+      (select id from credentialing.checklist_run where subject_reference = 'CHART-1042'))$$);
+select pg_temp.expect_fail('an override with a reason but nobody''s name',
+  $$select credentialing.fn_release_checklist_run(
+      (select id from credentialing.checklist_run where subject_reference = 'CHART-1042'),
+      null, 'in a hurry')$$);
+
+-- partial does not satisfy a blocking item: a consent that exists but is
+-- unsigned IS the denial
+update credentialing.checklist_response
+  set answer = 'partial', answered_at = now(), note = 'consent on file but unsigned'
+  where run_id = :'run_id' and position = 170;
+select pg_temp.expect_eq('partial does not clear a blocking item',
+  credentialing.fn_checklist_outstanding(:'run_id')::text, '22');
+update credentialing.checklist_response
+  set answer = 'have', answered_at = now()
+  where run_id = :'run_id' and position = 170;
+select pg_temp.expect_eq('have does',
+  credentialing.fn_checklist_outstanding(:'run_id')::text, '21');
+
+-- an override is allowed, and is recorded
+select pg_temp.expect_eq('the override reports what it overrode',
+  credentialing.fn_release_checklist_run(:'run_id', current_date,
+    'biller released under protest; chart being corrected',
+    '9a000000-0000-4000-8000-000000000004')::text, '21');
+select pg_temp.expect_eq('and the reason is on the run',
+  (select override_reason from credentialing.checklist_run where id = :'run_id'),
+  'biller released under protest; chart being corrected');
+select pg_temp.expect_eq('with the released date set',
+  (select case when released_on is not null then 'yes' else 'no' end
+     from credentialing.checklist_run where id = :'run_id'), 'yes');
+select pg_temp.expect_fail('a released run without a date',
+  $$update credentialing.checklist_run set released_on = null where subject_reference = 'CHART-1042'$$);
+select pg_temp.expect_fail('an override reason with nobody attached',
+  $$update credentialing.checklist_run set override_by = null where subject_reference = 'CHART-1042'$$);
+
+-- a clean run releases with no override at all
+select credentialing.fn_start_checklist_run(
+  'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+  'pre_submission', 'CHART-2000') as clean_id \gset
+update credentialing.checklist_response
+  set answer = 'have', answered_at = now() where run_id = :'clean_id' and is_blocking;
+select pg_temp.expect_eq('nothing outstanding',
+  credentialing.fn_checklist_outstanding(:'clean_id')::text, '0');
+select pg_temp.expect_eq('so it releases clean',
+  credentialing.fn_release_checklist_run(:'clean_id')::text, '0');
+select pg_temp.expect_eq('and records no override',
+  coalesce((select override_reason from credentialing.checklist_run where id = :'clean_id'), 'NULL'),
+  'NULL');
+
+-- the status view counts what the console shows
+select pg_temp.expect_eq('the view counts blocking questions',
+  (select blocking_count::text from credentialing.v_checklist_run_status where id = :'clean_id'), '23');
+select pg_temp.expect_eq('and the whole question set',
+  (select item_count::text from credentialing.v_checklist_run_status where id = :'clean_id'), '34');
+select pg_temp.expect_eq('and what is still outstanding',
+  (select outstanding_count::text from credentialing.v_checklist_run_status where id = :'run_id'), '21');
+
+-- an evidence run belongs to the appeal case it is building the record for
+select credentialing.fn_start_checklist_run(
+  'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+  'appeal_evidence', 'DOS 2025-01-14', date '2025-01-14', null,
+  'f1000000-0000-4000-8000-000000000001') as evidence_id \gset
+select pg_temp.expect_eq('an evidence run is tied to its case',
+  (select case_file_id::text from credentialing.checklist_run where id = :'evidence_id'),
+  'f1000000-0000-4000-8000-000000000001');
+
+-- and the RPCs are staff-gated like the rest
+set local role authenticated;
+set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000005';
+select pg_temp.expect_fail('a non-staff user cannot start a run',
+  $$select credentialing.fn_start_checklist_run(
+      'a0000000-0000-0000-0000-000000000001', 'skin_substitute_presubmission',
+      'pre_submission', 'CHART-X')$$);
+select pg_temp.expect_eq('and sees no runs',
+  (select count(*)::text from credentialing.checklist_run), '0');
+reset role;
 
 rollback;
