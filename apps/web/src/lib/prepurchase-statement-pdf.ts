@@ -104,8 +104,9 @@ export async function renderPrepurchaseStatementPdf(
   y -= 14;
   text("Date", M, y, 8, bold, SLATE);
   text("Products", M + 70, y, 8, bold, SLATE);
-  text("Status", M + 330, y, 8, bold, SLATE);
-  right("Drawn", W - M, y, 8, bold, SLATE);
+  text("Status", M + 300, y, 8, bold, SLATE);
+  right("Drawn", W - M - 80, y, 8, bold, SLATE);
+  right("Billed", W - M, y, 8, bold, SLATE);
   y -= 6;
   page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.75, color: LINE });
 
@@ -114,8 +115,9 @@ export async function renderPrepurchaseStatementPdf(
     room(60);
     y -= 14;
     text(formatDate(pull.date), M, y, 8);
-    text(STATUS_LABELS[pull.status] ?? pull.status, M + 330, y, 8);
-    right(formatCents(pull.drawCents), W - M, y, 8);
+    text(STATUS_LABELS[pull.status] ?? pull.status, M + 300, y, 8);
+    right(formatCents(pull.drawCents), W - M - 80, y, 8);
+    right(pull.billedCents > 0 ? formatCents(pull.billedCents) : "-", W - M, y, 8);
     // One line per item, indented under the date.
     pull.lines.forEach((l, i) => {
       if (i > 0) { room(40); y -= 11; }
@@ -126,8 +128,9 @@ export async function renderPrepurchaseStatementPdf(
   y -= 6;
   page.drawLine({ start: { x: M, y: y + 4 }, end: { x: W - M, y: y + 4 }, thickness: 1, color: NAVY });
   y -= 14;
-  text("Total drawn", M, y, 9, bold);
-  right(formatCents(stmt.pulls.reduce((a, p) => a + p.drawCents, 0)), W - M, y, 9, bold);
+  text("Totals", M, y, 9, bold);
+  right(formatCents(stmt.pulls.reduce((a, p) => a + p.drawCents, 0)), W - M - 80, y, 9, bold);
+  right(formatCents(stmt.billedCents), W - M, y, 9, bold);
   y -= 26;
 
   // --- Ledger --------------------------------------------------------------
@@ -153,10 +156,16 @@ export async function renderPrepurchaseStatementPdf(
   room(40);
   text("Credit remaining", M, y, 10, bold);
   right(formatCents(stmt.remainingCents), W - M, y, 12, bold);
+  if (stmt.billedCents > 0) {
+    y -= 18;
+    room(40);
+    text("Billed beyond credit", M, y, 10, bold);
+    right(formatCents(stmt.billedCents), W - M, y, 12, bold);
+  }
 
   if (y > M + 30) {
     text(
-      "Inventory pulls draw against the pre-paid credit at the agreed pricing above and are not separately invoiced.",
+      "Inventory pulls draw against the pre-paid credit at the agreed pricing above. Where a pull exceeded the remaining credit, the balance was billed at the same agreed price and is invoiced separately.",
       M, M, 7, font, SLATE,
     );
   }

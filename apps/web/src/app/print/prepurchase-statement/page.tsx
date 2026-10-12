@@ -116,6 +116,7 @@ export default async function PrepurchaseStatementPrint({
             <th className="py-2 font-medium">Products</th>
             <th className="py-2 font-medium">Status</th>
             <th className="py-2 text-right font-medium">Drawn</th>
+            <th className="py-2 text-right font-medium">Billed</th>
           </tr>
         </thead>
         <tbody>
@@ -132,17 +133,21 @@ export default async function PrepurchaseStatementPrint({
               </td>
               <td className="py-1.5">{STATUS_LABELS[p.status] ?? p.status}</td>
               <td className="py-1.5 text-right whitespace-nowrap">{formatCents(p.drawCents)}</td>
+              <td className="py-1.5 text-right whitespace-nowrap">
+                {p.billedCents > 0 ? formatCents(p.billedCents) : "—"}
+              </td>
             </tr>
           ))}
           {stmt.pulls.length === 0 && (
-            <tr><td colSpan={4} className="py-6 text-center text-slate-400">No pulls against this credit yet.</td></tr>
+            <tr><td colSpan={5} className="py-6 text-center text-slate-400">No pulls against this credit yet.</td></tr>
           )}
         </tbody>
         {stmt.pulls.length > 0 && (
           <tfoot>
             <tr className="border-t-2 border-slate-300 font-bold text-navy-900">
-              <td className="py-2" colSpan={3}>Total drawn</td>
+              <td className="py-2" colSpan={3}>Totals</td>
               <td className="py-2 text-right">{formatCents(stmt.pulls.reduce((a, p) => a + p.drawCents, 0))}</td>
+              <td className="py-2 text-right">{formatCents(stmt.billedCents)}</td>
             </tr>
           </tfoot>
         )}
@@ -175,16 +180,23 @@ export default async function PrepurchaseStatementPrint({
         </tbody>
       </table>
 
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end gap-3">
         <div className="rounded-lg border-2 border-navy-900 px-5 py-3 text-right">
           <div className="text-xs text-slate-500">Credit remaining</div>
           <div className="text-xl font-bold text-navy-900">{formatCents(stmt.remainingCents)}</div>
         </div>
+        {stmt.billedCents > 0 && (
+          <div className="rounded-lg border-2 border-amber-500 px-5 py-3 text-right">
+            <div className="text-xs text-slate-500">Billed beyond credit</div>
+            <div className="text-xl font-bold text-amber-700">{formatCents(stmt.billedCents)}</div>
+          </div>
+        )}
       </div>
 
       <p className="mt-8 text-[11px] text-slate-400">
         Statement generated from the Agile Medical Group portal. Inventory pulls draw against the
-        pre-paid credit at the agreed pricing above and are not separately invoiced.
+        pre-paid credit at the agreed pricing above. Where a pull exceeded the remaining credit, the
+        balance was billed at the same agreed price and is invoiced separately.
       </p>
     </main>
   );

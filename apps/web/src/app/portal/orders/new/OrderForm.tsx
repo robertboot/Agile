@@ -96,6 +96,10 @@ export function OrderForm({
       }, 0)
     : 0;
   const drawRemaining = (pp?.balanceCents ?? 0) - drawTotal;
+  // Credit covers what it can; anything beyond it is billed at the same deal
+  // rate rather than blocking the order.
+  const creditApplied = Math.min(drawTotal, pp?.balanceCents ?? 0);
+  const overage = Math.max(0, drawTotal - (pp?.balanceCents ?? 0));
   // In draw mode, only products included in the deal can be pulled.
   const drawProducts = isDraw ? products.filter((p) => pp!.prices[p.code] !== undefined) : products;
 
@@ -131,10 +135,6 @@ export function OrderForm({
 
   function submit() {
     setError(null);
-    if (isDraw && drawTotal > (pp?.balanceCents ?? 0)) {
-      setError("Draw exceeds remaining pre-purchased credit.");
-      return;
-    }
     startSubmit(async () => {
       const lines = items.map(({ productCode, sku, qty, serial }) => ({ productCode, sku, qty, serial }));
       const result = isDraw
@@ -328,16 +328,23 @@ export function OrderForm({
             <Econ label="Credit remaining" value={formatCents(pp!.balanceCents)} />
             <Econ
               label="After this pull"
-              value={formatCents(drawRemaining)}
-              highlight={drawRemaining < 0}
+              value={formatCents(Math.max(0, drawRemaining))}
             />
           </dl>
-          {drawRemaining < 0 && (
-            <p className="mt-2 text-sm text-red-600">Exceeds remaining credit — reduce the pull.</p>
+          {overage > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-sm font-semibold text-amber-900">
+                Credit covers {formatCents(creditApplied)} — {formatCents(overage)} will be billed.
+              </p>
+              <p className="mt-1 text-xs text-amber-800">
+                The overage is billed at the same deal price, so the per-cm² rate is unchanged. This
+                order will carry a balance and go to Invoiced rather than closing at Delivered.
+              </p>
+            </div>
           )}
           <p className="mt-3 text-xs text-emerald-700">
-            Drawn from pre-purchased inventory at the deal price. Not billed to the provider; no
-            commission.
+            Drawn from pre-purchased inventory at the deal price. No commission.
+            {overage === 0 && " Not billed to the provider."}
           </p>
         </div>
       ) : (
@@ -367,13 +374,15 @@ export function OrderForm({
       <button
         type="button"
         onClick={submit}
-        disabled={submitting || !providerId || items.length === 0 || (isDraw && drawRemaining < 0)}
+        disabled={submitting || !providerId || items.length === 0}
         className="btn-brand rounded-lg px-5 py-2.5 font-semibold text-white disabled:opacity-60"
       >
         {submitting
           ? "Saving…"
           : isDraw
-            ? `Pull from inventory · ${formatCents(drawTotal)}`
+            ? overage > 0
+              ? `Pull ${formatCents(creditApplied)} + bill ${formatCents(overage)}`
+              : `Pull from inventory · ${formatCents(drawTotal)}`
             : isEdit
               ? "Save changes & update invoice"
               : "Create order"}

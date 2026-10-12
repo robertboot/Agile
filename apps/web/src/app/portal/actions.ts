@@ -508,12 +508,27 @@ export async function createInventoryPull(
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }
-  if (pull.drawCents > account.creditCents) {
-    return {
-      ok: false,
-      error: `Draw $${(pull.drawCents / 100).toFixed(2)} exceeds remaining credit $${(account.creditCents / 100).toFixed(2)}`,
-    };
-  }
+  // A pull may exceed the remaining credit. The credit covers what it can and
+  // the remainder is billed — at the deal rate, not the reimbursement tier, so
+  // the provider pays the same per cm² either side of the line. Such an order
+  // carries a balance, so it follows the billed lifecycle (shipped ->
+  // invoiced -> paid) rather than closing at Delivered.
+  const totalCents = pull.drawCents;
+  const drawCents = Math.min(totalCents, account.creditCents);
+  const overageCents = totalCents - drawCents;
+
+  // Apportion the overage across lines by their share of the order, with the
+  // last line absorbing the rounding remainder so the parts sum exactly.
+  const billedByLine: number[] = (() => {
+    if (overageCents <= 0) return pull.lines.map(() => 0);
+    let left = overageCents;
+    return pull.lines.map((l, i) => {
+      if (i === pull.lines.length - 1) return left;
+      const share = totalCents > 0 ? Math.round((overageCents * l.saleCents) / totalCents) : 0;
+      left -= share;
+      return share;
+    });
+  })();
 
   const { data: pv } = await db
     .from("pricing_versions")
@@ -536,7 +551,7 @@ export async function createInventoryPull(
       date_applied: dateApplied || null,
       placed_at: new Date().toISOString(),
       prepurchase_account_id: account.id,
-      prepurchase_draw_cents: pull.drawCents,
+      prepurchase_draw_cents: drawCents,
       // Agile cost is stored only in order_internals (admin-only RLS), never on
       // the orders row (which the owning rep can read).
     })
@@ -552,7 +567,9 @@ export async function createInventoryPull(
       size_label: l.sizeLabel,
       cm2: l.cm2,
       qty: l.qty,
-      billed_cents: 0,
+      billed_cents: billedByLine[i] ?? 0,
+      // No commission on bulk-deal inventory, drawn or billed — the overage is
+      // the same agreement at the same rate, not a new sale.
       rep_commission_cents: 0,
       provider_keeps_cents: 0,
       serial_number: items[i]?.serial?.trim() || null,
@@ -563,18 +580,27 @@ export async function createInventoryPull(
   await db.from("order_internals").insert({
     order_id: order.id,
     cogs_cents: pull.costCents,
-    agile_net_cents: pull.drawCents - pull.costCents,
+    // Revenue is the whole order at the deal rate, however it was funded.
+    agile_net_cents: totalCents - pull.costCents,
   });
 
-  const newBalance = account.creditCents - pull.drawCents;
-  await db.from("prepurchase_accounts").update({ credit_cents: newBalance, updated_at: new Date().toISOString() }).eq("id", account.id);
-  await db.from("prepurchase_ledger").insert({
-    account_id: account.id,
-    order_id: order.id,
-    delta_cents: -pull.drawCents,
-    balance_after_cents: newBalance,
-    note: patientName?.trim() ? `Pull — ${patientName.trim()}` : "Inventory pull",
-  });
+  if (drawCents > 0) {
+    const newBalance = account.creditCents - drawCents;
+    await db
+      .from("prepurchase_accounts")
+      .update({ credit_cents: newBalance, updated_at: new Date().toISOString() })
+      .eq("id", account.id);
+    const who = patientName?.trim() ? ` — ${patientName.trim()}` : "";
+    await db.from("prepurchase_ledger").insert({
+      account_id: account.id,
+      order_id: order.id,
+      delta_cents: -drawCents,
+      balance_after_cents: newBalance,
+      note: overageCents > 0
+        ? `Inventory pull${who} — credit exhausted, $${(overageCents / 100).toFixed(2)} billed`
+        : `Inventory pull${who}`,
+    });
+  }
 
   revalidatePath("/portal/orders");
   revalidatePath(`/portal/providers/${providerId}`);
