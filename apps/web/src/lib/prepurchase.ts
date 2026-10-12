@@ -93,6 +93,8 @@ export interface StatementPull {
   date: string;
   status: string;
   drawCents: number;
+  /** Billed when the pull outran the remaining credit; 0 for a pure pull. */
+  billedCents: number;
   lines: { productCode: string; sizeLabel: string; cm2: number; qty: number }[];
 }
 
@@ -114,6 +116,8 @@ export interface PrepurchaseStatement {
   /** product_code → sale cents per cm². Agile cost is deliberately absent. */
   prices: { productCode: string; saleCents: number }[];
   pulls: StatementPull[];
+  /** Total billed across pulls that outran the credit. */
+  billedCents: number;
   ledger: StatementEntry[];
 }
 
@@ -146,7 +150,7 @@ export async function buildPrepurchaseStatement(providerId: string): Promise<Pre
       .order("seq", { ascending: true }),
     db
       .from("orders")
-      .select("id, created_at, status, prepurchase_draw_cents, order_items(product_code, size_label, cm2, qty)")
+      .select("id, created_at, status, prepurchase_draw_cents, order_items(product_code, size_label, cm2, qty, billed_cents)")
       .eq("prepurchase_account_id", acct.id)
       .not("prepurchase_draw_cents", "is", null)
       .is("deleted_at", null)
@@ -163,21 +167,36 @@ export async function buildPrepurchaseStatement(providerId: string): Promise<Pre
     initialCents: initial,
     remainingCents: remaining,
     drawnCents: initial - remaining,
+    billedCents: (orders ?? []).reduce(
+      (a, o) =>
+        a +
+        ((o.order_items ?? []) as { billed_cents: number }[]).reduce(
+          (b, i) => b + Number(i.billed_cents ?? 0),
+          0,
+        ),
+      0,
+    ),
     prices: (prices ?? [])
       .map((p) => ({ productCode: p.product_code as string, saleCents: Number(p.sale_per_cm2_cents) }))
       .sort((a, b) => a.productCode.localeCompare(b.productCode)),
-    pulls: (orders ?? []).map((o) => ({
-      orderId: o.id as string,
-      date: o.created_at as string,
-      status: o.status as string,
-      drawCents: Number(o.prepurchase_draw_cents),
-      lines: ((o.order_items ?? []) as { product_code: string; size_label: string; cm2: number; qty: number }[]).map((i) => ({
-        productCode: i.product_code,
-        sizeLabel: i.size_label,
-        cm2: Number(i.cm2),
-        qty: Number(i.qty),
-      })),
-    })),
+    pulls: (orders ?? []).map((o) => {
+      const rows = (o.order_items ?? []) as {
+        product_code: string; size_label: string; cm2: number; qty: number; billed_cents: number;
+      }[];
+      return {
+        orderId: o.id as string,
+        date: o.created_at as string,
+        status: o.status as string,
+        drawCents: Number(o.prepurchase_draw_cents),
+        billedCents: rows.reduce((a, i) => a + Number(i.billed_cents ?? 0), 0),
+        lines: rows.map((i) => ({
+          productCode: i.product_code,
+          sizeLabel: i.size_label,
+          cm2: Number(i.cm2),
+          qty: Number(i.qty),
+        })),
+      };
+    }),
     ledger: (ledger ?? []).map((l) => ({
       id: l.id as string,
       date: l.created_at as string,
