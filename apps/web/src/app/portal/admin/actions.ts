@@ -374,14 +374,25 @@ export async function advanceOrderStatus(
 ): Promise<ActionResult> {
   await requireAdmin();
   const db = createAdminClient();
-  const { data: order } = await db.from("orders").select("status, prepurchase_account_id").eq("id", orderId).single();
+  const { data: order } = await db
+    .from("orders")
+    .select("status, prepurchase_account_id, order_items(billed_cents)")
+    .eq("id", orderId)
+    .single();
   if (!order) return { ok: false, error: "Order not found" };
-  // Pre-purchased pulls are paid from credit — they close at Delivered (receipt
-  // confirmation), never Invoiced/Paid.
+
+  // A pull funded entirely from credit closes at Delivered (receipt
+  // confirmation) and is never invoiced. A pull that outran the credit carries
+  // a billed balance, so it has to follow the billed path to Invoiced → Paid —
+  // otherwise Delivered strands it as settled when money is still owed.
   const isPull = Boolean(order.prepurchase_account_id);
-  const next = isPull && order.status === "shipped" ? "delivered" : ORDER_NEXT[order.status];
+  const billedCents = ((order.order_items ?? []) as { billed_cents: number }[])
+    .reduce((a, i) => a + Number(i.billed_cents ?? 0), 0);
+  const closesAtDelivered = isPull && billedCents === 0;
+
+  const next = closesAtDelivered && order.status === "shipped" ? "delivered" : ORDER_NEXT[order.status];
   if (!next) return { ok: false, error: `No next step from ${order.status}` };
-  if (isPull && (next === "invoiced" || next === "paid")) {
+  if (closesAtDelivered && (next === "invoiced" || next === "paid")) {
     return { ok: false, error: "Inventory pulls aren't invoiced — they close at Delivered." };
   }
 
