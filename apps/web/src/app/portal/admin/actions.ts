@@ -711,6 +711,38 @@ export async function createRepInvite(
   return { ok: true, url: `/rep-signup/${data.id}` };
 }
 
+/**
+ * Delete a rep invite that was never taken up. Admin only.
+ *
+ * Refuses an invite that has already been completed — that row is the record
+ * of how a rep signed, and the signed agreement references it. Expired and
+ * still-pending invites are safe to remove; the audit trigger on rep_invites
+ * records the delete either way.
+ */
+export async function deleteRepInvite(inviteId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: invite } = await supabase
+    .from("rep_invites")
+    .select("id, status, completed_profile_id, completed_at")
+    .eq("id", inviteId)
+    .maybeSingle();
+  if (!invite) return { ok: false, error: "Invite not found" };
+  if (invite.completed_profile_id || invite.completed_at) {
+    return {
+      ok: false,
+      error: "This invite was completed — deleting it would remove the record of how that rep signed.",
+    };
+  }
+
+  const { error } = await supabase.from("rep_invites").delete().eq("id", inviteId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/portal/admin/reps");
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Contract template
 // ---------------------------------------------------------------------------
