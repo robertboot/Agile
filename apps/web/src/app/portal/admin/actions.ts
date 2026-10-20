@@ -374,14 +374,25 @@ export async function advanceOrderStatus(
 ): Promise<ActionResult> {
   await requireAdmin();
   const db = createAdminClient();
-  const { data: order } = await db.from("orders").select("status, prepurchase_account_id").eq("id", orderId).single();
+  const { data: order } = await db
+    .from("orders")
+    .select("status, prepurchase_account_id, order_items(billed_cents)")
+    .eq("id", orderId)
+    .single();
   if (!order) return { ok: false, error: "Order not found" };
-  // Pre-purchased pulls are paid from credit — they close at Delivered (receipt
-  // confirmation), never Invoiced/Paid.
+
+  // A pull funded entirely from credit closes at Delivered (receipt
+  // confirmation) and is never invoiced. A pull that outran the credit carries
+  // a billed balance, so it has to follow the billed path to Invoiced → Paid —
+  // otherwise Delivered strands it as settled when money is still owed.
   const isPull = Boolean(order.prepurchase_account_id);
-  const next = isPull && order.status === "shipped" ? "delivered" : ORDER_NEXT[order.status];
+  const billedCents = ((order.order_items ?? []) as { billed_cents: number }[])
+    .reduce((a, i) => a + Number(i.billed_cents ?? 0), 0);
+  const closesAtDelivered = isPull && billedCents === 0;
+
+  const next = closesAtDelivered && order.status === "shipped" ? "delivered" : ORDER_NEXT[order.status];
   if (!next) return { ok: false, error: `No next step from ${order.status}` };
-  if (isPull && (next === "invoiced" || next === "paid")) {
+  if (closesAtDelivered && (next === "invoiced" || next === "paid")) {
     return { ok: false, error: "Inventory pulls aren't invoiced — they close at Delivered." };
   }
 
@@ -698,6 +709,38 @@ export async function createRepInvite(
     .single();
   if (error) return { ok: false, error: error.message };
   return { ok: true, url: `/rep-signup/${data.id}` };
+}
+
+/**
+ * Delete a rep invite that was never taken up. Admin only.
+ *
+ * Refuses an invite that has already been completed — that row is the record
+ * of how a rep signed, and the signed agreement references it. Expired and
+ * still-pending invites are safe to remove; the audit trigger on rep_invites
+ * records the delete either way.
+ */
+export async function deleteRepInvite(inviteId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: invite } = await supabase
+    .from("rep_invites")
+    .select("id, status, completed_profile_id, completed_at")
+    .eq("id", inviteId)
+    .maybeSingle();
+  if (!invite) return { ok: false, error: "Invite not found" };
+  if (invite.completed_profile_id || invite.completed_at) {
+    return {
+      ok: false,
+      error: "This invite was completed — deleting it would remove the record of how that rep signed.",
+    };
+  }
+
+  const { error } = await supabase.from("rep_invites").delete().eq("id", inviteId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/portal/admin/reps");
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

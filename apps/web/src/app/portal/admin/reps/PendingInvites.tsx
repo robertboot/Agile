@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { copyFormattedAndCompose } from "@/lib/invite-email";
+import { deleteRepInvite } from "@/app/portal/admin/actions";
 
 export interface PendingInvite {
   id: string;
@@ -19,8 +21,25 @@ function daysLeft(iso: string): number {
 
 export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [isPending, startDelete] = useTransition();
+  const router = useRouter();
 
   if (invites.length === 0) return null;
+
+  function remove(inv: PendingInvite) {
+    setError(null);
+    setPendingId(inv.id);
+    startDelete(async () => {
+      const r = await deleteRepInvite(inv.id);
+      setPendingId(null);
+      setConfirmId(null);
+      if (r.ok) router.refresh();
+      else setError(r.error ?? "Could not delete this invite");
+    });
+  }
 
   function linkFor(id: string) {
     const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.agilemedgroup.com";
@@ -66,6 +85,7 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
               <th className="px-4 py-2.5 font-medium">Sent</th>
               <th className="px-4 py-2.5 font-medium">Status</th>
               <th className="px-4 py-2.5 text-right font-medium">Resend</th>
+              <th className="px-4 py-2.5 text-right font-medium" />
             </tr>
           </thead>
           <tbody>
@@ -111,12 +131,45 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
                       </button>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    {expired &&
+                      (confirmId === inv.id ? (
+                        <span className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => remove(inv)}
+                            disabled={isPending && pendingId === inv.id}
+                            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                          >
+                            {isPending && pendingId === inv.id ? "Deleting…" : "Confirm"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmId(null)}
+                            className="text-xs text-slate-500 hover:underline"
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setError(null); setConfirmId(inv.id); }}
+                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      ))}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      {error && (
+        <p className="border-t border-slate-200 px-4 py-3 text-sm text-red-600">{error}</p>
+      )}
     </div>
   );
 }
