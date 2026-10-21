@@ -273,6 +273,16 @@ select pg_temp.expect_eq('Select Health CC is a Medicaid MCO, not commercial',
 select pg_temp.expect_eq('Molina spans three classifications',
   (select count(distinct p.classification)::text from credentialing.payer_product p
      join credentialing.payer_group g on g.id=p.payer_group_id where g.name='Molina'), '3');
+select pg_temp.expect_eq('Railroad Medicare is traditional Medicare, not Advantage',
+  (select p.classification::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='Medicare' and p.name='Railroad Medicare'), 'medicare');
+-- Palmetto GBA receives the application, but it is the MAC, not a credentialing
+-- delegate: 'Medicare Part B' is 'direct' even though Noridian receives it.
+select pg_temp.expect_eq('Railroad Medicare files direct, not delegated',
+  (select p.filing_route::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='Medicare' and p.name='Railroad Medicare'), 'direct');
 select pg_temp.expect_eq('CHAMPVA credentials the location',
   (select p.credentialing_subject::text from credentialing.payer_product p
      join credentialing.payer_group g on g.id=p.payer_group_id
