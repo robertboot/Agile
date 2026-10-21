@@ -1,13 +1,13 @@
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ProductsManager, type PricingInfo, type ProductRow } from "./ProductsManager";
+import { ProductsManager, type PricingInfo, type ProductRow, type SizeRow } from "./ProductsManager";
 
 export default async function AdminProductsPage() {
   await requireAdmin();
   const db = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: products }, { data: costs }, { data: versions }] = await Promise.all([
+  const [{ data: products }, { data: costs }, { data: versions }, { data: sizes }] = await Promise.all([
     db.from("products").select("code, name, line, construct, active").order("code"),
     db
       .from("product_costs")
@@ -19,6 +19,12 @@ export default async function AdminProductsPage() {
       .select("quarter, reimbursement_per_cm2_cents, effective_from, effective_to, created_at")
       .order("effective_from", { ascending: false })
       .order("created_at", { ascending: false }),
+    db
+      .from("product_sizes")
+      .select("sku, product_code, label, cm2")
+      .eq("active", true)
+      .order("product_code")
+      .order("cm2"),
   ]);
 
   const costByCode = new Map((costs ?? []).map((c) => [c.product_code, c]));
@@ -55,5 +61,12 @@ export default async function AdminProductsPage() {
       : null,
   };
 
-  return <ProductsManager products={rows} pricing={pricing} />;
+  const sizeRows: SizeRow[] = (sizes ?? []).map((s) => ({
+    sku: s.sku,
+    productCode: s.product_code,
+    label: s.label,
+    cm2: Number(s.cm2),
+  }));
+
+  return <ProductsManager products={rows} sizes={sizeRows} pricing={pricing} />;
 }
