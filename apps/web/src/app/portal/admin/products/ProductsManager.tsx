@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { formatCents } from "@agile/shared";
+import {
+  formatCents,
+  BILL_PCT,
+  DISCOUNT_TIERS,
+  REP_COMMISSION_SHARE,
+  TYPICAL_COLLECTION_PCT,
+  type DiscountTier,
+} from "@agile/shared";
 import {
   addProduct,
   discardPricingDraft,
@@ -40,6 +47,10 @@ export function ProductsManager({
   products: ProductRow[];
   pricing: PricingInfo;
 }) {
+  // Reimbursement is a single rate for every product, so what the provider is
+  // billed and what they keep are identical across the catalogue — only Agile's
+  // own margin moves with COGS.
+  const reimbursementCents = pricing.current?.reimbursementCents ?? 12700;
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -72,6 +83,8 @@ export function ProductsManager({
 
       <PricingCard pricing={pricing} run={run} pending={pending} />
 
+      <ProviderPricingCard reimbursementCents={reimbursementCents} />
+
       <section className="rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between px-5 pt-4">
           <h2 className="font-semibold text-navy-900">Products, pricing &amp; COGS</h2>
@@ -86,15 +99,25 @@ export function ProductsManager({
                 <th className="px-3 py-2 font-medium">Code</th>
                 <th className="px-3 py-2 font-medium">Product</th>
                 <th className="px-3 py-2 font-medium">Active</th>
-                <th className="px-3 py-2 text-right font-medium">Price /cm²</th>
+                <th className="px-3 py-2 text-right font-medium">Agile cost /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">COGS /cm²</th>
+                <th className="px-3 py-2 text-right font-medium">
+                  Agile net /cm²
+                  <div className="font-normal text-[10px] text-slate-400">30% · 35% · 40%</div>
+                </th>
                 <th className="px-3 py-2 text-right font-medium">Pending changes</th>
                 <th className="px-3 py-2 font-medium" />
               </tr>
             </thead>
             <tbody>
               {products.map((p) => (
-                <ProductRowView key={p.code} product={p} run={run} pending={pending} />
+                <ProductRowView
+                  key={p.code}
+                  product={p}
+                  run={run}
+                  pending={pending}
+                  reimbursementCents={reimbursementCents}
+                />
               ))}
             </tbody>
           </table>
@@ -220,11 +243,69 @@ function PricingCard({
   );
 }
 
+/**
+ * What the provider is actually charged, and what they keep, at each discount
+ * tier. These figures are the same for every product — reimbursement is one
+ * flat rate — which is exactly what the per-product cost and COGS columns
+ * below make easy to misread.
+ */
+function ProviderPricingCard({ reimbursementCents }: { reimbursementCents: number }) {
+  const collects = Math.round(reimbursementCents * TYPICAL_COLLECTION_PCT);
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white">
+      <div className="border-b border-slate-200 px-5 py-4">
+        <h2 className="font-semibold text-navy-900">What the provider pays &amp; keeps</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Per cm², at {formatCents(reimbursementCents)}/cm² reimbursement. The same for every
+          product — the cost and COGS figures below are Agile&apos;s, not the provider&apos;s.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-slate-200 text-left text-slate-500">
+            <tr>
+              <th className="px-5 py-2 font-medium">Discount</th>
+              <th className="px-3 py-2 text-right font-medium">Billed to provider</th>
+              <th className="px-3 py-2 text-right font-medium">Provider collects*</th>
+              <th className="px-3 py-2 text-right font-medium">Provider keeps*</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DISCOUNT_TIERS.map((t: DiscountTier) => {
+              const billed = Math.round(reimbursementCents * BILL_PCT[t]);
+              return (
+                <tr key={t} className="border-b border-slate-100 last:border-0">
+                  <td className="px-5 py-2.5 font-medium text-navy-900">{t}%</td>
+                  <td className="px-3 py-2.5 text-right font-medium tabular-nums">
+                    {formatCents(billed)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
+                    {formatCents(collects)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-emerald-700">
+                    {formatCents(collects - billed)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-5 py-3 text-[11px] text-slate-400">
+        *At a typical {Math.round(TYPICAL_COLLECTION_PCT * 100)}% collection rate. Secondary
+        insurance can push it higher; actual reimbursement varies by payer.
+      </p>
+    </section>
+  );
+}
+
 function ProductRowView({
   product,
   run,
   pending,
+  reimbursementCents,
 }: {
+  reimbursementCents: number;
   product: ProductRow;
   run: Run;
   pending: boolean;
@@ -277,6 +358,24 @@ function ProductRowView({
         </td>
         <td className="px-3 py-2.5 text-right font-medium text-brand-violet">
           {product.cogsCents !== null ? formatCents(product.cogsCents) : "—"}
+        </td>
+        <td className="px-3 py-2.5 text-right">
+          {product.cogsCents === null ? (
+            <span className="text-xs text-slate-300">—</span>
+          ) : (
+            <div className="flex justify-end gap-2 text-xs tabular-nums text-brand-violet">
+              {DISCOUNT_TIERS.map((t) => {
+                const billed = Math.round(reimbursementCents * BILL_PCT[t]);
+                const net = billed - product.cogsCents!;
+                const agile = net - Math.round(REP_COMMISSION_SHARE * net);
+                return (
+                  <span key={t} className={agile < 0 ? "font-semibold text-red-600" : ""}>
+                    {formatCents(agile)}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </td>
         <td className="px-3 py-2.5 text-right">
           {hasPendingChanges ? (
