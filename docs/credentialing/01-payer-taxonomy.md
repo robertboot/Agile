@@ -295,12 +295,17 @@ Two facts that change how this enrollment is worked, from Palmetto GBA's provide
 - **No CMS-855 forms.** The packet assembly rule in §7 is about the local Part B MAC and does not
   apply here. The Railroad PTAN is requested through Palmetto GBA's online PTAN Lookup and Request
   Tool, by the provider or someone the provider employs — a billing agency or clearinghouse cannot
-  request it.
+  request it. The tool asks for exactly three things: the Part B PTAN the local MAC assigned, the
+  individual NPI, and the last five digits of the TIN.
 - **Part B first.** Palmetto GBA builds the Railroad record from what is already on file with the
   provider's local Part B MAC, so `Medicare Part B` has to be approved before this can be
-  requested. The schema cannot express one product gating another, so for now this is a sequencing
-  fact for whoever works the enrollment, and the reason not to batch it with a new Part B
-  application. Worth raising as a modelling question if prerequisites turn out to be common.
+  requested, and a newly issued Part B PTAN needs 14 business days before the lookup will match.
+
+These are no longer prose-only. Both are seeded as blocking punch-list items on the product
+(`payer_product_requirement`), so every Railroad enrollment opens with them outstanding and cannot
+reach `submitted` until each is satisfied, marked not applicable, or waived with a reason — see
+`08-completeness-punch-list.md`. The prerequisite itself is still not modelled as one product
+gating another; what is modelled is the work it creates.
 
 ### Credentialing not required — explicit exclusions
 
