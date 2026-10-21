@@ -494,9 +494,48 @@ select pg_temp.expect_eq('the membership tests pin their search_path',
 select pg_temp.expect_eq('no admin-only policy survives on the credentialing tables',
   (select count(*)::text from pg_policies
     where schemaname = 'credentialing' and policyname like '%_admin_all'), '0');
+-- Derived rather than counted. This assertion was a hardcoded 10, went stale
+-- the moment 20261006000001 added credentialing.enquiry, and spent a week
+-- failing on a schema that was correct; it is a 20 now and would go stale again
+-- on the next table. Naming the tables that legitimately lack the policy means
+-- a new table either carries one or shows up here by name.
 select pg_temp.expect_eq('every credentialing table carries a staff policy',
-  (select count(*)::text from pg_policies
-    where schemaname = 'credentialing' and policyname like '%_staff_all'), '20');
+  (select coalesce(string_agg(c.relname, ', ' order by c.relname), 'none')
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'credentialing'
+      and c.relkind = 'r'
+      -- staff is the one deliberate exception: staff read the list, only a
+      -- manager edits it, so it splits read from write instead of carrying a
+      -- single _staff_all.
+      and c.relname <> 'staff'
+      and not exists (
+        select 1 from pg_policies pol
+         where pol.schemaname = 'credentialing'
+           and pol.tablename = c.relname
+           and pol.policyname like '%\_staff\_all')), 'none');
+
+-- A function is executable by PUBLIC the moment it is created, so a migration
+-- that grants without revoking first leaves anon holding EXECUTE. is_staff(),
+-- is_manager() and every helper predicate in 20260724000004 revoke first.
+--
+-- Eight functions do not, and this names them rather than fixing them:
+-- tightening grants on the enrollment, appeal and checklist RPCs is a change
+-- of its own. All eight check auth.uid() or call fn_guard_staff() internally,
+-- so nothing is reachable anonymously today — the objection is that the
+-- protection lives in the body rather than in the grant. Pinning the list is
+-- the point: a ninth cannot appear unnoticed, and the debt is written down
+-- where the next person will see it.
+select pg_temp.expect_eq('no NEW credentialing function is executable by anon',
+  (select coalesce(string_agg(p.proname, ', ' order by p.proname), 'none')
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'credentialing'
+      and has_function_privilege('anon', p.oid, 'execute')
+      and p.proname not in (
+        'effective_organizational_npi', 'enrollment_disposition',
+        'fn_appeal_deadline_days', 'fn_check_superseded_pointer',
+        'fn_checklist_outstanding', 'fn_guard_staff',
+        'fn_record_batch_decision', 'fn_supersede_for_location_scope')), 'none');
 
 -- ---------- 21. cases: service lines, shared providers, the clock ----------
 -- 20261007000001. Two services, one provider roster, one deadline calculator.
