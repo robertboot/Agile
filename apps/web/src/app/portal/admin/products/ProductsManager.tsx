@@ -141,8 +141,14 @@ export function ProductsManager({
                 <th className="px-3 py-2 text-right font-medium">Agile cost /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">COGS /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">
+                  Agile selling price /cm²
+                  <div className="font-normal text-[10px] text-slate-400">cost + COGS</div>
+                </th>
+                <th className="px-3 py-2 text-right font-medium">
                   Provider price /cm²
-                  <div className="font-normal text-[10px] text-slate-400">30% · 35% · 40%</div>
+                  <div className="font-normal text-[10px] text-slate-400">
+                    selling price less 30% · 35% · 40%
+                  </div>
                 </th>
                 <th className="px-3 py-2 text-right font-medium">
                   Agile net /cm²
@@ -159,7 +165,6 @@ export function ProductsManager({
                   product={p}
                   run={run}
                   pending={pending}
-                  reimbursementCents={reimbursementCents}
                 />
               ))}
             </tbody>
@@ -568,9 +573,7 @@ function ProductRowView({
   product,
   run,
   pending,
-  reimbursementCents,
 }: {
-  reimbursementCents: number;
   product: ProductRow;
   run: Run;
   pending: boolean;
@@ -582,6 +585,14 @@ function ProductRowView({
   const [cogs, setCogs] = useState(dollars(product.draftCogsCents ?? product.cogsCents));
 
   const hasPendingChanges = product.draftCostCents !== null || product.draftCogsCents !== null;
+
+  // Agile selling price is purchase price + COGS; the discount tiers come off
+  // it. The CMS list price ($127-ish) is what the PROVIDER is reimbursed and
+  // plays no part in what Agile charges them.
+  const sellingCents =
+    product.costCents !== null && product.cogsCents !== null
+      ? product.costCents + product.cogsCents
+      : null;
 
   function save() {
     const priceCents = price.trim() ? toCents(price) : null;
@@ -624,21 +635,31 @@ function ProductRowView({
         <td className="px-3 py-2.5 text-right font-medium text-brand-violet">
           {product.cogsCents !== null ? formatCents(product.cogsCents) : "—"}
         </td>
-        <td className="px-3 py-2.5 text-right">
-          <div className="flex justify-end gap-2 text-xs tabular-nums font-medium text-navy-900">
-            {DISCOUNT_TIERS.map((t) => (
-              <span key={t}>{formatCents(Math.round(reimbursementCents * BILL_PCT[t]))}</span>
-            ))}
-          </div>
+        <td className="px-3 py-2.5 text-right font-semibold">
+          {sellingCents !== null ? formatCents(sellingCents) : "—"}
         </td>
         <td className="px-3 py-2.5 text-right">
-          {product.cogsCents === null ? (
+          {sellingCents === null ? (
+            <span className="text-xs text-slate-300">—</span>
+          ) : (
+            <div className="flex justify-end gap-2 text-xs tabular-nums font-medium text-navy-900">
+              {DISCOUNT_TIERS.map((t) => (
+                <span key={t}>{formatCents(Math.round(sellingCents * BILL_PCT[t]))}</span>
+              ))}
+            </div>
+          )}
+        </td>
+        <td className="px-3 py-2.5 text-right">
+          {sellingCents === null || product.costCents === null ? (
             <span className="text-xs text-slate-300">—</span>
           ) : (
             <div className="flex justify-end gap-2 text-xs tabular-nums text-brand-violet">
               {DISCOUNT_TIERS.map((t) => {
-                const billed = Math.round(reimbursementCents * BILL_PCT[t]);
-                const net = billed - product.cogsCents!;
+                // Agile's own outlay is the purchase price; COGS is the markup
+                // that lifts it to the selling price, so it is not subtracted
+                // again here.
+                const billed = Math.round(sellingCents * BILL_PCT[t]);
+                const net = billed - product.costCents!;
                 const agile = net - Math.round(REP_COMMISSION_SHARE * net);
                 return (
                   <span key={t} className={agile < 0 ? "font-semibold text-red-600" : ""}>
