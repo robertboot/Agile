@@ -112,7 +112,17 @@ export async function savePricingDraft(
   const { error } = existing
     ? await db.from("pricing_versions").update(values).eq("id", existing.id)
     : await db.from("pricing_versions").insert({ ...values, effective_from: "9999-12-31" });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // quarter is UNIQUE, so reusing a label that is already live (or on
+    // another version) surfaces as a raw constraint name. Say what to do.
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: `There is already a pricing version labelled ${values.quarter}. Give the draft its own quarter label, e.g. the next quarter.`,
+      };
+    }
+    return { ok: false, error: error.message };
+  }
   revalidatePath("/portal/admin/products");
   return { ok: true };
 }
