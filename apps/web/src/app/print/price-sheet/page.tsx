@@ -95,6 +95,11 @@ export default async function PriceSheetPrint({
             <h2 className="text-sm font-semibold text-navy-900">
               {p.name}{" "}
               <span className="font-mono text-xs font-normal text-slate-400">{p.code}</span>
+              {/* The rate the size rows below are derived from, repeated per
+                  product so each block stands alone when read or shared. */}
+              <span className="ml-2 font-normal tabular-nums text-slate-600">
+                {formatCents(costPerCm2)}/cm²
+              </span>
             </h2>
             {p.construct && <p className="text-xs text-slate-500">{p.construct}</p>}
             <table className="mt-2 w-full text-sm">

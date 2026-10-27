@@ -379,6 +379,16 @@ function PriceSheet({
                         <span className="font-mono text-xs font-normal text-slate-400">
                           {p.code}
                         </span>
+                        {/* The rate every size row below is derived from, so each
+                            product block reads on its own. */}
+                        <span className="ml-2 font-normal tabular-nums text-slate-600">
+                          {formatCents(billedPerCm2)}/cm²
+                        </span>
+                        {p.cogsCents !== null && (
+                          <span className="ml-2 font-normal tabular-nums text-brand-violet">
+                            COGS {formatCents(p.cogsCents)}/cm²
+                          </span>
+                        )}
                       </td>
                     </tr>
                     {rows.length === 0 && (
