@@ -302,6 +302,17 @@ function PriceSheet({
   const active = products.filter((p) => p.active);
   const sizesFor = (code: string) => sizes.filter((z) => z.productCode === code);
 
+  // Collapsed products, by code. Sizes show by default; collapsing leaves the
+  // header row with its rate, which is the comparison view across products.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const allCollapsed = active.length > 0 && active.every((p) => collapsed[p.code]);
+  const toggle = (code: string) =>
+    setCollapsed((c) => ({ ...c, [code]: !c[code] }));
+  const toggleAll = () =>
+    setCollapsed(
+      allCollapsed ? {} : Object.fromEntries(active.map((p) => [p.code, true])),
+    );
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-5 py-4">
@@ -343,6 +354,15 @@ function PriceSheet({
                 className="mt-1 w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
+            {valid && (
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                {allCollapsed ? "Expand all" : "Collapse all"}
+              </button>
+            )}
             {valid && (
               <a
                 href={`/print/price-sheet?discount=${pct}&list=${listCents}`}
@@ -409,30 +429,52 @@ function PriceSheet({
                   <Fragment key={p.code}>
                     <tr className="border-b border-slate-100 bg-slate-50/70">
                       <td className="px-5 py-2 font-semibold text-navy-900" colSpan={9}>
-                        {p.name}{" "}
-                        <span className="font-mono text-xs font-normal text-slate-400">
-                          {p.code}
-                        </span>
-                        {/* The rate every size row below is derived from, so each
-                            product block reads on its own. */}
-                        <span className="ml-2 font-normal tabular-nums text-slate-600">
-                          {formatCents(billedPerCm2)}/cm²
-                        </span>
-                        {p.cogsCents !== null && (
-                          <span className="ml-2 font-normal tabular-nums text-brand-violet">
-                            COGS {formatCents(p.cogsCents)}/cm²
+                        <button
+                          type="button"
+                          onClick={() => toggle(p.code)}
+                          aria-expanded={!collapsed[p.code]}
+                          className="-mx-1 flex w-full items-center gap-2 rounded px-1 text-left font-semibold text-navy-900 hover:text-brand-blue"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`text-xs text-slate-400 transition-transform ${
+                              collapsed[p.code] ? "" : "rotate-90"
+                            }`}
+                          >
+                            ▶
                           </span>
-                        )}
+                          <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+                            <span>{p.name}</span>
+                            <span className="font-mono text-xs font-normal text-slate-400">
+                              {p.code}
+                            </span>
+                            {/* The rate every size row below is derived from, so
+                                each product block reads on its own — and still
+                                does when the sizes are collapsed away. */}
+                            <span className="font-normal tabular-nums text-slate-600">
+                              {formatCents(billedPerCm2)}/cm²
+                            </span>
+                            {p.cogsCents !== null && (
+                              <span className="font-normal tabular-nums text-brand-violet">
+                                COGS {formatCents(p.cogsCents)}/cm²
+                              </span>
+                            )}
+                            <span className="ml-auto text-xs font-normal text-slate-400">
+                              {rows.length} {rows.length === 1 ? "size" : "sizes"}
+                            </span>
+                          </span>
+                        </button>
                       </td>
                     </tr>
-                    {rows.length === 0 && (
+                    {!collapsed[p.code] && rows.length === 0 && (
                       <tr className="border-b border-slate-100">
                         <td className="px-5 py-2 text-slate-400" colSpan={9}>
                           No active sizes
                         </td>
                       </tr>
                     )}
-                    {rows.map((z) => {
+                    {!collapsed[p.code] &&
+                      rows.map((z) => {
                       const cost = Math.round(billedPerCm2 * z.cm2);
                       const claim = Math.round(base * z.cm2);
                       const collects = Math.round(collectsPerCm2 * z.cm2);
