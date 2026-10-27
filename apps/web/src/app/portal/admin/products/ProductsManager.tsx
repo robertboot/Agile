@@ -46,8 +46,8 @@ const dollars = (cents: number | null) => (cents === null ? "" : (cents / 100).t
 const toCents = (v: string) => Math.round(Number(v) * 100);
 
 /** Purchase price + COGS, shown live in the edit form. "—" until both parse.
-    Not the list price — list price is the $127 reimbursement. */
-function sellingOf(purchase: string, cogs: string): string {
+    Distinct from the CMS list price, which is the $127 reimbursement. */
+function saleOf(purchase: string, cogs: string): string {
   const a = Number(purchase);
   const b = Number(cogs);
   if (purchase.trim() === "" || cogs.trim() === "" || !Number.isFinite(a) || !Number.isFinite(b)) {
@@ -120,7 +120,7 @@ export function ProductsManager({
                 <th className="px-3 py-2 text-right font-medium">Agile cost /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">COGS /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">
-                  Sale price /cm²
+                  Provider price /cm²
                   <div className="font-normal text-[10px] text-slate-400">30% · 35% · 40%</div>
                 </th>
                 <th className="px-3 py-2 text-right font-medium">
@@ -292,7 +292,7 @@ function PriceSheet({
   reimbursementCents: number;
 }) {
   const [discount, setDiscount] = useState("40");
-  // List price is what the discounts come off. It seeds from the live pricing
+  // CMS list price is what the discounts come off. It seeds from the live pricing
   // version but is editable here for modelling — changing it does NOT change
   // what orders are priced at; that is the Pricing card's GO LIVE flow.
   const [listPrice, setListPrice] = useState(dollars(reimbursementCents));
@@ -332,13 +332,13 @@ function PriceSheet({
             <h2 className="font-semibold text-navy-900">Provider price sheet</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               Every product and size at one discount, off a{" "}
-              {formatCents(base)}/cm² list price.
+              {formatCents(base)}/cm² CMS list price.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="label-mono text-slate-500" htmlFor="sheet-list">
-                List price /cm²
+                CMS list price /cm²
               </label>
               <input
                 id="sheet-list"
@@ -390,7 +390,7 @@ function PriceSheet({
           <p className="mt-2 text-sm text-red-600">
             {listValid
               ? "Enter a discount between 0 and 100."
-              : "Enter a list price greater than zero."}
+              : "Enter a CMS list price greater than zero."}
           </p>
         ) : (
           <p className="mt-2 text-xs text-slate-500">
@@ -699,14 +699,14 @@ function ProductRowView({
                 />
               </div>
               {/* Derived, not stored: purchase + COGS. Updates as either is
-                  typed so the selling price is visible before saving. */}
+                  typed so the sale price is visible before saving. */}
               <div>
-                <span className="label-mono block text-slate-500">= Agile selling price $/cm²</span>
+                <span className="label-mono block text-slate-500">= Sale price $/cm²</span>
                 <output
                   htmlFor="edit-purchase edit-cogs"
                   className="mt-1 block w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm font-semibold tabular-nums text-navy-900"
                 >
-                  {sellingOf(price, cogs)}
+                  {saleOf(price, cogs)}
                 </output>
               </div>
               <button
@@ -719,7 +719,7 @@ function ProductRowView({
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Agile selling price is purchase price plus COGS. Name and construct apply
+              Sale price is Agile's purchase price plus COGS. Name and construct apply
               immediately; purchase price and COGS changes stage as drafts — publish them with
               GO LIVE below.
             </p>
