@@ -3,7 +3,6 @@
 import { Fragment, useState, useTransition } from "react";
 import {
   formatCents,
-  BILL_PCT,
   DISCOUNT_TIERS,
   REP_COMMISSION_SHARE,
   TYPICAL_COLLECTION_PCT,
@@ -92,6 +91,13 @@ export function ProductsManager({
   // billed and what they keep are identical across the catalogue — only Agile's
   // own margin moves with COGS.
   const reimbursementCents = pricing.current?.reimbursementCents ?? 12700;
+  // One free-form discount drives the whole table. 40% is the tier Agile
+  // quotes most often, so it is the default.
+  const [discount, setDiscount] = useState("40");
+  const discountPct = Number(discount);
+  const discountValid =
+    discount.trim() !== "" && Number.isFinite(discountPct) && discountPct >= 0 && discountPct < 100;
+  const billPct = discountValid ? 1 - discountPct / 100 : null;
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -125,11 +131,24 @@ export function ProductsManager({
       <PricingCard pricing={pricing} run={run} pending={pending} />
 
       <section className="rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between px-5 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4">
           <h2 className="font-semibold text-navy-900">Products, pricing &amp; COGS</h2>
-          <span className="label-mono text-slate-400">
-            Edit → change price &amp; COGS → Save → GO LIVE
-          </span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2">
+              <span className="label-mono text-slate-500">Discount</span>
+              <input
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                inputMode="decimal"
+                aria-label="Discount percent applied to the selling price"
+                className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-right text-sm"
+              />
+              <span className="text-sm text-slate-500">%</span>
+            </label>
+            <span className="label-mono text-slate-400">
+              Edit → change price &amp; COGS → Save → GO LIVE
+            </span>
+          </div>
         </div>
         <div className="overflow-x-auto p-2">
           <table className="w-full text-sm">
@@ -147,12 +166,12 @@ export function ProductsManager({
                 <th className="px-3 py-2 text-right font-medium">
                   Provider price /cm²
                   <div className="font-normal text-[10px] text-slate-400">
-                    selling price less 30% · 35% · 40%
+                    {discountValid ? `selling price less ${discountPct}%` : "enter a discount"}
                   </div>
                 </th>
                 <th className="px-3 py-2 text-right font-medium">
                   Agile net /cm²
-                  <div className="font-normal text-[10px] text-slate-400">30% · 35% · 40%</div>
+                  <div className="font-normal text-[10px] text-slate-400">after cost &amp; commission</div>
                 </th>
                 <th className="px-3 py-2 text-right font-medium">Pending changes</th>
                 <th className="px-3 py-2 font-medium" />
@@ -165,6 +184,7 @@ export function ProductsManager({
                   product={p}
                   run={run}
                   pending={pending}
+                  billPct={billPct}
                 />
               ))}
             </tbody>
@@ -302,7 +322,7 @@ function PricingCard({
  *
  * The discount is free-form, not limited to the three standard tiers, so an
  * admin can test what Agile still nets at, say, 50% before offering it.
- * billPct is 1 - discount/100, which matches BILL_PCT exactly at 30/35/40.
+ * billPct is 1 - discount/100, which matches the 30/35/40 tiers exactly.
  *
  * Provider-facing figures (cost, claim, collects, keeps) sit left; Agile's own
  * COGS, commission and net sit right in violet, the convention this portal
@@ -573,10 +593,13 @@ function ProductRowView({
   product,
   run,
   pending,
+  billPct,
 }: {
   product: ProductRow;
   run: Run;
   pending: boolean;
+  /** 1 - discount/100, or null while the discount field is not a usable number. */
+  billPct: number | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(product.name);
@@ -638,36 +661,30 @@ function ProductRowView({
         <td className="px-3 py-2.5 text-right font-semibold">
           {sellingCents !== null ? formatCents(sellingCents) : "—"}
         </td>
-        <td className="px-3 py-2.5 text-right">
-          {sellingCents === null ? (
+        <td className="px-3 py-2.5 text-right font-medium tabular-nums text-navy-900">
+          {sellingCents === null || billPct === null ? (
             <span className="text-xs text-slate-300">—</span>
           ) : (
-            <div className="flex justify-end gap-2 text-xs tabular-nums font-medium text-navy-900">
-              {DISCOUNT_TIERS.map((t) => (
-                <span key={t}>{formatCents(Math.round(sellingCents * BILL_PCT[t]))}</span>
-              ))}
-            </div>
+            formatCents(Math.round(sellingCents * billPct))
           )}
         </td>
-        <td className="px-3 py-2.5 text-right">
-          {sellingCents === null || product.costCents === null ? (
+        <td className="px-3 py-2.5 text-right tabular-nums">
+          {sellingCents === null || product.costCents === null || billPct === null ? (
             <span className="text-xs text-slate-300">—</span>
           ) : (
-            <div className="flex justify-end gap-2 text-xs tabular-nums text-brand-violet">
-              {DISCOUNT_TIERS.map((t) => {
-                // Agile's own outlay is the purchase price; COGS is the markup
-                // that lifts it to the selling price, so it is not subtracted
-                // again here.
-                const billed = Math.round(sellingCents * BILL_PCT[t]);
-                const net = billed - product.costCents!;
-                const agile = net - Math.round(REP_COMMISSION_SHARE * net);
-                return (
-                  <span key={t} className={agile < 0 ? "font-semibold text-red-600" : ""}>
-                    {formatCents(agile)}
-                  </span>
-                );
-              })}
-            </div>
+            (() => {
+              // Agile's own outlay is the purchase price; COGS is the markup
+              // that lifts it to the selling price, so it is not subtracted
+              // again here.
+              const billed = Math.round(sellingCents * billPct);
+              const net = billed - product.costCents;
+              const agile = net - Math.round(REP_COMMISSION_SHARE * net);
+              return (
+                <span className={agile < 0 ? "font-semibold text-red-600" : "text-brand-violet"}>
+                  {formatCents(agile)}
+                </span>
+              );
+            })()
           )}
         </td>
         <td className="px-3 py-2.5 text-right">
