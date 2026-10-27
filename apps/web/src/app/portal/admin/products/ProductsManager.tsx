@@ -143,7 +143,7 @@ export function ProductsManager({
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
                 inputMode="decimal"
-                aria-label={`Discount percent applied to the selling price, up to ${MAX_DISCOUNT_PCT}`}
+                aria-label={`Discount percent applied to the Agile list price, up to ${MAX_DISCOUNT_PCT}`}
                 className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-right text-sm"
               />
               <span className="text-sm text-slate-500">%</span>
@@ -163,14 +163,14 @@ export function ProductsManager({
                 <th className="px-3 py-2 text-right font-medium">Agile cost /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">COGS /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">
-                  Agile selling price /cm²
+                  Agile list price /cm²
                   <div className="font-normal text-[10px] text-slate-400">cost + COGS</div>
                 </th>
                 <th className="px-3 py-2 text-right font-medium">
                   Provider price /cm²
                   <div className="font-normal text-[10px] text-slate-400">
                     {discountValid
-                      ? `selling price less ${discountPct}%`
+                      ? `list price less ${discountPct}%`
                       : discountNeedsApproval
                         ? `over ${MAX_DISCOUNT_PCT}% — needs approval`
                         : "enter a discount"}
@@ -487,7 +487,7 @@ function PriceSheet({
             <tbody>
               {active.map((p) => {
                 const rows = sizesFor(p.code);
-                // Each product is discounted off its own selling price
+                // Each product is discounted off its own Agile list price
                 // (purchase + COGS). The CMS list price still drives what the
                 // provider bills and collects, which is unrelated.
                 const sellingPerCm2 =
@@ -549,7 +549,7 @@ function PriceSheet({
                       const claim = Math.round(base * z.cm2);
                       const collects = Math.round(collectsPerCm2 * z.cm2);
                       // Agile's outlay is the purchase price; COGS is the
-                      // markup already inside the selling price.
+                      // markup already inside the Agile list price.
                       const cogs = p.costCents === null ? null : Math.round(p.costCents * z.cm2);
                       const net = cogs === null || cost === null ? null : cost - cogs;
                       const commission = net === null ? null : Math.round(REP_COMMISSION_SHARE * net);
@@ -624,7 +624,7 @@ function ProductRowView({
 
   const hasPendingChanges = product.draftCostCents !== null || product.draftCogsCents !== null;
 
-  // Agile selling price is purchase price + COGS; the discount tiers come off
+  // Agile list price is purchase price + COGS; the discount tiers come off
   // it. The CMS list price ($127-ish) is what the PROVIDER is reimbursed and
   // plays no part in what Agile charges them.
   const sellingCents =
@@ -633,7 +633,7 @@ function ProductRowView({
       : null;
 
   // Agile's own outlay is the purchase price; COGS is the markup that lifts it
-  // to the selling price, so it is not subtracted again here.
+  // to the Agile list price, so it is not subtracted again here.
   const economics =
     sellingCents === null || product.costCents === null || billPct === null
       ? null
@@ -792,9 +792,9 @@ function ProductRowView({
                 />
               </div>
               {/* Derived, not stored: purchase + COGS. Updates as either is
-                  typed so the sale price is visible before saving. */}
+                  typed so the list price is visible before saving. */}
               <div>
-                <span className="label-mono block text-slate-500">= Sale price $/cm²</span>
+                <span className="label-mono block text-slate-500">= Agile list price $/cm²</span>
                 <output
                   htmlFor="edit-purchase edit-cogs"
                   className="mt-1 block w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm font-semibold tabular-nums text-navy-900"
@@ -812,7 +812,7 @@ function ProductRowView({
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Sale price is Agile's purchase price plus COGS. Name and construct apply
+              Agile list price is the purchase price plus COGS. Name and construct apply
               immediately; purchase price and COGS changes stage as drafts — publish them with
               GO LIVE below.
             </p>

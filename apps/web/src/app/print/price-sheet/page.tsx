@@ -47,7 +47,7 @@ export default async function PriceSheetPrint({
       db.from("pricing_versions")
         .select("reimbursement_per_cm2_cents, effective_from, effective_to")
         .order("effective_from", { ascending: false }),
-      // Read only — these build the selling price. Neither the purchase price
+      // Read only — these build the Agile list price. Neither the purchase price
       // nor the COGS markup is ever rendered on this provider-facing page.
       db.from("product_costs").select("product_code, cost_per_cm2_cents, cogs_per_cm2_cents"),
     ]);
@@ -69,7 +69,7 @@ export default async function PriceSheetPrint({
   const billPct = 1 - pct / 100;
   const collectsPerCm2 = Math.round(reimbursement * TYPICAL_COLLECTION_PCT);
 
-  // What the provider pays is their discount off Agile's selling price for
+  // What the provider pays is their discount off Agile's list price for
   // that product (purchase price + COGS markup), so it varies per product.
   const costPerCm2ByProduct = new Map(
     (costs ?? []).map((c) => [
