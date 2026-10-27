@@ -29,6 +29,12 @@ export const TYPICAL_COLLECTION_PCT = 0.8;
 
 export const REP_COMMISSION_SHARE = 0.6;
 
+/**
+ * Most Agile can discount off the selling price without sign-off. Past this a
+ * deal needs approval, so pricing surfaces refuse to quote beyond it.
+ */
+export const MAX_DISCOUNT_PCT = 60;
+
 /** Selling price as a multiple of purchase price, when no explicit COGS markup is on file. */
 export const DEFAULT_COGS_MULTIPLIER = 2;
 

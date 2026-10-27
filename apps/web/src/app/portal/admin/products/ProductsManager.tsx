@@ -3,10 +3,9 @@
 import { Fragment, useState, useTransition } from "react";
 import {
   formatCents,
-  DISCOUNT_TIERS,
+  MAX_DISCOUNT_PCT,
   REP_COMMISSION_SHARE,
   TYPICAL_COLLECTION_PCT,
-  type DiscountTier,
 } from "@agile/shared";
 import {
   addProduct,
@@ -95,8 +94,12 @@ export function ProductsManager({
   // quotes most often, so it is the default.
   const [discount, setDiscount] = useState("40");
   const discountPct = Number(discount);
+  const discountNeedsApproval = Number.isFinite(discountPct) && discountPct > MAX_DISCOUNT_PCT;
   const discountValid =
-    discount.trim() !== "" && Number.isFinite(discountPct) && discountPct >= 0 && discountPct < 100;
+    discount.trim() !== "" &&
+    Number.isFinite(discountPct) &&
+    discountPct >= 0 &&
+    discountPct <= MAX_DISCOUNT_PCT;
   const billPct = discountValid ? 1 - discountPct / 100 : null;
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +143,7 @@ export function ProductsManager({
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
                 inputMode="decimal"
-                aria-label="Discount percent applied to the selling price"
+                aria-label={`Discount percent applied to the selling price, up to ${MAX_DISCOUNT_PCT}`}
                 className="w-20 rounded-lg border border-slate-300 px-3 py-1.5 text-right text-sm"
               />
               <span className="text-sm text-slate-500">%</span>
@@ -166,7 +169,11 @@ export function ProductsManager({
                 <th className="px-3 py-2 text-right font-medium">
                   Provider price /cm²
                   <div className="font-normal text-[10px] text-slate-400">
-                    {discountValid ? `selling price less ${discountPct}%` : "enter a discount"}
+                    {discountValid
+                      ? `selling price less ${discountPct}%`
+                      : discountNeedsApproval
+                        ? `over ${MAX_DISCOUNT_PCT}% — needs approval`
+                        : "enter a discount"}
                   </div>
                 </th>
                 <th className="px-3 py-2 text-right font-medium">
@@ -352,7 +359,8 @@ function PriceSheet({
   const pct = Number(discount);
   const listCents = toCents(listPrice);
   const listValid = listPrice.trim() !== "" && Number.isFinite(listCents) && listCents > 0;
-  const pctValid = Number.isFinite(pct) && pct >= 0 && pct <= 100;
+  const needsApproval = Number.isFinite(pct) && pct > MAX_DISCOUNT_PCT;
+  const pctValid = Number.isFinite(pct) && pct >= 0 && pct <= MAX_DISCOUNT_PCT;
   const valid = listValid && pctValid;
   const billPct = pctValid ? 1 - pct / 100 : 0;
 
@@ -409,7 +417,7 @@ function PriceSheet({
                 id="sheet-discount"
                 type="number"
                 min={0}
-                max={100}
+                max={MAX_DISCOUNT_PCT}
                 step={1}
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
@@ -437,33 +445,26 @@ function PriceSheet({
             )}
           </div>
         </div>
-        {!valid ? (
+        {needsApproval ? (
+          <p className="mt-2 rounded bg-amber-100 px-2 py-1.5 text-sm font-medium text-amber-900">
+            Discounts above {MAX_DISCOUNT_PCT}% require approval — no sheet is priced until the
+            deal is approved.
+          </p>
+        ) : !valid ? (
           <p className="mt-2 text-sm text-red-600">
             {listValid
-              ? "Enter a discount between 0 and 100."
+              ? `Enter a discount between 0 and ${MAX_DISCOUNT_PCT}.`
               : "Enter a CMS list price greater than zero."}
           </p>
         ) : (
-          <p className="mt-2 text-xs text-slate-500">
-            At {pct}% the provider pays each product&rsquo;s selling price less {pct}% — the rate in
-            each product header below — and collects{" "}
-            <span className="font-semibold text-emerald-700">
-              {formatCents(collectsPerCm2)}/cm²
-            </span>{" "}
-            at a typical {Math.round(TYPICAL_COLLECTION_PCT * 100)}% collection rate.
-            {overridden && (
-              <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
+          overridden && (
+            <p className="mt-2 text-xs">
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
                 modelling {formatCents(listCents)}/cm² — live rate is{" "}
                 {formatCents(reimbursementCents)}
               </span>
-            )}
-            {!DISCOUNT_TIERS.includes(pct as DiscountTier) && (
-              <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
-                non-standard tier — orders only offer{" "}
-                {DISCOUNT_TIERS.join("%, ")}%
-              </span>
-            )}
-          </p>
+            </p>
+          )
         )}
       </div>
 
