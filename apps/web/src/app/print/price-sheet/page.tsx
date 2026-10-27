@@ -1,4 +1,4 @@
-import { formatCents, TYPICAL_COLLECTION_PCT } from "@agile/shared";
+import { formatCents, MAX_DISCOUNT_PCT, TYPICAL_COLLECTION_PCT } from "@agile/shared";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
@@ -20,10 +20,19 @@ export default async function PriceSheetPrint({
   const sp = await searchParams;
 
   const pct = Number(sp.discount);
-  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+  if (!Number.isFinite(pct) || pct < 0) {
     return (
       <main className="mx-auto max-w-3xl p-10 text-slate-700">
-        Add a discount between 0 and 100, e.g. <code>?discount=40</code>.
+        Add a discount between 0 and {MAX_DISCOUNT_PCT}, e.g. <code>?discount=40</code>.
+      </main>
+    );
+  }
+  // Enforced here too, not just in the admin UI — this page is reachable by URL.
+  if (pct > MAX_DISCOUNT_PCT) {
+    return (
+      <main className="mx-auto max-w-3xl p-10 text-slate-700">
+        Discounts above {MAX_DISCOUNT_PCT}% require approval — this sheet is not priced until the
+        deal is approved.
       </main>
     );
   }
@@ -38,7 +47,7 @@ export default async function PriceSheetPrint({
       db.from("pricing_versions")
         .select("reimbursement_per_cm2_cents, effective_from, effective_to")
         .order("effective_from", { ascending: false }),
-      // Read only — these build the selling price. Neither the purchase price
+      // Read only — these build the Agile list price. Neither the purchase price
       // nor the COGS markup is ever rendered on this provider-facing page.
       db.from("product_costs").select("product_code, cost_per_cm2_cents, cogs_per_cm2_cents"),
     ]);
@@ -60,7 +69,7 @@ export default async function PriceSheetPrint({
   const billPct = 1 - pct / 100;
   const collectsPerCm2 = Math.round(reimbursement * TYPICAL_COLLECTION_PCT);
 
-  // What the provider pays is their discount off Agile's selling price for
+  // What the provider pays is their discount off Agile's list price for
   // that product (purchase price + COGS markup), so it varies per product.
   const costPerCm2ByProduct = new Map(
     (costs ?? []).map((c) => [
