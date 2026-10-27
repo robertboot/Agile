@@ -126,7 +126,7 @@ export function AdminCalculator({
         <>
           <div className="mt-5 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 sm:grid-cols-4">
             <Stat label="Billed to provider" value={x(line.billedCents)} />
-            <Stat label="COGS (2× cost)" value={x(line.cogsCents)} />
+            <Stat label="COGS (purchase price)" value={x(line.cogsCents)} />
             <Stat label="Net revenue" value={x(line.netCents)} />
             <Stat label="AGILE NET (40%)" value={x(line.agileNetCents)} highlight />
           </div>

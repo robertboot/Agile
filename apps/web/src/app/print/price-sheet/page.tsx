@@ -30,14 +30,18 @@ export default async function PriceSheetPrint({
 
   const db = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
-  const [{ data: products }, { data: sizes }, { data: versions }] = await Promise.all([
-    db.from("products").select("code, name, construct").eq("active", true).order("code"),
-    db.from("product_sizes").select("sku, product_code, label, cm2").eq("active", true)
-      .order("product_code").order("cm2"),
-    db.from("pricing_versions")
-      .select("reimbursement_per_cm2_cents, effective_from, effective_to")
-      .order("effective_from", { ascending: false }),
-  ]);
+  const [{ data: products }, { data: sizes }, { data: versions }, { data: costs }] =
+    await Promise.all([
+      db.from("products").select("code, name, construct").eq("active", true).order("code"),
+      db.from("product_sizes").select("sku, product_code, label, cm2").eq("active", true)
+        .order("product_code").order("cm2"),
+      db.from("pricing_versions")
+        .select("reimbursement_per_cm2_cents, effective_from, effective_to")
+        .order("effective_from", { ascending: false }),
+      // Read only — these build the selling price. Neither the purchase price
+      // nor the COGS markup is ever rendered on this provider-facing page.
+      db.from("product_costs").select("product_code, cost_per_cm2_cents, cogs_per_cm2_cents"),
+    ]);
 
   const current = (versions ?? []).find(
     (v) =>
@@ -53,8 +57,19 @@ export default async function PriceSheetPrint({
     Number.isFinite(listParam) && listParam > 0 ? Math.round(listParam) : live;
 
   // 1 - discount/100, which equals BILL_PCT at the standard 30/35/40 tiers.
-  const costPerCm2 = Math.round(reimbursement * (1 - pct / 100));
+  const billPct = 1 - pct / 100;
   const collectsPerCm2 = Math.round(reimbursement * TYPICAL_COLLECTION_PCT);
+
+  // What the provider pays is their discount off Agile's selling price for
+  // that product (purchase price + COGS markup), so it varies per product.
+  const costPerCm2ByProduct = new Map(
+    (costs ?? []).map((c) => [
+      c.product_code as string,
+      Math.round(
+        ((c.cost_per_cm2_cents as number) + Number(c.cogs_per_cm2_cents ?? 0)) * billPct,
+      ),
+    ]),
+  );
 
   return (
     <main className="mx-auto max-w-4xl bg-white p-10 text-slate-800">
@@ -77,26 +92,22 @@ export default async function PriceSheetPrint({
         </div>
         <div className="text-right">
           <h1 className="text-xl font-bold text-navy-900">Price Sheet</h1>
-          <div className="text-sm text-slate-500">
-            {pct}% off {formatCents(reimbursement)}/cm²
-          </div>
+          <div className="text-sm text-slate-500">{pct}% off list</div>
           <div className="text-xs text-slate-400">Generated {formatDate(new Date().toISOString())}</div>
         </div>
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-4 rounded-lg border border-slate-200 p-4">
-        <Sum label="Your cost / cm²" value={formatCents(costPerCm2)} />
+        <Sum label="Your discount" value={`${pct}%`} />
         <Sum label="CMS list price / cm²" value={formatCents(reimbursement)} />
-        <Sum
-          label="You keep / cm²"
-          value={formatCents(collectsPerCm2 - costPerCm2)}
-          tone="emerald"
-        />
+        <Sum label="You collect* / cm²" value={formatCents(collectsPerCm2)} tone="emerald" />
       </div>
 
       {(products ?? []).map((p) => {
         const rows = (sizes ?? []).filter((z) => z.product_code === p.code);
         if (rows.length === 0) return null;
+        const costPerCm2 = costPerCm2ByProduct.get(p.code);
+        if (costPerCm2 === undefined) return null;
         return (
           <section key={p.code} className="mt-7">
             <h2 className="text-sm font-semibold text-navy-900">

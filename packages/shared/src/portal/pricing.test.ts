@@ -19,11 +19,18 @@ describe("bill percentages", () => {
     expect(BILL_PCT[40]).toBe(0.6);
   });
 
-  it("bills $88.90 / $82.55 / $76.20 per cm² at $127", () => {
+  it("discounts the selling price, not the CMS list price", () => {
+    // $15 purchase price, no explicit markup → selling price 2× = $30/cm².
     const item = { productCode: "Q4205", sku: "MW0101", cm2: 1, qty: 1, costPerCm2Cents: 1500 };
-    expect(priceLine(item, REIMB, 30).billedCents).toBe(8890);
-    expect(priceLine(item, REIMB, 35).billedCents).toBe(8255);
-    expect(priceLine(item, REIMB, 40).billedCents).toBe(7620);
+    expect(priceLine(item, REIMB, 30).sellingPerCm2Cents).toBe(3000);
+    expect(priceLine(item, REIMB, 30).billedCents).toBe(2100);
+    expect(priceLine(item, REIMB, 35).billedCents).toBe(1950);
+    expect(priceLine(item, REIMB, 40).billedCents).toBe(1800);
+  });
+
+  it("ignores the CMS list price when billing", () => {
+    const item = { productCode: "Q4205", sku: "MW0101", cm2: 1, qty: 1, costPerCm2Cents: 1500 };
+    expect(priceLine(item, 13065, 40).billedCents).toBe(priceLine(item, REIMB, 40).billedCents);
   });
 });
 
@@ -35,18 +42,19 @@ describe("per-line economics", () => {
     30,
   );
 
-  it("computes billed, COGS (2× cost), net, 60/40 split", () => {
-    expect(line.billedCents).toBe(142240); // 88.90 × 16
-    expect(line.cogsCents).toBe(48000); // 2 × $15 × 16
-    expect(line.netCents).toBe(94240);
-    expect(line.repCommissionCents).toBe(56544); // 60%
-    expect(line.agileNetCents).toBe(37696); // 40%
+  it("computes billed off the selling price, net over purchase price, 60/40", () => {
+    expect(line.sellingPerCm2Cents).toBe(3000); // 2 × $15
+    expect(line.billedCents).toBe(33600); // $30 × 0.70 × 16
+    expect(line.cogsCents).toBe(24000); // $15 purchase price × 16
+    expect(line.netCents).toBe(9600);
+    expect(line.repCommissionCents).toBe(5760); // 60%
+    expect(line.agileNetCents).toBe(3840); // 40%
     expect(line.repCommissionCents + line.agileNetCents).toBe(line.netCents);
   });
 
   it("computes provider-keeps as 80% of reimbursement minus billed", () => {
-    // 0.8 × 127 × 16 = 1625.60 → 162560 − 142240 = 20320
-    expect(line.providerKeepsCents).toBe(20320);
+    // 0.8 × 127 × 16 = 1625.60 → 162560 − 33600 = 128960
+    expect(line.providerKeepsCents).toBe(128960);
   });
 
   it("scales with qty", () => {
@@ -65,29 +73,33 @@ describe("per-line economics", () => {
       REIMB,
       40,
     );
-    expect(disc.billedCents).toBe(Math.round(12700 * 0.6 * 0.79)); // 6020
-    expect(disc.cogsCents).toBe(2370);
+    expect(disc.billedCents).toBe(Math.round(3000 * 0.6 * 0.79)); // 1422
+    expect(disc.cogsCents).toBe(1185); // $15 × 0.79
   });
 
-  it("uses explicit per-product COGS when provided", () => {
+  it("adds an explicit COGS markup to the purchase price", () => {
     const item = {
       productCode: "Q4205", sku: "MW0404", cm2: 16, qty: 1,
-      costPerCm2Cents: 1500, cogsPerCm2Cents: 3300, // $33/cm² explicit, not 2×
+      costPerCm2Cents: 1500, cogsPerCm2Cents: 3300, // $15 + $33 = $48/cm² selling
     };
     const line = priceLine(item, REIMB, 30);
-    expect(line.cogsCents).toBe(52800); // 33.00 × 16
-    expect(line.netCents).toBe(142240 - 52800);
-    expect(line.repCommissionCents).toBe(Math.round(0.6 * (142240 - 52800)));
+    expect(line.sellingPerCm2Cents).toBe(4800);
+    expect(line.billedCents).toBe(53760); // $48 × 0.70 × 16
+    expect(line.cogsCents).toBe(24000); // purchase price only
+    expect(line.netCents).toBe(53760 - 24000);
+    expect(line.repCommissionCents).toBe(Math.round(0.6 * (53760 - 24000)));
   });
 
-  it("supports an adjustable COGS multiplier (default 2×)", () => {
+  it("supports an adjustable selling-price multiplier (default 2×)", () => {
     const item = { productCode: "Q4205", sku: "MW0404", cm2: 16, qty: 1, costPerCm2Cents: 1500 };
     const at25 = priceLine(item, REIMB, 30, 2.5);
-    expect(at25.cogsCents).toBe(60000); // 2.5 × $15 × 16
-    expect(at25.netCents).toBe(142240 - 60000);
-    expect(at25.repCommissionCents).toBe(Math.round(0.6 * (142240 - 60000)));
+    expect(at25.sellingPerCm2Cents).toBe(3750); // 2.5 × $15
+    expect(at25.billedCents).toBe(42000); // $37.50 × 0.70 × 16
+    expect(at25.cogsCents).toBe(24000); // purchase price is unaffected
+    expect(at25.netCents).toBe(42000 - 24000);
+    expect(at25.repCommissionCents).toBe(Math.round(0.6 * (42000 - 24000)));
     // default matches the historical 2×
-    expect(priceLine(item, REIMB, 30).cogsCents).toBe(priceLine(item, REIMB, 30, 2).cogsCents);
+    expect(priceLine(item, REIMB, 30).billedCents).toBe(priceLine(item, REIMB, 30, 2).billedCents);
     expect(() => priceLine(item, REIMB, 30, 0)).toThrow();
   });
 

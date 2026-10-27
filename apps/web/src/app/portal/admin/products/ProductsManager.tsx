@@ -353,7 +353,6 @@ function PriceSheet({
   const base = listValid ? listCents : reimbursementCents;
   const overridden = listValid && listCents !== reimbursementCents;
 
-  const billedPerCm2 = Math.round(base * billPct);
   const collectsPerCm2 = Math.round(base * TYPICAL_COLLECTION_PCT);
 
   const active = products.filter((p) => p.active);
@@ -440,11 +439,10 @@ function PriceSheet({
           </p>
         ) : (
           <p className="mt-2 text-xs text-slate-500">
-            At {pct}% the provider pays{" "}
-            <span className="font-semibold text-navy-900">{formatCents(billedPerCm2)}/cm²</span> and
-            keeps{" "}
+            At {pct}% the provider pays each product&rsquo;s selling price less {pct}% — the rate in
+            each product header below — and collects{" "}
             <span className="font-semibold text-emerald-700">
-              {formatCents(collectsPerCm2 - billedPerCm2)}/cm²
+              {formatCents(collectsPerCm2)}/cm²
             </span>{" "}
             at a typical {Math.round(TYPICAL_COLLECTION_PCT * 100)}% collection rate.
             {overridden && (
@@ -482,6 +480,13 @@ function PriceSheet({
             <tbody>
               {active.map((p) => {
                 const rows = sizesFor(p.code);
+                // Each product is discounted off its own selling price
+                // (purchase + COGS). The CMS list price still drives what the
+                // provider bills and collects, which is unrelated.
+                const sellingPerCm2 =
+                  p.costCents !== null && p.cogsCents !== null ? p.costCents + p.cogsCents : null;
+                const productBilledPerCm2 =
+                  sellingPerCm2 === null ? null : Math.round(sellingPerCm2 * billPct);
                 return (
                   <Fragment key={p.code}>
                     <tr className="border-b border-slate-100 bg-slate-50/70">
@@ -509,11 +514,13 @@ function PriceSheet({
                                 each product block reads on its own — and still
                                 does when the sizes are collapsed away. */}
                             <span className="font-normal tabular-nums text-slate-600">
-                              {formatCents(billedPerCm2)}/cm²
+                              {productBilledPerCm2 === null
+                                ? "—"
+                                : `${formatCents(productBilledPerCm2)}/cm²`}
                             </span>
-                            {p.cogsCents !== null && (
+                            {p.costCents !== null && (
                               <span className="font-normal tabular-nums text-brand-violet">
-                                COGS {formatCents(p.cogsCents)}/cm²
+                                COGS {formatCents(p.costCents)}/cm²
                               </span>
                             )}
                             <span className="ml-auto text-xs font-normal text-slate-400">
@@ -532,11 +539,16 @@ function PriceSheet({
                     )}
                     {!collapsed[p.code] &&
                       rows.map((z) => {
-                      const cost = Math.round(billedPerCm2 * z.cm2);
+                      const cost =
+                        productBilledPerCm2 === null
+                          ? null
+                          : Math.round(productBilledPerCm2 * z.cm2);
                       const claim = Math.round(base * z.cm2);
                       const collects = Math.round(collectsPerCm2 * z.cm2);
-                      const cogs = p.cogsCents === null ? null : Math.round(p.cogsCents * z.cm2);
-                      const net = cogs === null ? null : cost - cogs;
+                      // Agile's outlay is the purchase price; COGS is the
+                      // markup already inside the selling price.
+                      const cogs = p.costCents === null ? null : Math.round(p.costCents * z.cm2);
+                      const net = cogs === null || cost === null ? null : cost - cogs;
                       const commission = net === null ? null : Math.round(REP_COMMISSION_SHARE * net);
                       const agile = net === null || commission === null ? null : net - commission;
                       return (
@@ -546,7 +558,7 @@ function PriceSheet({
                             {z.cm2}
                           </td>
                           <td className="px-3 py-2 text-right font-medium tabular-nums">
-                            {formatCents(cost)}
+                            {cost === null ? "—" : formatCents(cost)}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-600">
                             {formatCents(claim)}
@@ -555,7 +567,7 @@ function PriceSheet({
                             {formatCents(collects)}
                           </td>
                           <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">
-                            {formatCents(collects - cost)}
+                            {cost === null ? "—" : formatCents(collects - cost)}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-brand-violet">
                             {cogs === null ? "—" : formatCents(cogs)}
