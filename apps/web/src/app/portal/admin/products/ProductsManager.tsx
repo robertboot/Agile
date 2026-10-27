@@ -210,7 +210,7 @@ function PricingCard({
             <div className="mt-1 text-sm text-red-600">No live pricing version!</div>
           )}
           <p className="mt-2 text-xs text-slate-400">
-            Product price and COGS are set per product in the table below.
+            Agile purchase price and COGS are set per product in the table below.
           </p>
         </div>
         <div className="rounded-lg border border-dashed border-slate-300 p-4">
@@ -621,7 +621,7 @@ function ProductRowView({
           {hasPendingChanges ? (
             <span className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
               {product.draftCostCents !== null &&
-                `Price → ${formatCents(product.draftCostCents)}`}
+                `Purchase → ${formatCents(product.draftCostCents)}`}
               {product.draftCostCents !== null && product.draftCogsCents !== null && " · "}
               {product.draftCogsCents !== null && `COGS → ${formatCents(product.draftCogsCents)}`}
             </span>
@@ -666,7 +666,9 @@ function ProductRowView({
                 />
               </div>
               <div>
-                <label className="label-mono block text-slate-500">Product price $/cm²</label>
+                <label className="label-mono block text-slate-500">
+                  Agile purchase price $/cm²
+                </label>
                 <input
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
@@ -693,8 +695,8 @@ function ProductRowView({
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Name and construct apply immediately. Price and COGS changes stage as drafts —
-              publish them with GO LIVE below.
+              Name and construct apply immediately. Purchase price and COGS changes stage as
+              drafts — publish them with GO LIVE below.
             </p>
           </td>
         </tr>
