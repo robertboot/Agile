@@ -45,6 +45,17 @@ export interface PricingInfo {
 const dollars = (cents: number | null) => (cents === null ? "" : (cents / 100).toFixed(2));
 const toCents = (v: string) => Math.round(Number(v) * 100);
 
+/** Purchase price + COGS, shown live in the edit form. "—" until both parse.
+    Not the list price — list price is the $127 reimbursement. */
+function sellingOf(purchase: string, cogs: string): string {
+  const a = Number(purchase);
+  const b = Number(cogs);
+  if (purchase.trim() === "" || cogs.trim() === "" || !Number.isFinite(a) || !Number.isFinite(b)) {
+    return "—";
+  }
+  return formatCents(Math.round(a * 100) + Math.round(b * 100));
+}
+
 type Run = (fn: () => Promise<{ ok: boolean; error?: string; summary?: string }>) => void;
 
 export function ProductsManager({
@@ -670,6 +681,7 @@ function ProductRowView({
                   Agile purchase price $/cm²
                 </label>
                 <input
+                  id="edit-purchase"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   inputMode="decimal"
@@ -679,11 +691,23 @@ function ProductRowView({
               <div>
                 <label className="label-mono block text-slate-500">COGS $/cm²</label>
                 <input
+                  id="edit-cogs"
                   value={cogs}
                   onChange={(e) => setCogs(e.target.value)}
                   inputMode="decimal"
                   className="mt-1 w-28 rounded-lg border border-slate-300 px-3 py-2 text-right text-sm"
                 />
+              </div>
+              {/* Derived, not stored: purchase + COGS. Updates as either is
+                  typed so the selling price is visible before saving. */}
+              <div>
+                <span className="label-mono block text-slate-500">= Agile selling price $/cm²</span>
+                <output
+                  htmlFor="edit-purchase edit-cogs"
+                  className="mt-1 block w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm font-semibold tabular-nums text-navy-900"
+                >
+                  {sellingOf(price, cogs)}
+                </output>
               </div>
               <button
                 type="button"
@@ -695,8 +719,9 @@ function ProductRowView({
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Name and construct apply immediately. Purchase price and COGS changes stage as
-              drafts — publish them with GO LIVE below.
+              Agile selling price is purchase price plus COGS. Name and construct apply
+              immediately; purchase price and COGS changes stage as drafts — publish them with
+              GO LIVE below.
             </p>
           </td>
         </tr>
