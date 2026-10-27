@@ -14,7 +14,7 @@ export const metadata = { title: "Price Sheet" };
 export default async function PriceSheetPrint({
   searchParams,
 }: {
-  searchParams: Promise<{ discount?: string }>;
+  searchParams: Promise<{ discount?: string; list?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
@@ -45,7 +45,12 @@ export default async function PriceSheetPrint({
       v.effective_from <= today &&
       (!v.effective_to || v.effective_to >= today),
   );
-  const reimbursement = current?.reimbursement_per_cm2_cents ?? 12700;
+  // The sheet can be built off a modelled list price; absent that, the live
+  // pricing version's rate.
+  const live = current?.reimbursement_per_cm2_cents ?? 12700;
+  const listParam = Number(sp.list);
+  const reimbursement =
+    Number.isFinite(listParam) && listParam > 0 ? Math.round(listParam) : live;
 
   // 1 - discount/100, which equals BILL_PCT at the standard 30/35/40 tiers.
   const costPerCm2 = Math.round(reimbursement * (1 - pct / 100));
@@ -72,14 +77,16 @@ export default async function PriceSheetPrint({
         </div>
         <div className="text-right">
           <h1 className="text-xl font-bold text-navy-900">Price Sheet</h1>
-          <div className="text-sm text-slate-500">{pct}% discount</div>
+          <div className="text-sm text-slate-500">
+            {pct}% off {formatCents(reimbursement)}/cm²
+          </div>
           <div className="text-xs text-slate-400">Generated {formatDate(new Date().toISOString())}</div>
         </div>
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-4 rounded-lg border border-slate-200 p-4">
         <Sum label="Your cost / cm²" value={formatCents(costPerCm2)} />
-        <Sum label="Reimbursement / cm²" value={formatCents(reimbursement)} />
+        <Sum label="List price / cm²" value={formatCents(reimbursement)} />
         <Sum
           label="You keep / cm²"
           value={formatCents(collectsPerCm2 - costPerCm2)}
@@ -95,6 +102,11 @@ export default async function PriceSheetPrint({
             <h2 className="text-sm font-semibold text-navy-900">
               {p.name}{" "}
               <span className="font-mono text-xs font-normal text-slate-400">{p.code}</span>
+              {/* The rate the size rows below are derived from, repeated per
+                  product so each block stands alone when read or shared. */}
+              <span className="ml-2 font-normal tabular-nums text-slate-600">
+                {formatCents(costPerCm2)}/cm²
+              </span>
             </h2>
             {p.construct && <p className="text-xs text-slate-500">{p.construct}</p>}
             <table className="mt-2 w-full text-sm">
@@ -140,8 +152,8 @@ export default async function PriceSheetPrint({
 
       <p className="mt-8 text-[11px] text-slate-400">
         *&ldquo;You collect&rdquo; assumes a typical {Math.round(TYPICAL_COLLECTION_PCT * 100)}%
-        collection rate against {formatCents(reimbursement)}/cm² reimbursement; secondary insurance
-        may increase it, and actual reimbursement varies by payer. Pricing is indicative and subject
+        collection rate against the {formatCents(reimbursement)}/cm² list price; secondary
+        insurance may increase it, and actual reimbursement varies by payer. Pricing is indicative and subject
         to the terms of your agreement with Agile Medical Group, LLC.
       </p>
     </main>

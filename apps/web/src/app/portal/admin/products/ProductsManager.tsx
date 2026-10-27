@@ -281,13 +281,23 @@ function PriceSheet({
   reimbursementCents: number;
 }) {
   const [discount, setDiscount] = useState("40");
+  // List price is what the discounts come off. It seeds from the live pricing
+  // version but is editable here for modelling — changing it does NOT change
+  // what orders are priced at; that is the Pricing card's GO LIVE flow.
+  const [listPrice, setListPrice] = useState(dollars(reimbursementCents));
 
   const pct = Number(discount);
-  const valid = Number.isFinite(pct) && pct >= 0 && pct <= 100;
-  const billPct = valid ? 1 - pct / 100 : 0;
+  const listCents = toCents(listPrice);
+  const listValid = listPrice.trim() !== "" && Number.isFinite(listCents) && listCents > 0;
+  const pctValid = Number.isFinite(pct) && pct >= 0 && pct <= 100;
+  const valid = listValid && pctValid;
+  const billPct = pctValid ? 1 - pct / 100 : 0;
 
-  const billedPerCm2 = Math.round(reimbursementCents * billPct);
-  const collectsPerCm2 = Math.round(reimbursementCents * TYPICAL_COLLECTION_PCT);
+  const base = listValid ? listCents : reimbursementCents;
+  const overridden = listValid && listCents !== reimbursementCents;
+
+  const billedPerCm2 = Math.round(base * billPct);
+  const collectsPerCm2 = Math.round(base * TYPICAL_COLLECTION_PCT);
 
   const active = products.filter((p) => p.active);
   const sizesFor = (code: string) => sizes.filter((z) => z.productCode === code);
@@ -299,11 +309,25 @@ function PriceSheet({
           <div>
             <h2 className="font-semibold text-navy-900">Provider price sheet</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Every product and size at one discount, against{" "}
-              {formatCents(reimbursementCents)}/cm² reimbursement.
+              Every product and size at one discount, off a{" "}
+              {formatCents(base)}/cm² list price.
             </p>
           </div>
-          <div className="flex items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="label-mono text-slate-500" htmlFor="sheet-list">
+                List price /cm²
+              </label>
+              <input
+                id="sheet-list"
+                type="number"
+                min={0}
+                step="0.01"
+                value={listPrice}
+                onChange={(e) => setListPrice(e.target.value)}
+                className="mt-1 w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
             <div>
               <label className="label-mono text-slate-500" htmlFor="sheet-discount">
                 Discount %
@@ -321,7 +345,7 @@ function PriceSheet({
             </div>
             {valid && (
               <a
-                href={`/print/price-sheet?discount=${pct}`}
+                href={`/print/price-sheet?discount=${pct}&list=${listCents}`}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-brand rounded-lg px-4 py-2 text-sm font-semibold text-white"
@@ -332,7 +356,11 @@ function PriceSheet({
           </div>
         </div>
         {!valid ? (
-          <p className="mt-2 text-sm text-red-600">Enter a discount between 0 and 100.</p>
+          <p className="mt-2 text-sm text-red-600">
+            {listValid
+              ? "Enter a discount between 0 and 100."
+              : "Enter a list price greater than zero."}
+          </p>
         ) : (
           <p className="mt-2 text-xs text-slate-500">
             At {pct}% the provider pays{" "}
@@ -342,6 +370,12 @@ function PriceSheet({
               {formatCents(collectsPerCm2 - billedPerCm2)}/cm²
             </span>{" "}
             at a typical {Math.round(TYPICAL_COLLECTION_PCT * 100)}% collection rate.
+            {overridden && (
+              <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
+                modelling {formatCents(listCents)}/cm² — live rate is{" "}
+                {formatCents(reimbursementCents)}
+              </span>
+            )}
             {!DISCOUNT_TIERS.includes(pct as DiscountTier) && (
               <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
                 non-standard tier — orders only offer{" "}
@@ -379,6 +413,16 @@ function PriceSheet({
                         <span className="font-mono text-xs font-normal text-slate-400">
                           {p.code}
                         </span>
+                        {/* The rate every size row below is derived from, so each
+                            product block reads on its own. */}
+                        <span className="ml-2 font-normal tabular-nums text-slate-600">
+                          {formatCents(billedPerCm2)}/cm²
+                        </span>
+                        {p.cogsCents !== null && (
+                          <span className="ml-2 font-normal tabular-nums text-brand-violet">
+                            COGS {formatCents(p.cogsCents)}/cm²
+                          </span>
+                        )}
                       </td>
                     </tr>
                     {rows.length === 0 && (
@@ -390,7 +434,7 @@ function PriceSheet({
                     )}
                     {rows.map((z) => {
                       const cost = Math.round(billedPerCm2 * z.cm2);
-                      const claim = Math.round(reimbursementCents * z.cm2);
+                      const claim = Math.round(base * z.cm2);
                       const collects = Math.round(collectsPerCm2 * z.cm2);
                       const cogs = p.cogsCents === null ? null : Math.round(p.cogsCents * z.cm2);
                       const net = cogs === null ? null : cost - cogs;

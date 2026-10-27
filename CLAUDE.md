@@ -24,9 +24,14 @@ Check first, then act:
   the call. Do not walk the user through curl.
 - **GitHub** — the MCP tools cover PRs, merges, CI. Open and merge without
   narrating git plumbing.
-- **Vercel** — blocked by network policy, no token. Deploys happen via the
-  GitHub integration on merge to `main`; say so rather than offering a CLI
-  command that cannot run here.
+- **Vercel** — blocked by network policy, no token, so the session cannot
+  deploy. **Production deploys are manual and merging does NOT ship.** The
+  Vercel checks on a PR are Preview builds only. The user runs, from the repo
+  root (not `apps/web`, which hits a stray project not aliased to the domain):
+  `npx vercel deploy --prod --yes --archive=tgz`
+  Never tell the user a merge is live. To check what production actually has,
+  probe a route the change adds: 404 means it is not deployed, 307 (redirect
+  to login) means it is. Compare against a known-bad path as a control.
 
 Only hand over a command when you genuinely cannot run it. When that happens,
 say *why* in one line, and be specific about where it goes — "Terminal, not the
