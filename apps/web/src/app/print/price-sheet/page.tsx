@@ -45,7 +45,7 @@ export default async function PriceSheetPrint({
       v.effective_from <= today &&
       (!v.effective_to || v.effective_to >= today),
   );
-  // The sheet can be built off a modelled list price; absent that, the live
+  // The sheet can be built off a modelled CMS list price; absent that, the live
   // pricing version's rate.
   const live = current?.reimbursement_per_cm2_cents ?? 12700;
   const listParam = Number(sp.list);
@@ -86,7 +86,7 @@ export default async function PriceSheetPrint({
 
       <div className="mt-5 grid grid-cols-3 gap-4 rounded-lg border border-slate-200 p-4">
         <Sum label="Your cost / cm²" value={formatCents(costPerCm2)} />
-        <Sum label="List price / cm²" value={formatCents(reimbursement)} />
+        <Sum label="CMS list price / cm²" value={formatCents(reimbursement)} />
         <Sum
           label="You keep / cm²"
           value={formatCents(collectsPerCm2 - costPerCm2)}
@@ -152,7 +152,7 @@ export default async function PriceSheetPrint({
 
       <p className="mt-8 text-[11px] text-slate-400">
         *&ldquo;You collect&rdquo; assumes a typical {Math.round(TYPICAL_COLLECTION_PCT * 100)}%
-        collection rate against the {formatCents(reimbursement)}/cm² list price; secondary
+        collection rate against the {formatCents(reimbursement)}/cm² CMS list price; secondary
         insurance may increase it, and actual reimbursement varies by payer. Pricing is indicative and subject
         to the terms of your agreement with Agile Medical Group, LLC.
       </p>

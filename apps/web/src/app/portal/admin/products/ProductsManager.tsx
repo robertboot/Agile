@@ -45,6 +45,17 @@ export interface PricingInfo {
 const dollars = (cents: number | null) => (cents === null ? "" : (cents / 100).toFixed(2));
 const toCents = (v: string) => Math.round(Number(v) * 100);
 
+/** Purchase price + COGS, shown live in the edit form. "—" until both parse.
+    Distinct from the CMS list price, which is the $127 reimbursement. */
+function saleOf(purchase: string, cogs: string): string {
+  const a = Number(purchase);
+  const b = Number(cogs);
+  if (purchase.trim() === "" || cogs.trim() === "" || !Number.isFinite(a) || !Number.isFinite(b)) {
+    return "—";
+  }
+  return formatCents(Math.round(a * 100) + Math.round(b * 100));
+}
+
 type Run = (fn: () => Promise<{ ok: boolean; error?: string; summary?: string }>) => void;
 
 export function ProductsManager({
@@ -109,7 +120,7 @@ export function ProductsManager({
                 <th className="px-3 py-2 text-right font-medium">Agile cost /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">COGS /cm²</th>
                 <th className="px-3 py-2 text-right font-medium">
-                  Sale price /cm²
+                  Provider price /cm²
                   <div className="font-normal text-[10px] text-slate-400">30% · 35% · 40%</div>
                 </th>
                 <th className="px-3 py-2 text-right font-medium">
@@ -210,7 +221,7 @@ function PricingCard({
             <div className="mt-1 text-sm text-red-600">No live pricing version!</div>
           )}
           <p className="mt-2 text-xs text-slate-400">
-            Product price and COGS are set per product in the table below.
+            Agile purchase price and COGS are set per product in the table below.
           </p>
         </div>
         <div className="rounded-lg border border-dashed border-slate-300 p-4">
@@ -281,7 +292,7 @@ function PriceSheet({
   reimbursementCents: number;
 }) {
   const [discount, setDiscount] = useState("40");
-  // List price is what the discounts come off. It seeds from the live pricing
+  // CMS list price is what the discounts come off. It seeds from the live pricing
   // version but is editable here for modelling — changing it does NOT change
   // what orders are priced at; that is the Pricing card's GO LIVE flow.
   const [listPrice, setListPrice] = useState(dollars(reimbursementCents));
@@ -302,6 +313,17 @@ function PriceSheet({
   const active = products.filter((p) => p.active);
   const sizesFor = (code: string) => sizes.filter((z) => z.productCode === code);
 
+  // Collapsed products, by code. Sizes show by default; collapsing leaves the
+  // header row with its rate, which is the comparison view across products.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const allCollapsed = active.length > 0 && active.every((p) => collapsed[p.code]);
+  const toggle = (code: string) =>
+    setCollapsed((c) => ({ ...c, [code]: !c[code] }));
+  const toggleAll = () =>
+    setCollapsed(
+      allCollapsed ? {} : Object.fromEntries(active.map((p) => [p.code, true])),
+    );
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-5 py-4">
@@ -310,13 +332,13 @@ function PriceSheet({
             <h2 className="font-semibold text-navy-900">Provider price sheet</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               Every product and size at one discount, off a{" "}
-              {formatCents(base)}/cm² list price.
+              {formatCents(base)}/cm² CMS list price.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="label-mono text-slate-500" htmlFor="sheet-list">
-                List price /cm²
+                CMS list price /cm²
               </label>
               <input
                 id="sheet-list"
@@ -344,6 +366,15 @@ function PriceSheet({
               />
             </div>
             {valid && (
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                {allCollapsed ? "Expand all" : "Collapse all"}
+              </button>
+            )}
+            {valid && (
               <a
                 href={`/print/price-sheet?discount=${pct}&list=${listCents}`}
                 target="_blank"
@@ -359,7 +390,7 @@ function PriceSheet({
           <p className="mt-2 text-sm text-red-600">
             {listValid
               ? "Enter a discount between 0 and 100."
-              : "Enter a list price greater than zero."}
+              : "Enter a CMS list price greater than zero."}
           </p>
         ) : (
           <p className="mt-2 text-xs text-slate-500">
@@ -409,30 +440,52 @@ function PriceSheet({
                   <Fragment key={p.code}>
                     <tr className="border-b border-slate-100 bg-slate-50/70">
                       <td className="px-5 py-2 font-semibold text-navy-900" colSpan={9}>
-                        {p.name}{" "}
-                        <span className="font-mono text-xs font-normal text-slate-400">
-                          {p.code}
-                        </span>
-                        {/* The rate every size row below is derived from, so each
-                            product block reads on its own. */}
-                        <span className="ml-2 font-normal tabular-nums text-slate-600">
-                          {formatCents(billedPerCm2)}/cm²
-                        </span>
-                        {p.cogsCents !== null && (
-                          <span className="ml-2 font-normal tabular-nums text-brand-violet">
-                            COGS {formatCents(p.cogsCents)}/cm²
+                        <button
+                          type="button"
+                          onClick={() => toggle(p.code)}
+                          aria-expanded={!collapsed[p.code]}
+                          className="-mx-1 flex w-full items-center gap-2 rounded px-1 text-left font-semibold text-navy-900 hover:text-brand-blue"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`text-xs text-slate-400 transition-transform ${
+                              collapsed[p.code] ? "" : "rotate-90"
+                            }`}
+                          >
+                            ▶
                           </span>
-                        )}
+                          <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+                            <span>{p.name}</span>
+                            <span className="font-mono text-xs font-normal text-slate-400">
+                              {p.code}
+                            </span>
+                            {/* The rate every size row below is derived from, so
+                                each product block reads on its own — and still
+                                does when the sizes are collapsed away. */}
+                            <span className="font-normal tabular-nums text-slate-600">
+                              {formatCents(billedPerCm2)}/cm²
+                            </span>
+                            {p.cogsCents !== null && (
+                              <span className="font-normal tabular-nums text-brand-violet">
+                                COGS {formatCents(p.cogsCents)}/cm²
+                              </span>
+                            )}
+                            <span className="ml-auto text-xs font-normal text-slate-400">
+                              {rows.length} {rows.length === 1 ? "size" : "sizes"}
+                            </span>
+                          </span>
+                        </button>
                       </td>
                     </tr>
-                    {rows.length === 0 && (
+                    {!collapsed[p.code] && rows.length === 0 && (
                       <tr className="border-b border-slate-100">
                         <td className="px-5 py-2 text-slate-400" colSpan={9}>
                           No active sizes
                         </td>
                       </tr>
                     )}
-                    {rows.map((z) => {
+                    {!collapsed[p.code] &&
+                      rows.map((z) => {
                       const cost = Math.round(billedPerCm2 * z.cm2);
                       const claim = Math.round(base * z.cm2);
                       const collects = Math.round(collectsPerCm2 * z.cm2);
@@ -579,7 +632,7 @@ function ProductRowView({
           {hasPendingChanges ? (
             <span className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
               {product.draftCostCents !== null &&
-                `Price → ${formatCents(product.draftCostCents)}`}
+                `Purchase → ${formatCents(product.draftCostCents)}`}
               {product.draftCostCents !== null && product.draftCogsCents !== null && " · "}
               {product.draftCogsCents !== null && `COGS → ${formatCents(product.draftCogsCents)}`}
             </span>
@@ -624,8 +677,11 @@ function ProductRowView({
                 />
               </div>
               <div>
-                <label className="label-mono block text-slate-500">Product price $/cm²</label>
+                <label className="label-mono block text-slate-500">
+                  Agile purchase price $/cm²
+                </label>
                 <input
+                  id="edit-purchase"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   inputMode="decimal"
@@ -635,11 +691,23 @@ function ProductRowView({
               <div>
                 <label className="label-mono block text-slate-500">COGS $/cm²</label>
                 <input
+                  id="edit-cogs"
                   value={cogs}
                   onChange={(e) => setCogs(e.target.value)}
                   inputMode="decimal"
                   className="mt-1 w-28 rounded-lg border border-slate-300 px-3 py-2 text-right text-sm"
                 />
+              </div>
+              {/* Derived, not stored: purchase + COGS. Updates as either is
+                  typed so the sale price is visible before saving. */}
+              <div>
+                <span className="label-mono block text-slate-500">= Sale price $/cm²</span>
+                <output
+                  htmlFor="edit-purchase edit-cogs"
+                  className="mt-1 block w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm font-semibold tabular-nums text-navy-900"
+                >
+                  {saleOf(price, cogs)}
+                </output>
               </div>
               <button
                 type="button"
@@ -651,8 +719,9 @@ function ProductRowView({
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Name and construct apply immediately. Price and COGS changes stage as drafts —
-              publish them with GO LIVE below.
+              Sale price is Agile's purchase price plus COGS. Name and construct apply
+              immediately; purchase price and COGS changes stage as drafts — publish them with
+              GO LIVE below.
             </p>
           </td>
         </tr>
