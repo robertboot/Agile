@@ -56,6 +56,27 @@ function saleOf(purchase: string, cogs: string): string {
   return formatCents(Math.round(a * 100) + Math.round(b * 100));
 }
 
+/**
+ * A draft needs its own quarter label — pricing_versions.quarter is UNIQUE, so
+ * seeding the box with the live quarter made the default Save collide. Seed
+ * the calendar quarter instead, stepping past the live one if it is the same.
+ */
+function nextQuarterAfter(liveQuarter: string | undefined): string {
+  const now = new Date();
+  let year = now.getFullYear();
+  let q = Math.floor(now.getMonth() / 3) + 1;
+  const label = () => `${year}-Q${q}`;
+  if (liveQuarter && label() === liveQuarter) {
+    if (q === 4) {
+      q = 1;
+      year += 1;
+    } else {
+      q += 1;
+    }
+  }
+  return label();
+}
+
 type Run = (fn: () => Promise<{ ok: boolean; error?: string; summary?: string }>) => void;
 
 export function ProductsManager({
@@ -196,7 +217,7 @@ function PricingCard({
   pending: boolean;
 }) {
   const [quarter, setQuarter] = useState(
-    pricing.draft?.quarter ?? pricing.current?.quarter ?? "",
+    pricing.draft?.quarter ?? nextQuarterAfter(pricing.current?.quarter),
   );
   const [reimb, setReimb] = useState(
     dollars(pricing.draft?.reimbursementCents ?? pricing.current?.reimbursementCents ?? 12700),
