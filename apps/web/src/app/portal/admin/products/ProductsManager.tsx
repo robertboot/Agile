@@ -173,6 +173,12 @@ export function ProductsManager({
                   Agile net /cm²
                   <div className="font-normal text-[10px] text-slate-400">after cost &amp; commission</div>
                 </th>
+                <th className="px-3 py-2 text-right font-medium">
+                  Rep commission /cm²
+                  <div className="font-normal text-[10px] text-slate-400">
+                    {Math.round(REP_COMMISSION_SHARE * 100)}% of net
+                  </div>
+                </th>
                 <th className="px-3 py-2 text-right font-medium">Pending changes</th>
                 <th className="px-3 py-2 font-medium" />
               </tr>
@@ -510,19 +516,15 @@ function PriceSheet({
                             <span className="font-mono text-xs font-normal text-slate-400">
                               {p.code}
                             </span>
-                            {/* The rate every size row below is derived from, so
-                                each product block reads on its own — and still
-                                does when the sizes are collapsed away. */}
+                            {/* The provider's discounted rate every size row
+                                below is derived from, so each product block
+                                reads on its own — and still does when the
+                                sizes are collapsed away. */}
                             <span className="font-normal tabular-nums text-slate-600">
                               {productBilledPerCm2 === null
                                 ? "—"
                                 : `${formatCents(productBilledPerCm2)}/cm²`}
                             </span>
-                            {p.costCents !== null && (
-                              <span className="font-normal tabular-nums text-brand-violet">
-                                COGS {formatCents(p.costCents)}/cm²
-                              </span>
-                            )}
                             <span className="ml-auto text-xs font-normal text-slate-400">
                               {rows.length} {rows.length === 1 ? "size" : "sizes"}
                             </span>
@@ -629,6 +631,18 @@ function ProductRowView({
       ? product.costCents + product.cogsCents
       : null;
 
+  // Agile's own outlay is the purchase price; COGS is the markup that lifts it
+  // to the selling price, so it is not subtracted again here.
+  const economics =
+    sellingCents === null || product.costCents === null || billPct === null
+      ? null
+      : (() => {
+          const billed = Math.round(sellingCents * billPct);
+          const net = billed - product.costCents;
+          const commission = Math.round(REP_COMMISSION_SHARE * net);
+          return { billed, net, commission, agile: net - commission };
+        })();
+
   function save() {
     const priceCents = price.trim() ? toCents(price) : null;
     const cogsCents = cogs.trim() ? toCents(cogs) : null;
@@ -681,22 +695,29 @@ function ProductRowView({
           )}
         </td>
         <td className="px-3 py-2.5 text-right tabular-nums">
-          {sellingCents === null || product.costCents === null || billPct === null ? (
+          {economics === null ? (
             <span className="text-xs text-slate-300">—</span>
           ) : (
-            (() => {
-              // Agile's own outlay is the purchase price; COGS is the markup
-              // that lifts it to the selling price, so it is not subtracted
-              // again here.
-              const billed = Math.round(sellingCents * billPct);
-              const net = billed - product.costCents;
-              const agile = net - Math.round(REP_COMMISSION_SHARE * net);
-              return (
-                <span className={agile < 0 ? "font-semibold text-red-600" : "text-brand-violet"}>
-                  {formatCents(agile)}
-                </span>
-              );
-            })()
+            <span
+              className={
+                economics.agile < 0 ? "font-semibold text-red-600" : "text-brand-violet"
+              }
+            >
+              {formatCents(economics.agile)}
+            </span>
+          )}
+        </td>
+        <td className="px-3 py-2.5 text-right tabular-nums">
+          {economics === null ? (
+            <span className="text-xs text-slate-300">—</span>
+          ) : (
+            <span
+              className={
+                economics.commission < 0 ? "font-semibold text-red-600" : "text-brand-violet"
+              }
+            >
+              {formatCents(economics.commission)}
+            </span>
           )}
         </td>
         <td className="px-3 py-2.5 text-right">
@@ -729,7 +750,7 @@ function ProductRowView({
       </tr>
       {editing && (
         <tr className="border-t border-slate-100 bg-slate-50">
-          <td colSpan={7} className="px-4 py-4">
+          <td colSpan={11} className="px-4 py-4">
             <div className="flex flex-wrap items-end gap-4">
               <div className="min-w-56 flex-1">
                 <label className="label-mono block text-slate-500">Name</label>
