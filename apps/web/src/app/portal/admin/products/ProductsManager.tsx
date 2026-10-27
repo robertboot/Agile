@@ -510,19 +510,15 @@ function PriceSheet({
                             <span className="font-mono text-xs font-normal text-slate-400">
                               {p.code}
                             </span>
-                            {/* The rate every size row below is derived from, so
-                                each product block reads on its own — and still
-                                does when the sizes are collapsed away. */}
+                            {/* The provider's discounted rate every size row
+                                below is derived from, so each product block
+                                reads on its own — and still does when the
+                                sizes are collapsed away. */}
                             <span className="font-normal tabular-nums text-slate-600">
                               {productBilledPerCm2 === null
                                 ? "—"
                                 : `${formatCents(productBilledPerCm2)}/cm²`}
                             </span>
-                            {p.costCents !== null && (
-                              <span className="font-normal tabular-nums text-brand-violet">
-                                COGS {formatCents(p.costCents)}/cm²
-                              </span>
-                            )}
                             <span className="ml-auto text-xs font-normal text-slate-400">
                               {rows.length} {rows.length === 1 ? "size" : "sizes"}
                             </span>
