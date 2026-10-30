@@ -8,7 +8,12 @@ import { signIn } from "./actions";
 function LoginForm() {
   const params = useSearchParams();
   const [state, action, pending] = useActionState(signIn, null);
-  const notPortal = params.get("error") === "not-portal-user";
+  const error = params.get("error");
+  const notPortal = error === "not-portal-user";
+  // Set by /auth/callback when a recovery link is dead, and by the reset form
+  // on success.
+  const linkExpired = error === "link-expired" || error === "link-invalid";
+  const justReset = params.get("reset") === "1";
 
   return (
     <form action={action} className="w-full space-y-4">
@@ -28,10 +33,29 @@ function LoginForm() {
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 outline-none focus:border-brand-blue"
         />
       </div>
-      <label className="flex items-center gap-2 text-sm text-slate-600">
-        <input type="checkbox" name="remember" defaultChecked className="accent-brand-blue" />
-        Remember me on this device
-      </label>
+      <div className="flex items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" name="remember" defaultChecked className="accent-brand-blue" />
+          Remember me on this device
+        </label>
+        <Link href="/forgot-password" className="text-sm text-slate-500 hover:text-brand-blue">
+          Forgot password?
+        </Link>
+      </div>
+      {justReset && (
+        <p className="text-sm text-emerald-700">
+          Password updated — sign in with it below.
+        </p>
+      )}
+      {linkExpired && (
+        <p className="text-sm text-amber-600">
+          That reset link has expired or was already used.{" "}
+          <Link href="/forgot-password" className="underline hover:text-brand-blue">
+            Request a new one
+          </Link>
+          .
+        </p>
+      )}
       {notPortal && (
         <p className="text-sm text-amber-600">
           This account doesn&apos;t have portal access. Contact your Agile admin.
