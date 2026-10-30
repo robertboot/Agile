@@ -3,19 +3,24 @@
 // reimbursement claims. The official flyers carry the specifics.
 // Reviewed against the portal Product Reference so the two don't drift.
 
-import { sizesForProduct } from "@agile/shared";
+import { sizesForProduct, type ProductLine } from "@agile/shared";
 import { FLYERS } from "@/app/portal/products/battlecards";
 
 export interface PublicProduct {
   slug: string;
   name: string;
   subtitle: string;
-  line: "Membrane" | "Microlyte" | "Apis";
+  line: ProductLine;
   description: string;
   image: string;
   /** Available size labels (from the shared catalog). */
   sizes: string[];
   flyers: { label: string; href: string }[];
+  /** Illustrated procedure steps, where the product is prepared rather than
+   *  taken from a pouch. */
+  steps?: { image: string; caption: string }[];
+  /** Instructions-for-use video, mirrored from the manufacturer. */
+  video?: { src: string; poster: string; label: string };
 }
 
 const sizeLabels = (code: string) => sizesForProduct(code).map((s) => s.label);
@@ -108,6 +113,42 @@ export const PUBLIC_PRODUCTS: PublicProduct[] = [
     description:
       "A wound dressing combining medical-grade Mānuka honey and collagen to cover and manage wounds, including deep and large wounds. Developed with SweetBio. See the product literature for complete labeled information.",
     flyers: FLYERS["A2010"] ?? [],
+  },
+  {
+    slug: "fastskin-patch",
+    // One kit; the patch is cut to size from the patient's own clot, so there
+    // is no catalogue size list to pull from the shared catalog.
+    sizes: ["1 Kit"],
+    image: "/products-img/fastskin-patch.jpg",
+    name: "FastSkin\u00ae Patch",
+    subtitle: "Autologous Whole-Blood Patch",
+    line: "FastSkin",
+    description:
+      "An autologous product prepared at the point of care. A small sample of the patient's own whole blood is processed chairside \u2014 without a centrifuge or other capital equipment \u2014 into a self-supporting whole-blood clot, which is then cut to size and placed for the management of exuding cutaneous wounds.",
+    steps: [
+      {
+        image: "/products-img/fastskin-step-1-blood-collection.jpg",
+        caption: "Blood collection",
+      },
+      {
+        image: "/products-img/fastskin-step-2-processing.jpg",
+        caption: "Capital-equipment-free processing",
+      },
+      {
+        image: "/products-img/fastskin-step-3-custom-sizing.jpg",
+        caption: "Custom sizing",
+      },
+      {
+        image: "/products-img/fastskin-step-4-placement.jpg",
+        caption: "Placement",
+      },
+    ],
+    video: {
+      src: "/video/fastskin-patch-ifu.mp4",
+      poster: "/products-img/fastskin-step-1-blood-collection.jpg",
+      label: "Instructions for use",
+    },
+    flyers: FLYERS["G0465"] ?? [],
   },
 ];
 

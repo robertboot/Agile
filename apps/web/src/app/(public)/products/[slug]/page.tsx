@@ -59,6 +59,48 @@ export default async function PublicProductPage({
           </div>
         </div>
 
+        {product.steps && (
+          <section>
+            <h2 className="font-bold text-navy-900">How it works</h2>
+            <ol className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {product.steps.map((step, i) => (
+                <li key={step.image}>
+                  <div className="relative aspect-[3/2] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <Image
+                      src={step.image}
+                      alt={step.caption}
+                      fill
+                      sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                      className="object-cover"
+                    />
+                  </div>
+                  <p className="mt-2 text-sm text-slate-700">
+                    <span className="font-semibold text-navy-900">{i + 1}.</span> {step.caption}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {product.video && (
+          <section>
+            <h2 className="font-bold text-navy-900">{product.video.label}</h2>
+            {/* Mirrored from the manufacturer; no autoplay, so a 20 MB file is
+                only fetched when someone asks for it. */}
+            <video
+              controls
+              preload="none"
+              poster={product.video.poster}
+              className="mt-4 w-full rounded-xl border border-slate-200 bg-black"
+            >
+              <source src={product.video.src} type="video/mp4" />
+              Your browser can&apos;t play this video.{" "}
+              <a href={product.video.src}>Download it instead</a>.
+            </video>
+          </section>
+        )}
+
         <section className="rounded-xl border border-slate-200 bg-slate-50 p-6">
           <h2 className="font-bold text-navy-900">Product literature</h2>
           <p className="mt-1 text-sm text-slate-500">

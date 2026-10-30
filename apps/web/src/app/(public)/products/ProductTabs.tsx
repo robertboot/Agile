@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import type { ProductLine } from "@agile/shared";
 import type { PublicProduct } from "./product-pages";
 
 const TABS = [
   { key: "Membrane", label: "Membrane", sub: "Amnion-derived coverings" },
   { key: "Microlyte", label: "Microlyte", sub: "Synthetic antimicrobial matrices" },
   { key: "Apis", label: "APIS", sub: "Mānuka honey dressings" },
+  { key: "FastSkin", label: "FastSkin", sub: "Autologous blood patch" },
 ] as const;
 
 export function ProductTabs({
@@ -16,7 +18,7 @@ export function ProductTabs({
   initialTab = "Membrane",
 }: {
   products: PublicProduct[];
-  initialTab?: "Membrane" | "Microlyte" | "Apis";
+  initialTab?: ProductLine;
 }) {
   const [active, setActive] = useState<(typeof TABS)[number]["key"]>(initialTab);
   const visible = products.filter((p) => p.line === active);

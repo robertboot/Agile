@@ -146,11 +146,12 @@ export async function addProduct(input: {
 }): Promise<ActionResult> {
   await requireAdmin();
   const code = input.code.trim().toUpperCase();
-  if (!/^[AQ]\d{4}$/.test(code)) {
-    return { ok: false, error: "Code should be a Q/A billing code, e.g. Q4205 or A2005" };
+  // Q/A for the graft lines; G for FastSkin, which bills as a procedure.
+  if (!/^[AQG]\d{4}$/.test(code)) {
+    return { ok: false, error: "Code should be a Q/A/G billing code, e.g. Q4205, A2005 or G0465" };
   }
   if (!input.name.trim()) return { ok: false, error: "Name is required" };
-  if (!["Membrane", "Microlyte", "Apis"].includes(input.line)) {
+  if (!["Membrane", "Microlyte", "Apis", "FastSkin"].includes(input.line)) {
     return { ok: false, error: "Pick a product line" };
   }
   if (!Number.isInteger(input.costCents) || input.costCents <= 0) {

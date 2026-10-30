@@ -5,13 +5,15 @@
 // INTERNAL USE ONLY — never distribute to patients or paste into provider
 // emails; the compliance-gated share flow sends only on-label basics.
 
+import type { ProductLine } from "@agile/shared";
+
 export interface Battlecard {
   slug: string;
-  /** Q/A billing code; null when not yet assigned (Ocular). */
+  /** Billing code; G-codes for FastSkin, null when unassigned (Ocular). */
   code: string | null;
   name: string;
   subtitle: string;
-  line: "Membrane" | "Microlyte" | "Apis";
+  line: ProductLine;
   headline: string;
   positioning: string;
   leadWith: string;
@@ -35,6 +37,7 @@ export const PUBLIC_SLUGS: Record<string, string> = {
   A2005: "microlyte-sam",
   A2040: "microlyte-painguard",
   A2010: "apis",
+  G0465: "fastskin-patch",
 };
 
 /** Product images (served from /public/products-img), keyed by battlecard slug. */
@@ -47,6 +50,7 @@ export const PRODUCT_IMAGES: Record<string, string> = {
   A2005: "/products-img/microlyte-sam.jpg",
   A2040: "/products-img/microlyte-painguard.jpg",
   A2010: "/products-img/apis.jpg",
+  G0465: "/products-img/fastskin-patch.jpg",
 };
 
 /** Official literature PDFs (served from /public/flyers), keyed by battlecard slug. */
@@ -65,9 +69,14 @@ export const FLYERS: Record<string, { label: string; href: string }[]> = {
   ],
   A2040: [{ label: "Microlyte PainGuard product flyer", href: "/flyers/microlyte-painguard.pdf" }],
   A2010: [{ label: "APIS flyer (SweetBio)", href: "/flyers/apis.pdf" }],
+  G0465: [{ label: "FastSkin Patch product flyer (EmeraNova)", href: "/flyers/fastskin-patch.pdf" }],
 };
 
 export const LINE_INTROS: Record<string, { title: string; body: string }> = {
+  FastSkin: {
+    title: "FastSkin — autologous whole-blood patch (with EmeraNova)",
+    body: "A kit, not a graft. A small draw of the patient's own blood is processed chairside — no centrifuge, no capital equipment — into a self-supporting whole-blood clot that is cut to size and placed. Nothing is implanted that did not come from the patient, which is the whole pitch for accounts that resist donor tissue. It bills as a procedure under G0465/G0460, not against the per-cm² graft schedule, so treat the economics as a separate conversation.",
+  },
   Membrane: {
     title: "Membrane Line — amnion-derived protective coverings",
     body: "Readily available human amniotic allografts that serve as a barrier and protective covering for the wound — minimally manipulated, donor-tested, terminally sterilized, and 21 CFR Part 1271 compliant. You differentiate within the line by construct, thickness, and format.",
@@ -441,6 +450,58 @@ export const BATTLECARDS: Battlecard[] = [
     },
     footnote:
       "Skin-substitute application limits and the conservative-care period vary by payer and LCD. Confirm current policy; never promise coverage, application counts, or reimbursement. Apis positioning reflects standard-of-care wound management, not a clinical healing claim.",
+  },
+  {
+    slug: "G0465",
+    code: "G0465",
+    name: "FastSkin Patch",
+    subtitle: "Autologous Whole-Blood Patch (EmeraNova)",
+    line: "FastSkin",
+    headline: "The patient is the donor",
+    positioning:
+      "Not a graft off the shelf — a kit. A small draw of the patient's own whole blood is processed chairside into a self-supporting clot, cut to size, and placed. No centrifuge and no capital equipment, so a clinic can adopt it without buying anything. This is the answer for the account that will not use donor tissue, and for the case where nothing else has moved.",
+    leadWith: "Open with the accounts that have told you no on allografts.",
+    matrix: {
+      whatItIs: "Autologous whole-blood patch made chairside",
+      differentiator: "Patient's own biology; no donor tissue, no equipment",
+      bestFit: "Accounts that decline allografts; exuding cutaneous wounds",
+    },
+    whatItIs: [
+      {
+        fact: "Made from the patient's own whole blood",
+        say: "Nothing goes on the wound that didn't come from the patient — that removes the donor-tissue conversation entirely.",
+      },
+      {
+        fact: "Prepared at the point of care in about 10 minutes",
+        say: "It happens inside the visit. No send-out, no second appointment.",
+      },
+      {
+        fact: "No centrifuge or capital equipment",
+        say: "If you can draw blood, you can use it. Nothing to buy, nothing to service.",
+      },
+      {
+        fact: "Cut to size from the clot",
+        say: "One kit, any wound shape — you size it at the bedside instead of ordering to fit.",
+      },
+      {
+        fact: "Bills as a procedure, not a graft",
+        say: "G0465 and G0460 are a different lane from the per-cm² schedule — worth a separate conversation with their biller.",
+      },
+    ],
+    idealProfile: [
+      "Accounts that decline human tissue allografts",
+      "Exuding cutaneous wounds",
+      "Clinics already comfortable drawing blood in-office",
+    ],
+    discoveryQuestions: [
+      "\u201cAre there patients where donor tissue is a non-starter for you or for them?\u201d",
+      "\u201cDo you draw blood in the office today?\u201d",
+      "\u201cWho handles your G-code billing \u2014 is that the same person as your graft billing?\u201d",
+    ],
+    competitiveAngle:
+      "Everything else in the bag is something you put on the patient. This one is made from the patient. Against a competitor pushing another allograft, it is not a better graft — it is a different category, and it reaches the accounts allografts cannot.",
+    footnote:
+      "Pricing is not yet loaded: the kit cost is still being agreed with EmeraNova, so the product sits inactive in the portal and cannot be ordered. Quote nothing until it goes live. Reimbursement under G0465/G0460 is MAC-determined — never promise an amount.",
   },
 ];
 

@@ -1,12 +1,14 @@
+import type { ProductLine } from "@agile/shared";
 import { PUBLIC_PRODUCTS } from "./product-pages";
 import { ProductTabs } from "./ProductTabs";
 
 export const metadata = { title: "Products" };
 
-const LINE_PARAM: Record<string, "Membrane" | "Microlyte" | "Apis"> = {
+const LINE_PARAM: Record<string, ProductLine> = {
   membrane: "Membrane",
   microlyte: "Microlyte",
   apis: "Apis",
+  fastskin: "FastSkin",
 };
 
 export default async function PublicProductsPage({
@@ -21,7 +23,7 @@ export default async function PublicProductsPage({
       <section className="bg-navy-950 px-6 pb-24 pt-16 text-center">
         <h1 className="text-4xl font-bold text-white">Our Products</h1>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-sky-100">
-          Advanced wound and surgical coverings across three complementary lines — with official
+          Advanced wound and surgical coverings across four complementary lines — with official
           product literature for each.
         </p>
       </section>
