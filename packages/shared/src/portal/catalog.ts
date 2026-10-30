@@ -1,10 +1,12 @@
 // Product catalog + size charts (spec §7). Costs are per cm², in cents.
 // COGS charged to Agile is 2× cost — computed in pricing.ts, never shown to reps.
 
-export type ProductLine = "Membrane" | "Microlyte" | "Apis";
+export type ProductLine = "Membrane" | "Microlyte" | "Apis" | "FastSkin";
 
 export interface CatalogProduct {
-  /** Q/A billing code; null until assigned (Ocular). */
+  /** Billing code, also the system-wide product key. Q/A for the graft lines;
+   *  G-codes for FastSkin, which bills as a procedure. Null until assigned
+   *  (Ocular). */
   code: string | null;
   name: string;
   line: ProductLine;
@@ -18,7 +20,9 @@ export interface CatalogSize {
   productCode: string;
   sku: string;
   label: string;
-  /** Billable cm² (for APIS these are billable units, not literal area). */
+  /** Billable cm² (for APIS these are billable units, not literal area; for
+   *  FastSkin, 1 = one kit — the patch is cut to size from the patient's own
+   *  clot, so there is no catalogue area). */
   cm2: number;
 }
 
@@ -30,6 +34,11 @@ export const PRODUCTS: CatalogProduct[] = [
   { code: "A2005", name: "Microlyte SAM", line: "Microlyte", construct: "Synthetic absorbable matrix with silver", costPerCm2Cents: 1800, active: true },
   { code: "A2040", name: "Microlyte PainGuard", line: "Microlyte", construct: "Synthetic absorbable matrix, lidocaine", costPerCm2Cents: 2500, active: true },
   { code: "A2010", name: "APIS", line: "Apis", construct: "Manuka-honey-impregnated dressing", costPerCm2Cents: 1700, active: true },
+  // Autologous: the patch is made chairside from the patient's own blood, so
+  // it sells as a kit rather than by area and bills as a procedure (G0465 /
+  // G0460) rather than against the per-cm² schedule. Cost per kit is not yet
+  // agreed with EmeraNova, so it stays inactive — same handling as Ocular.
+  { code: "G0465", name: "FastSkin Patch", line: "FastSkin", construct: "Autologous whole-blood clot, prepared at point of care", costPerCm2Cents: null, active: false },
   // Cost/cm² and Q/A-code TBD — inactive until confirmed (spec §11).
   { code: null, name: "Membrane Lite Restore – Ocular", line: "Membrane", construct: "Single-layer amnion membrane, ocular discs", costPerCm2Cents: null, active: false },
 ];
@@ -84,6 +93,10 @@ export const SIZES: CatalogSize[] = [
   { productCode: "A2010", sku: "APIS-40x40-2", label: "4×4 cm", cm2: 16 },
   { productCode: "A2010", sku: "APIS-50x50-2", label: "5×5 cm", cm2: 25 },
   { productCode: "A2010", sku: "APIS-60x80-2", label: "6×8 cm", cm2: 48 },
+
+  // FastSkin Patch (G0465) — one kit, cut to size chairside. cm2 is 1 so the
+  // per-cm² engine prices it per kit; it is not an area.
+  { productCode: "G0465", sku: "MXA00405", label: "1 Kit", cm2: 1 },
 ];
 
 export function productByCode(code: string): CatalogProduct | undefined {

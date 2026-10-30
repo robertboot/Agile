@@ -27,7 +27,7 @@ export default function AboutPage() {
         <div>
           <h2 className="text-xl font-bold text-navy-900">A focused portfolio</h2>
           <p className="mt-3 leading-relaxed text-slate-600">
-            We carry three complementary product lines — Membrane, Microlyte, and Apis — covering
+            We carry four complementary product lines — Membrane, Microlyte, Apis, and FastSkin — covering
             human-tissue membrane allografts, synthetic absorbable matrices, and Manuka-honey
             dressings. One relationship covers the range.
           </p>

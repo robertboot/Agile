@@ -12,7 +12,7 @@ import {
   THIRTY_SECOND_PITCH,
 } from "./battlecards";
 
-const LINE_ORDER = ["Membrane", "Microlyte", "Apis"] as const;
+const LINE_ORDER = ["Membrane", "Microlyte", "Apis", "FastSkin"] as const;
 
 export default async function ProductsPage() {
   await requirePortalUser();

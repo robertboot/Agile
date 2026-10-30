@@ -41,4 +41,13 @@ export const PRODUCT_LINES: ProductLineCard[] = [
       "Wound dressings impregnated with medical-grade Manuka honey, available in multiple sizes for a range of wound presentations.",
     visible: true,
   },
+  {
+    key: "fastskin",
+    name: "FastSkin",
+    layers: 1,
+    tagline: "Autologous whole-blood patch",
+    description:
+      "A kit that turns a small sample of the patient's own whole blood into a self-supporting clot at the point of care \u2014 no centrifuge or capital equipment \u2014 cut to size and placed for the management of exuding cutaneous wounds.",
+    visible: true,
+  },
 ];
