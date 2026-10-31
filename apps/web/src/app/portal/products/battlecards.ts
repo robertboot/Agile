@@ -25,6 +25,9 @@ export interface Battlecard {
   competitiveAngle: string;
   footnote?: string;
   strategicPlay?: { title: string; body: string };
+  /** How the product is sold. "kit" products carry cm2 = 1 as a billing unit,
+   *  so their sizes must not be printed as an area. Defaults to "cm2". */
+  unit?: "cm2" | "kit";
 }
 
 /** Public-site product page slug for each battlecard (for provider-facing links). */
@@ -457,6 +460,7 @@ export const BATTLECARDS: Battlecard[] = [
     name: "FastSkin Patch",
     subtitle: "Autologous Whole-Blood Patch (EmeraNova)",
     line: "FastSkin",
+    unit: "kit",
     headline: "The patient is the donor",
     positioning:
       "Not a graft off the shelf — a kit. A small draw of the patient's own whole blood is processed chairside into a self-supporting clot, cut to size, and placed. No centrifuge and no capital equipment, so a clinic can adopt it without buying anything. This is the answer for the account that will not use donor tissue, and for the case where nothing else has moved.",
@@ -500,6 +504,10 @@ export const BATTLECARDS: Battlecard[] = [
     ],
     competitiveAngle:
       "Everything else in the bag is something you put on the patient. This one is made from the patient. Against a competitor pushing another allograft, it is not a better graft — it is a different category, and it reaches the accounts allografts cannot.",
+    strategicPlay: {
+      title: "Strategic play — the accounts that already said no",
+      body: "Your closed-lost list is the target list. Every account that declined on donor-tissue grounds — religious objection, patient pushback, a committee that would not clear an HCT/P — is a live call again, and it is a call no competitor selling allografts can make. Lead with the objection they gave you: “You told me you would not use donor tissue. This one is made from your patient’s own blood.” It also opens a second door inside accounts you already hold, because it does not compete with the membranes on the shelf — it covers the cases those membranes were never going to win. Qualify on two things only: do they draw blood in-office, and who owns their G-code billing.",
+    },
     footnote:
       "Pricing is not yet loaded: the kit cost is still being agreed with EmeraNova, so the product sits inactive in the portal and cannot be ordered. Quote nothing until it goes live. Reimbursement under G0465/G0460 is MAC-determined — never promise an amount.",
   },
