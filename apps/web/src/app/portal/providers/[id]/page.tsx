@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { isValidNpi } from "@agile/shared";
 import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 import { EditProviderForm, type ProviderRecord } from "./EditProviderForm";
 import { ProviderAdminOverride } from "./ProviderAdminOverride";
 import { ReassignRep, type RepOption } from "./ReassignRep";
 import { ActiveToggle } from "./ActiveToggle";
 import { PrepurchasePanel } from "./PrepurchasePanel";
+import { ProviderPricing, type PricingProduct } from "./ProviderPricing";
 import { HouseAccountPanel } from "./HouseAccountPanel";
 import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 import { TouchpointLog, type Touchpoint } from "./TouchpointLog";
@@ -60,6 +62,32 @@ export default async function ProviderDetailPage({
 
   // RLS lets reps update only their own unapproved providers; admins any.
   const editable = user.role === "admin" || !provider.approved;
+
+  // Agile list price per product = purchase price + COGS markup, so the panel
+  // can show what this provider's discount actually costs them per cm².
+  const owns = user.role === "admin" || provider.rep_id === user.id;
+  let pricingProducts: PricingProduct[] = [];
+  if (owns) {
+    const admin = createAdminClient();
+    const [{ data: prods }, { data: costs }] = await Promise.all([
+      admin.from("products").select("code, name").eq("active", true).order("code"),
+      admin.from("product_costs").select("product_code, cost_per_cm2_cents, cogs_per_cm2_cents"),
+    ]);
+    const costRows = (costs ?? []) as {
+      product_code: string;
+      cost_per_cm2_cents: number;
+      cogs_per_cm2_cents: number | null;
+    }[];
+    const byCode = new Map(
+      costRows.map((c) => [
+        c.product_code,
+        Number(c.cost_per_cm2_cents) + Number(c.cogs_per_cm2_cents ?? 0),
+      ]),
+    );
+    pricingProducts = ((prods ?? []) as { code: string; name: string }[])
+      .filter((pr) => byCode.has(pr.code))
+      .map((pr) => ({ code: pr.code, name: pr.name, listCents: byCode.get(pr.code)! }));
+  }
 
   // Partial saves are allowed — surface what's still missing before approval.
   const missing: string[] = [];
@@ -153,6 +181,16 @@ export default async function ProviderDetailPage({
             <ActiveToggle providerId={provider.id} active={provider.active !== false} />
           </div>
         </section>
+      )}
+
+      {owns && (
+        <ProviderPricing
+          providerId={provider.id}
+          current={Number(provider.discount_pct ?? 40)}
+          products={pricingProducts}
+          isAdmin={user.role === "admin"}
+          canEdit={owns}
+        />
       )}
 
       {(user.role === "admin" || provider.rep_id === user.id) && (

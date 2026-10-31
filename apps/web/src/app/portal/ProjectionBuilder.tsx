@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
+import { formatCents, DISCOUNT_TIERS, MAX_DISCOUNT_PCT } from "@agile/shared";
 import { quoteOrder } from "@/app/portal/actions";
 import { useServerQuote } from "@/lib/use-server-quote";
 
@@ -62,7 +62,7 @@ export function ProjectionBuilder({
   ];
   const hasPreload = preloadPatients.every((p) => sizes.some((s) => s.sku === p.sku));
 
-  const [tier, setTier] = useState<DiscountTier>(40);
+  const [tier, setTier] = useState<number>(40);
   const [blocks, setBlocks] = useState<ProviderBlock[]>(
     hasPreload
       ? [{ count: 5, patients: preloadPatients }]
@@ -181,6 +181,20 @@ export function ProjectionBuilder({
         <h2 className="font-semibold text-navy-900">Book-of-business projection</h2>
         <div className="flex items-center gap-2">
           <span className="label-mono text-slate-500">Provider discount</span>
+          <input
+            type="number"
+            min={0}
+            max={MAX_DISCOUNT_PCT}
+            step={1}
+            value={tier}
+            aria-label="Provider discount percent"
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) setTier(Math.min(Math.max(Math.round(n), 0), MAX_DISCOUNT_PCT));
+            }}
+            className="w-16 rounded-lg border border-slate-300 px-2 py-1.5 text-right text-xs"
+          />
+          <span className="text-xs text-slate-500">%</span>
           {DISCOUNT_TIERS.map((t) => (
             <button
               key={t}

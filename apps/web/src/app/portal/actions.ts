@@ -6,8 +6,9 @@ import {
   commissionOnCollection,
   formatCents,
   priceOrder,
+  isPriceableDiscount,
+  MAX_DISCOUNT_PCT,
   toRepView,
-  type DiscountTier,
   type LineItemInput,
 } from "@agile/shared";
 import { requireAdmin, requirePortalUser } from "@/lib/auth";
@@ -34,7 +35,7 @@ export type { QuoteItemInput };
  * Prices an order server-side. Product costs stay server-only; the caller gets
  * the rep view (billed, commission, provider-keeps) — never COGS/Agile net.
  */
-export async function quoteOrder(items: QuoteItemInput[], tier: DiscountTier) {
+export async function quoteOrder(items: QuoteItemInput[], tier: number) {
   await requirePortalUser();
   if (items.length === 0) return null;
   const { lineInputs, reimbursement, cogsMultiplier } = await resolveLineInputs(items);
@@ -61,6 +62,19 @@ export async function createProvider(
   // the record can be identified. NPI + other details can be filled in later;
   // ordering is still gated on approve + MedNecessity-onboarded.
   if (!f("practice_name")) return { ok: false, error: "Practice name is required" };
+
+  // The rep agrees pricing when they bring the provider on. 40% is the house
+  // default; reps are capped at MAX_DISCOUNT_PCT, admins are not.
+  const isAdminUser = user.role === "admin";
+  const discountRaw = f("discount_pct");
+  const discountPct = discountRaw === null ? 40 : Number(discountRaw);
+  if (!Number.isInteger(discountPct) || discountPct < 0 || discountPct > 100) {
+    return { ok: false, error: "Discount must be a whole number between 0 and 100" };
+  }
+  if (!isAdminUser && discountPct > MAX_DISCOUNT_PCT) {
+    return { ok: false, error: `Discounts above ${MAX_DISCOUNT_PCT}% require admin approval` };
+  }
+
   const individualNpi = f("individual_npi");
   const orgNpi = f("organization_npi");
 
@@ -89,6 +103,7 @@ export async function createProvider(
   const { error } = await supabase.from("providers").insert({
     baa_document_path: baaDocumentPath,
     rep_id: repId,
+    discount_pct: discountPct,
     practice_name: f("practice_name"),
     practice_type: f("practice_type"),
     organization_npi: orgNpi,
@@ -426,20 +441,44 @@ export async function reassignProvider(providerId: string, repId: string): Promi
   return { ok: true };
 }
 
+/**
+ * The discount an order is priced at comes from the provider record, never
+ * from the client. A rep agrees pricing on the provider; the order follows it.
+ */
+async function providerDiscountPct(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  providerId: string,
+): Promise<number | null> {
+  const { data } = await supabase
+    .from("providers")
+    .select("discount_pct")
+    .eq("id", providerId)
+    .maybeSingle();
+  return data ? Number(data.discount_pct) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Orders (spec §5)
 // ---------------------------------------------------------------------------
 
 export async function createOrder(
   providerId: string,
-  tier: DiscountTier,
   items: (QuoteItemInput & { serial?: string })[],
   patientName?: string,
   dateApplied?: string,
 ): Promise<ActionResult> {
   const user = await requirePortalUser();
   if (items.length === 0) return { ok: false, error: "Add at least one line item" };
-  if (![30, 35, 40].includes(tier)) return { ok: false, error: "Invalid discount tier" };
+
+  // One atomic transaction: order + items + economics snapshot (audit H3).
+  // The DB function re-checks provider ownership + onboarding.
+  void user; // authorization is re-verified inside fn_create_order via auth.uid()
+  const supabase = await createClient();
+
+  const tier = await providerDiscountPct(supabase, providerId);
+  if (tier === null || !isPriceableDiscount(tier)) {
+    return { ok: false, error: "This provider has no agreed pricing yet — set it first." };
+  }
 
   let resolved;
   try {
@@ -448,11 +487,6 @@ export async function createOrder(
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }
   const econ = priceOrder(resolved.lineInputs, resolved.reimbursement, tier, resolved.cogsMultiplier);
-
-  // One atomic transaction: order + items + economics snapshot (audit H3).
-  // The DB function re-checks provider ownership + onboarding.
-  void user; // authorization is re-verified inside fn_create_order via auth.uid()
-  const supabase = await createClient();
   const { data: orderId, error } = await supabase.rpc("fn_create_order", {
     p_provider_id: providerId,
     p_discount_tier: tier,
@@ -614,14 +648,12 @@ export async function createInventoryPull(
  */
 export async function editOrder(
   orderId: string,
-  tier: DiscountTier,
   items: (QuoteItemInput & { serial?: string })[],
   patientName?: string,
   dateApplied?: string,
 ): Promise<ActionResult> {
   await requirePortalUser();
   if (items.length === 0) return { ok: false, error: "Add at least one line item" };
-  if (![30, 35, 40].includes(tier)) return { ok: false, error: "Invalid discount tier" };
 
   const supabase = await createClient();
 
@@ -632,7 +664,7 @@ export async function editOrder(
   // The edit page hides the form for pulls; this guards direct action calls.
   const { data: existing } = await supabase
     .from("orders")
-    .select("prepurchase_account_id")
+    .select("prepurchase_account_id, provider_id")
     .eq("id", orderId)
     .maybeSingle();
   if (existing?.prepurchase_account_id) {
@@ -642,6 +674,14 @@ export async function editOrder(
         "This is a pull from pre-purchased inventory — its prices are firm under the bulk " +
         "agreement and can't be changed here. Delete the pull to restore the credit, then create it again.",
     };
+  }
+
+  // Re-price at the provider's current agreed discount, same as a new order.
+  const tier = existing?.provider_id
+    ? await providerDiscountPct(supabase, existing.provider_id as string)
+    : null;
+  if (tier === null || !isPriceableDiscount(tier)) {
+    return { ok: false, error: "This provider has no agreed pricing yet — set it first." };
   }
 
   let resolved;
@@ -1005,5 +1045,30 @@ export async function recordCollection(
   await notifySlack({ kind: "payment_recorded", orderId, amount: formatCents(amountCents) });
   revalidatePath(`/portal/orders/${orderId}`);
   revalidatePath("/portal/commissions");
+  return { ok: true };
+}
+
+/**
+ * Set a provider's agreed discount. The 60% ceiling and "your own providers
+ * only" are enforced inside fn_set_provider_discount, which runs as definer
+ * because providers_rep_update stops at approved = false and RLS cannot be
+ * scoped to one column. An admin may set any value.
+ */
+export async function setProviderDiscount(
+  providerId: string,
+  discountPct: number,
+): Promise<ActionResult> {
+  await requirePortalUser();
+  if (!Number.isInteger(discountPct) || discountPct < 0 || discountPct > 100) {
+    return { ok: false, error: "Discount must be a whole number between 0 and 100" };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_set_provider_discount", {
+    p_provider: providerId,
+    p_pct: discountPct,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/portal/providers");
+  revalidatePath(`/portal/providers/${providerId}`);
   return { ok: true };
 }

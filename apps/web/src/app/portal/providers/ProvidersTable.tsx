@@ -23,6 +23,8 @@ export interface ProviderRow {
   lastTouchKind: string | null;
   lastTouchAt: string | null;
   originatorName: string | null;
+  /** Agreed discount off Agile list price; what this provider's orders bill at. */
+  discountPct: number;
 }
 
 const TOUCH_ICON: Record<string, string> = {
@@ -189,6 +191,7 @@ export function ProvidersTable({
               <Th label={`Location${arrow("location")}`} onClick={() => toggle("location")} />
               {isAdmin && <Th label={`Rep${arrow("rep")}`} onClick={() => toggle("rep")} />}
               {isAdmin && <Th label={`Originator${arrow("originator")}`} onClick={() => toggle("originator")} />}
+              <th className="px-4 py-2.5 text-right font-medium">Pricing</th>
               <Th label={`Status${arrow("status")}`} onClick={() => toggle("status")} />
               <Th label={`Last touch${arrow("lastTouch")}`} onClick={() => toggle("lastTouch")} />
               {isAdmin && <th className="px-4 py-2.5" />}
@@ -233,6 +236,10 @@ export function ProvidersTable({
                     {p.originatorName ?? <span className="text-slate-300">—</span>}
                   </td>
                 )}
+                <td className="px-4 py-2.5 text-right tabular-nums">
+                  <span className="font-semibold text-navy-900">{p.discountPct}%</span>
+                  <span className="ml-1 text-xs text-slate-400">off list</span>
+                </td>
                 <td className="px-4 py-2.5">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_META[statusOf(p)].cls}`}>
                     {STATUS_META[statusOf(p)].label}
@@ -256,7 +263,7 @@ export function ProvidersTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 8 : 5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={isAdmin ? 9 : 6} className="px-4 py-8 text-center text-slate-400">
                   No providers match.
                 </td>
               </tr>
