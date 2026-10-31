@@ -17,7 +17,8 @@ export interface PublicProduct {
   sizes: string[];
   flyers: { label: string; href: string }[];
   /** Illustrated procedure steps, where the product is prepared rather than
-   *  taken from a pouch. */
+   *  taken from a pouch. The artwork carries its own numbered caption, so
+   *  `caption` is used as alt text and mirrors the wording in the image. */
   steps?: { image: string; caption: string }[];
   /** Instructions-for-use video, mirrored from the manufacturer. */
   video?: { src: string; poster: string; label: string };
@@ -128,15 +129,15 @@ export const PUBLIC_PRODUCTS: PublicProduct[] = [
     steps: [
       {
         image: "/products-img/fastskin-step-1-blood-collection.jpg",
-        caption: "Blood collection",
+        caption: "Draw Blood",
       },
       {
         image: "/products-img/fastskin-step-2-processing.jpg",
-        caption: "Capital-equipment-free processing",
+        caption: "Capital Equipment-Free Processing",
       },
       {
         image: "/products-img/fastskin-step-3-custom-sizing.jpg",
-        caption: "Custom sizing",
+        caption: "Custom Sizing",
       },
       {
         image: "/products-img/fastskin-step-4-placement.jpg",
