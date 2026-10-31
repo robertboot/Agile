@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { DiscountTier } from "@agile/shared";
 import { requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { OrderForm } from "../../new/OrderForm";
@@ -14,7 +13,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, rep_id, provider_id, discount_tier, patient_name, date_applied, status, gross_collected_cents, qbo_invoice_number, prepurchase_account_id, providers(practice_name), order_items(product_code, sku, qty, serial_number)",
+      "id, rep_id, provider_id, discount_tier, patient_name, date_applied, status, gross_collected_cents, qbo_invoice_number, prepurchase_account_id, providers(practice_name, discount_pct), order_items(product_code, sku, qty, serial_number)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -23,7 +22,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
 
   const collected = Number(order.gross_collected_cents ?? 0) > 0;
   const isPull = order.prepurchase_account_id != null;
-  const provider = order.providers as unknown as { practice_name: string };
+  const provider = order.providers as unknown as { practice_name: string; discount_pct: number };
   const items = (order.order_items as {
     product_code: string; sku: string; qty: number; serial_number: string | null;
   }[]).map((i) => ({
@@ -72,12 +71,17 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
         </p>
       ) : (
         <OrderForm
-          providers={[{ id: order.provider_id, practice_name: provider.practice_name }]}
+          providers={[
+            {
+              id: order.provider_id,
+              practice_name: provider.practice_name,
+              discount_pct: Number(provider.discount_pct),
+            },
+          ]}
           products={products ?? []}
           sizes={(sizes ?? []).map((s) => ({ ...s, cm2: Number(s.cm2) }))}
           initialProviderId={order.provider_id}
           editOrderId={order.id}
-          initialTier={order.discount_tier as DiscountTier}
           initialPatient={order.patient_name ?? ""}
           initialDateApplied={order.date_applied ?? ""}
           initialItems={items}

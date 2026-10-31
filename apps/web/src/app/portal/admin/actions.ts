@@ -4,7 +4,7 @@
 // with GO LIVE, provider edits, rep invites, and the contract template.
 
 import { revalidatePath } from "next/cache";
-import { priceOrder, type DiscountTier } from "@agile/shared";
+import { priceOrder } from "@agile/shared";
 import { requireAdmin, requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -16,7 +16,7 @@ import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 // ---------------------------------------------------------------------------
 // Admin calculator — FULL economics (COGS + Agile net). Admin-only.
 // ---------------------------------------------------------------------------
-export async function adminQuote(items: QuoteItemInput[], tier: DiscountTier) {
+export async function adminQuote(items: QuoteItemInput[], tier: number) {
   await requireAdmin();
   if (items.length === 0) return null;
   const { lineInputs, reimbursement, cogsMultiplier } = await resolveLineInputs(items);
