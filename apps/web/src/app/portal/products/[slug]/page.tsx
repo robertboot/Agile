@@ -196,7 +196,9 @@ export default async function ProductBattlecardPage({
 
       {sizes.length > 0 && (
         <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <div className="label-mono mb-2 text-slate-500">Sizes (billable cm²)</div>
+          <div className="label-mono mb-2 text-slate-500">
+            {card.unit === "kit" ? "Supplied as" : "Sizes (billable cm²)"}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {sizes.map((s) => (
               <span
@@ -204,7 +206,9 @@ export default async function ProductBattlecardPage({
                 className="rounded border border-slate-200 px-2 py-0.5 font-mono text-xs text-slate-600"
                 title={s.sku}
               >
-                {s.label} · {s.cm2} cm²
+                {/* A kit carries cm2 = 1 as a billing unit, not an area, so
+                    printing "1 cm²" next to it would be wrong. */}
+                {card.unit === "kit" ? s.label : `${s.label} · ${s.cm2} cm²`}
               </span>
             ))}
           </div>
