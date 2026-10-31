@@ -65,18 +65,18 @@ export default async function PublicProductPage({
             <ol className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {product.steps.map((step, i) => (
                 <li key={step.image}>
-                  <div className="relative aspect-[3/2] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  {/* The manufacturer's images carry their own numbered
+                      captions, so the caption here is alt text only — printing
+                      it again would both repeat and contradict the artwork. */}
+                  <div className="relative aspect-[3/2] overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <Image
                       src={step.image}
-                      alt={step.caption}
+                      alt={`Step ${i + 1}: ${step.caption}`}
                       fill
                       sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-                      className="object-cover"
+                      className="object-contain"
                     />
                   </div>
-                  <p className="mt-2 text-sm text-slate-700">
-                    <span className="font-semibold text-navy-900">{i + 1}.</span> {step.caption}
-                  </p>
                 </li>
               ))}
             </ol>

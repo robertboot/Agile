@@ -11,6 +11,10 @@ export interface ProductLineCard {
   tagline: string;
   description: string;
   visible: boolean;
+  /** Lifted out of the three-across grid into the banner above it. */
+  featured?: boolean;
+  /** Banner artwork; only read for a featured line. */
+  image?: string;
 }
 
 export const PRODUCT_LINES: ProductLineCard[] = [
@@ -43,11 +47,13 @@ export const PRODUCT_LINES: ProductLineCard[] = [
   },
   {
     key: "fastskin",
-    name: "FastSkin",
+    name: "FastSkin\u00ae Patch",
     layers: 1,
     tagline: "Autologous whole-blood patch",
     description:
-      "A kit that turns a small sample of the patient's own whole blood into a self-supporting clot at the point of care \u2014 no centrifuge or capital equipment \u2014 cut to size and placed for the management of exuding cutaneous wounds.",
+      "A small sample of the patient's own whole blood becomes a self-supporting clot at the point of care \u2014 no centrifuge, no capital equipment \u2014 cut to size and placed for the management of exuding cutaneous wounds.",
     visible: true,
+    featured: true,
+    image: "/products-img/fastskin-patch.jpg",
   },
 ];

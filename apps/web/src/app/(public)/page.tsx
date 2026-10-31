@@ -3,7 +3,11 @@ import Link from "next/link";
 import { PRODUCT_LINES } from "./product-lines";
 
 export default function HomePage() {
-  const lines = PRODUCT_LINES.filter((l) => l.visible);
+  // The featured line heads the section as a full-width banner; the rest keep
+  // the three-across grid beneath it.
+  const visible = PRODUCT_LINES.filter((l) => l.visible);
+  const featured = visible.find((l) => l.featured);
+  const lines = visible.filter((l) => !l.featured);
 
   return (
     <main>
@@ -39,7 +43,46 @@ export default function HomePage() {
 
       {/* Product lines */}
       <section id="products" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
-        <h2 className="text-center text-2xl font-bold text-navy-900">Three product lines</h2>
+        {featured && (
+          <Link
+            href={`/products?line=${featured.key}`}
+            className="group mb-14 block overflow-hidden rounded-2xl bg-navy-950 shadow-sm transition hover:shadow-lg"
+          >
+            <div className="grid items-stretch md:grid-cols-2">
+              <div className="order-2 p-8 sm:p-10 md:order-1 md:py-12">
+                <span className="label-mono rounded-full bg-cyan-300/15 px-3 py-1 text-cyan-300">
+                  New
+                </span>
+                <h2
+                  className="mt-4 text-3xl font-bold leading-tight text-white sm:text-4xl"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {featured.name}
+                </h2>
+                <p className="label-mono mt-2 text-cyan-300">{featured.tagline}</p>
+                <p className="mt-4 max-w-md leading-relaxed text-sky-100/80">
+                  {featured.description}
+                </p>
+                <span className="mt-6 inline-block font-semibold text-white group-hover:underline">
+                  See FastSkin&nbsp;&rarr;
+                </span>
+              </div>
+              <div className="relative order-1 min-h-56 md:order-2 md:min-h-full">
+                <Image
+                  src={featured.image!}
+                  alt={featured.name}
+                  fill
+                  sizes="(min-width: 768px) 50vw, 100vw"
+                  className="object-cover"
+                />
+              </div>
+            </div>
+          </Link>
+        )}
+
+        <h2 className="text-center text-2xl font-bold text-navy-900">
+          {lines.length === 3 ? "Three product lines" : `${lines.length} product lines`}
+        </h2>
         <p className="mx-auto mt-2 max-w-xl text-center text-slate-500">
           A portfolio that covers the wound-care spectrum, from human-tissue membrane allografts to
           synthetic matrices and Manuka-honey dressings.
