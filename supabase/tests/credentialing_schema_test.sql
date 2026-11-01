@@ -208,7 +208,7 @@ select pg_temp.expect_eq('tables without RLS',
 -- Nine products in one payer group produced THREE outcomes across TWO effective
 -- dates. This is the data that settled Q9, kept as a regression test: it is the
 -- exact shape a uniform-batch model cannot represent.
-insert into credentialing.organization (id, legal_name) values ('a1000000-0000-0000-0000-000000000001','Utah Clinic LLC');
+insert into credentialing.organization (id, legal_name, ein) values ('a1000000-0000-0000-0000-000000000001','Utah Clinic LLC','45-1110001');
 insert into credentialing.location (id, organization_id, address_line1, city, state, postal_code)
   values ('b1000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','1 Main','Provo','UT','84601');
 insert into credentialing.provider (id, individual_npi, first_name, last_name)
@@ -273,6 +273,16 @@ select pg_temp.expect_eq('Select Health CC is a Medicaid MCO, not commercial',
 select pg_temp.expect_eq('Molina spans three classifications',
   (select count(distinct p.classification)::text from credentialing.payer_product p
      join credentialing.payer_group g on g.id=p.payer_group_id where g.name='Molina'), '3');
+select pg_temp.expect_eq('Railroad Medicare is traditional Medicare, not Advantage',
+  (select p.classification::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='Medicare' and p.name='Railroad Medicare'), 'medicare');
+-- Palmetto GBA receives the application, but it is the MAC, not a credentialing
+-- delegate: 'Medicare Part B' is 'direct' even though Noridian receives it.
+select pg_temp.expect_eq('Railroad Medicare files direct, not delegated',
+  (select p.filing_route::text from credentialing.payer_product p
+     join credentialing.payer_group g on g.id=p.payer_group_id
+   where g.name='Medicare' and p.name='Railroad Medicare'), 'direct');
 select pg_temp.expect_eq('CHAMPVA credentials the location',
   (select p.credentialing_subject::text from credentialing.payer_product p
      join credentialing.payer_group g on g.id=p.payer_group_id
@@ -309,7 +319,7 @@ set local request.jwt.claim.sub = '9a000000-0000-4000-8000-000000000002';
 select pg_temp.expect_eq('acting as admin for the operations tests',
   public.is_admin()::text, 'true');
 
-insert into credentialing.organization (id, legal_name) values ('a2000000-0000-4000-8000-000000000001','Ops Test Org');
+insert into credentialing.organization (id, legal_name, ein) values ('a2000000-0000-4000-8000-000000000001','Ops Test Org','45-1110002');
 insert into credentialing.location (id, organization_id, address_line1, city, state, postal_code) values
   ('b2000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000001','1 A','Provo','UT','84601'),
   ('b2000000-0000-4000-8000-000000000002','a2000000-0000-4000-8000-000000000001','2 B','Orem','UT','84057');
@@ -843,5 +853,98 @@ select pg_temp.expect_fail('a non-staff user cannot start a run',
 select pg_temp.expect_eq('and sees no runs',
   (select count(*)::text from credentialing.checklist_run), '0');
 reset role;
+
+-- ---------- 20. the completeness punch list (migrations 20261021000002/3) ----------
+-- 04-enrollment-lifecycle.md defines completeness_hold as "blocked on a
+-- punch-list item". These assertions are what makes that true rather than
+-- aspirational.
+reset role;
+insert into credentialing.organization (id, legal_name, ein)
+  values ('a3000000-0000-4000-8000-000000000001','Punch List Clinic LLC','45-1110003');
+insert into credentialing.location (id, organization_id, address_line1, city, state, postal_code)
+  values ('a3000000-0000-4000-8000-000000000002','a3000000-0000-4000-8000-000000000001',
+          '12 S Main','Murray','UT','84107');
+insert into credentialing.provider (id, individual_npi, first_name, last_name, medicare_enrollment_status)
+  values ('a3000000-0000-4000-8000-000000000003','1104398362','Punch','Tester','enrolled');
+
+insert into credentialing.enrollment (id, location_id, provider_id, payer_product_id, credentialing_subject, state)
+select 'a3000000-0000-4000-8000-000000000004','a3000000-0000-4000-8000-000000000002',
+       'a3000000-0000-4000-8000-000000000003', pp.id, 'individual_provider', 'UT'
+from credentialing.payer_product pp
+join credentialing.payer_group g on g.id = pp.payer_group_id
+where g.name = 'Medicare' and pp.name = 'Railroad Medicare';
+
+-- The requirements arrive with the enrollment. One that has to be added by
+-- hand is one that gets forgotten.
+select pg_temp.expect_eq('opening a Railroad enrollment seeds its requirements',
+  (select count(*)::text from credentialing.enrollment_requirement
+     where enrollment_id = 'a3000000-0000-4000-8000-000000000004'), '3');
+select pg_temp.expect_eq('and the enrollment lands in completeness hold',
+  (select status::text from credentialing.enrollment
+     where id = 'a3000000-0000-4000-8000-000000000004'), 'completeness_hold');
+select pg_temp.expect_eq('three blocking items outstanding',
+  credentialing.fn_enrollment_outstanding('a3000000-0000-4000-8000-000000000004')::text, '3');
+
+-- The block is in the database, not only in the console.
+select pg_temp.expect_fail('cannot submit with outstanding requirements',
+  $$update credentialing.enrollment set status = 'submitted'
+     where id = 'a3000000-0000-4000-8000-000000000004'$$);
+
+-- "Does not apply" and "we are going ahead anyway" each need a reason.
+select pg_temp.expect_fail('waiving without a reason is rejected',
+  $$update credentialing.enrollment_requirement
+       set status='waived', resolved_on=current_date,
+           resolved_by='9a000000-0000-4000-8000-000000000002'
+     where enrollment_id='a3000000-0000-4000-8000-000000000004' and code='part_b_ptan'$$);
+select pg_temp.expect_fail('resolving without a resolver is rejected',
+  $$update credentialing.enrollment_requirement
+       set status='satisfied', resolved_on=current_date
+     where enrollment_id='a3000000-0000-4000-8000-000000000004' and code='part_b_ptan'$$);
+
+update credentialing.enrollment_requirement
+   set status='satisfied', supplied_value='UT12345', resolved_on=current_date,
+       resolved_by='9a000000-0000-4000-8000-000000000002'
+ where enrollment_id='a3000000-0000-4000-8000-000000000004' and code in ('part_b_ptan','tin_last_five');
+select pg_temp.expect_eq('still held while one item is open',
+  (select status::text from credentialing.enrollment
+     where id = 'a3000000-0000-4000-8000-000000000004'), 'completeness_hold');
+
+update credentialing.enrollment_requirement
+   set status='waived', note='Verified by phone with the MAC; portal unavailable.',
+       resolved_on=current_date, resolved_by='9a000000-0000-4000-8000-000000000002'
+ where enrollment_id='a3000000-0000-4000-8000-000000000004' and code='part_b_enrollment_verified';
+-- A waiver clears the item and leaves its reason behind. That is the
+-- difference between an override and an omission.
+select pg_temp.expect_eq('clearing the last item returns it to preparation',
+  (select status::text from credentialing.enrollment
+     where id = 'a3000000-0000-4000-8000-000000000004'), 'in_preparation');
+select pg_temp.expect_ok('and now it can be submitted',
+  $$update credentialing.enrollment set status = 'submitted'
+     where id = 'a3000000-0000-4000-8000-000000000004'$$);
+
+-- Reopening an item does not drag a submitted enrollment backwards: once it is
+-- with the payer its status is a record, not a derived flag.
+update credentialing.enrollment_requirement
+   set status='outstanding', resolved_on=null, resolved_by=null
+ where enrollment_id='a3000000-0000-4000-8000-000000000004' and code='part_b_ptan';
+select pg_temp.expect_eq('a submitted enrollment is not pulled back into hold',
+  (select status::text from credentialing.enrollment
+     where id = 'a3000000-0000-4000-8000-000000000004'), 'submitted');
+
+-- ---------- 21. organization contacts (migration 20261021000004) ----------
+select pg_temp.expect_fail('an organization now needs an EIN',
+  $$insert into credentialing.organization (legal_name) values ('No EIN LLC')$$);
+select pg_temp.expect_fail('a contact nobody can reach is rejected',
+  $$insert into credentialing.organization_contact (organization_id, full_name)
+     values ('a3000000-0000-4000-8000-000000000001','Unreachable Person')$$);
+select pg_temp.expect_ok('a reachable contact is accepted',
+  $$insert into credentialing.organization_contact
+      (organization_id, full_name, email, role, is_primary)
+     values ('a3000000-0000-4000-8000-000000000001','Office Manager',
+             'office@example.test','enrollment_requestor', true)$$);
+select pg_temp.expect_fail('only one primary contact per organization',
+  $$insert into credentialing.organization_contact
+      (organization_id, full_name, phone, is_primary)
+     values ('a3000000-0000-4000-8000-000000000001','Second Primary','801-555-0100', true)$$);
 
 rollback;
