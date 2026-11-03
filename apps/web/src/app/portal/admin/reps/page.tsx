@@ -23,8 +23,21 @@ interface RepRow {
   owedCents: number;
 }
 
-export default async function RepsCenterPage() {
+/** Rep statuses the filter offers. "all" is the escape hatch, not a status. */
+const STATUS_FILTERS = ["active", "suspended", "all"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+export default async function RepsCenterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
   await requireAdmin();
+  const { status: statusParam } = await searchParams;
+  // Active by default — suspended reps are the long tail and clutter the list.
+  const statusFilter: StatusFilter = STATUS_FILTERS.includes(statusParam as StatusFilter)
+    ? (statusParam as StatusFilter)
+    : "active";
   const db = createAdminClient();
 
   // Money totals come from SQL aggregate views — immune to the PostgREST
@@ -84,6 +97,19 @@ export default async function RepsCenterPage() {
     };
   });
 
+  const visibleRows =
+    statusFilter === "all" ? rows : rows.filter((r) => r.status === statusFilter);
+
+  // Hiding a rep who is still owed money would hide a real liability, so say
+  // so rather than letting the filter quietly swallow it.
+  const hiddenOwed = rows
+    .filter((r) => !visibleRows.includes(r))
+    .reduce((sum, r) => sum + r.owedCents, 0);
+  const hiddenOwedCount = rows.filter((r) => !visibleRows.includes(r) && r.owedCents > 0).length;
+
+  const countFor = (f: StatusFilter) =>
+    f === "all" ? rows.length : rows.filter((r) => r.status === f).length;
+
   const inviteRows: PendingInvite[] = (invites ?? []).map((i) => ({
     id: i.id,
     name: i.invited_name ?? "",
@@ -117,12 +143,41 @@ export default async function RepsCenterPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Stat label="Total billed" value={formatCents(totals.billed)} />
-        <Stat label="Total collected" value={formatCents(totals.collected)} />
-        <Stat label="Owed to reps" value={formatCents(totals.owed)} highlight />
+        <Stat label="Total billed — all reps" value={formatCents(totals.billed)} />
+        <Stat label="Total collected — all reps" value={formatCents(totals.collected)} />
+        <Stat label="Owed to reps — all reps" value={formatCents(totals.owed)} highlight />
       </div>
 
       <PendingInvites invites={inviteRows} />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="label-mono text-slate-500">Status</span>
+        {STATUS_FILTERS.map((f) => (
+          <Link
+            key={f}
+            href={f === "active" ? "/portal/admin/reps" : `/portal/admin/reps?status=${f}`}
+            aria-current={statusFilter === f ? "page" : undefined}
+            className={`rounded-full border px-3 py-1 text-xs font-medium capitalize ${
+              statusFilter === f
+                ? "border-brand-blue bg-brand-blue text-white"
+                : "border-slate-300 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            {f} ({countFor(f)})
+          </Link>
+        ))}
+      </div>
+
+      {hiddenOwed > 0 && (
+        <p className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          {hiddenOwedCount} hidden rep{hiddenOwedCount === 1 ? " is" : "s are"} still owed{" "}
+          <strong>{formatCents(hiddenOwed)}</strong>.{" "}
+          <Link href="/portal/admin/reps?status=all" className="underline">
+            Show all
+          </Link>
+          .
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
@@ -142,7 +197,7 @@ export default async function RepsCenterPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {visibleRows.map((r) => (
               <tr key={r.id} className="border-b border-slate-100 align-top last:border-0">
                 <td className="px-4 py-3">
                   <Link
@@ -193,10 +248,10 @@ export default async function RepsCenterPage() {
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && (
+            {visibleRows.length === 0 && (
               <tr>
                 <td colSpan={11} className="px-4 py-8 text-center text-slate-400">
-                  No reps yet.
+                  {rows.length === 0 ? "No reps yet." : `No ${statusFilter} reps.`}
                 </td>
               </tr>
             )}
