@@ -132,8 +132,10 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {expired &&
-                      (confirmId === inv.id ? (
+                    {/* Any invite that has not been completed can be withdrawn,
+                        expired or not — a mistyped address or a rep who is no
+                        longer joining should not have to wait out the link. */}
+                    {(confirmId === inv.id ? (
                         <span className="inline-flex items-center gap-2">
                           <button
                             type="button"
@@ -152,14 +154,14 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
                           </button>
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => { setError(null); setConfirmId(inv.id); }}
-                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      ))}
+                      <button
+                        type="button"
+                        onClick={() => { setError(null); setConfirmId(inv.id); }}
+                        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    ))}
                   </td>
                 </tr>
               );

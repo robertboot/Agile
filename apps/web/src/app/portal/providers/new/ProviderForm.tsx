@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { isValidNpi } from "@agile/shared";
+import { isValidNpi, MAX_DISCOUNT_PCT } from "@agile/shared";
 import { createProvider, type ActionResult } from "@/app/portal/actions";
 import { HOUSE_ACCOUNT_OWNER_ID } from "@/lib/house-account";
 
@@ -11,6 +11,8 @@ interface RepOption {
 }
 
 export function ProviderForm({ isAdmin, reps }: { isAdmin: boolean; reps: RepOption[] }) {
+  // Reps are held to the standard ceiling; an admin can set any rate.
+  const discountCeiling = isAdmin ? 100 : MAX_DISCOUNT_PCT;
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     createProvider,
     null,
@@ -27,6 +29,29 @@ export function ProviderForm({ isAdmin, reps }: { isAdmin: boolean; reps: RepOpt
           <Field name="ptan" label="PTAN" />
           <Field name="phone" label="Phone" />
           <Field name="fax" label="Fax" />
+        </div>
+        {/* Pricing is agreed when the provider is brought on, and every order
+            for them is priced at it. */}
+        <div className="mt-4 max-w-xs">
+          <label htmlFor="discount_pct" className="label-mono text-slate-500">
+            Discount % off Agile list price
+          </label>
+          <input
+            id="discount_pct"
+            name="discount_pct"
+            type="number"
+            min={0}
+            max={discountCeiling}
+            step={1}
+            defaultValue={40}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 outline-none focus:border-brand-blue"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            {isAdmin
+              ? "Admins may set any rate."
+              : `Up to ${MAX_DISCOUNT_PCT}%. Anything higher needs an admin.`}{" "}
+            You can change this later.
+          </p>
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field name="address_line1" label="Address line 1" />

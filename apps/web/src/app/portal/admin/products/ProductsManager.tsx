@@ -86,9 +86,9 @@ export function ProductsManager({
   products: ProductRow[];
   pricing: PricingInfo;
 }) {
-  // Reimbursement is a single rate for every product, so what the provider is
-  // billed and what they keep are identical across the catalogue — only Agile's
-  // own margin moves with COGS.
+  // The CMS list price is one rate for the whole catalogue and sets only what
+  // the provider collects. What Agile bills comes from each product's own list
+  // price (purchase + COGS), so provider price varies by product.
   const reimbursementCents = pricing.current?.reimbursementCents ?? 12700;
   // One free-form discount drives the whole table. 40% is the tier Agile
   // quotes most often, so it is the default.

@@ -14,15 +14,33 @@
 // Commission accrues only on gross COLLECTED dollars; partial collection
 // scales it, and refunds/recoveries reverse it (clawback).
 
+/** The three rates Agile quotes most often. Presets for the calculators — a
+ *  discount is a free-form percent, not one of these. */
 export type DiscountTier = 30 | 35 | 40;
 
 export const DISCOUNT_TIERS: DiscountTier[] = [30, 35, 40];
 
+/** Kept for the preset tiers; billPctFor is the general form. */
 export const BILL_PCT: Record<DiscountTier, number> = {
   30: 0.7,
   35: 0.65,
   40: 0.6,
 };
+
+/** Hard ceiling on any discount, whoever is setting it. */
+export const ABSOLUTE_MAX_DISCOUNT_PCT = 100;
+
+/** Share of the list price a provider pays at this discount. */
+export function billPctFor(discountPct: number): number {
+  return 1 - discountPct / 100;
+}
+
+/** A discount the engine will price: a finite percent from 0 to 100. The 60%
+ *  rep ceiling (MAX_DISCOUNT_PCT) is policy enforced where it is set, not
+ *  here — an admin override has to remain priceable. */
+export function isPriceableDiscount(pct: number): boolean {
+  return Number.isFinite(pct) && pct >= 0 && pct <= ABSOLUTE_MAX_DISCOUNT_PCT;
+}
 
 /** Share of reimbursement a provider typically collects (secondary insurance can push this toward 100%). */
 export const TYPICAL_COLLECTION_PCT = 0.8;
@@ -90,22 +108,22 @@ const round = Math.round;
 export function priceLine(
   item: LineItemInput,
   reimbursementPerCm2Cents: number,
-  tier: DiscountTier,
+  discountPct: number,
   cogsMultiplier: number = DEFAULT_COGS_MULTIPLIER,
 ): LineEconomics {
-  if (!(tier in BILL_PCT)) throw new Error(`Invalid discount tier: ${tier}`);
+  if (!isPriceableDiscount(discountPct)) throw new Error(`Invalid discount: ${discountPct}`);
   if (item.qty <= 0 || !Number.isInteger(item.qty)) throw new Error(`Invalid qty: ${item.qty}`);
   if (item.cm2 <= 0) throw new Error(`Invalid cm2: ${item.cm2}`);
   if (cogsMultiplier <= 0) throw new Error(`Invalid COGS multiplier: ${cogsMultiplier}`);
 
   const totalCm2 = item.cm2 * item.qty;
-  // Purchase price + COGS markup is what Agile sells at; the tier discounts
-  // that, not the CMS list price.
+  // Purchase price + COGS markup is what Agile sells at; the discount comes
+  // off that, not off the CMS list price.
   const sellingPerCm2Cents =
     item.cogsPerCm2Cents != null
       ? item.costPerCm2Cents + item.cogsPerCm2Cents
       : cogsMultiplier * item.costPerCm2Cents;
-  const billedCents = round(sellingPerCm2Cents * BILL_PCT[tier] * totalCm2);
+  const billedCents = round(sellingPerCm2Cents * billPctFor(discountPct) * totalCm2);
   // Agile's outlay is the purchase price alone — the COGS markup is margin
   // built into the selling price, so subtracting it too would double-count.
   const cogsCents = round(item.costPerCm2Cents * totalCm2);
@@ -134,10 +152,12 @@ export function priceLine(
 export function priceOrder(
   items: LineItemInput[],
   reimbursementPerCm2Cents: number,
-  tier: DiscountTier,
+  discountPct: number,
   cogsMultiplier: number = DEFAULT_COGS_MULTIPLIER,
 ): OrderEconomics {
-  const lines = items.map((i) => priceLine(i, reimbursementPerCm2Cents, tier, cogsMultiplier));
+  const lines = items.map((i) =>
+    priceLine(i, reimbursementPerCm2Cents, discountPct, cogsMultiplier),
+  );
   const sum = (f: (l: LineEconomics) => number) => lines.reduce((a, l) => a + f(l), 0);
   return {
     lines,

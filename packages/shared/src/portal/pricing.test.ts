@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BILL_PCT,
+  billPctFor,
+  isPriceableDiscount,
   commissionOnCollection,
   commissionReversal,
   priceLine,
@@ -108,6 +110,46 @@ describe("per-line economics", () => {
     expect(() => priceLine({ ...item, qty: 0 }, REIMB, 30)).toThrow();
     expect(() => priceLine({ ...item, qty: 1.5 }, REIMB, 30)).toThrow();
     expect(() => priceLine({ ...item, cm2: 0 }, REIMB, 30)).toThrow();
+  });
+});
+
+describe("free-form discounts", () => {
+  const item = { productCode: "Q4205", sku: "MW0101", cm2: 1, qty: 1, costPerCm2Cents: 1500 };
+
+  it("prices any percent, not just the preset tiers", () => {
+    // $15 purchase price, no markup on file -> $30 list.
+    expect(priceLine(item, REIMB, 0).billedCents).toBe(3000);
+    expect(priceLine(item, REIMB, 50).billedCents).toBe(1500);
+    expect(priceLine(item, REIMB, 60).billedCents).toBe(1200);
+  });
+
+  it("agrees with the preset tiers it replaces", () => {
+    for (const t of [30, 35, 40] as const) {
+      expect(billPctFor(t)).toBeCloseTo(BILL_PCT[t], 10);
+      expect(priceLine(item, REIMB, t).billedCents).toBe(Math.round(3000 * BILL_PCT[t]));
+    }
+  });
+
+  it("still prices above the 60% rep ceiling, so an admin override works", () => {
+    expect(isPriceableDiscount(75)).toBe(true);
+    expect(priceLine(item, REIMB, 75).billedCents).toBe(750);
+  });
+
+  it("rejects a discount outside 0-100", () => {
+    expect(isPriceableDiscount(-1)).toBe(false);
+    expect(isPriceableDiscount(101)).toBe(false);
+    expect(isPriceableDiscount(Number.NaN)).toBe(false);
+    expect(() => priceLine(item, REIMB, -1)).toThrow();
+    expect(() => priceLine(item, REIMB, 101)).toThrow();
+    expect(() => priceLine(item, REIMB, Number.NaN)).toThrow();
+  });
+
+  it("commission and Agile net still split net at any percent", () => {
+    for (const d of [0, 7, 22.5, 50, 60]) {
+      const l = priceLine(item, REIMB, d);
+      expect(l.repCommissionCents + l.agileNetCents).toBe(l.netCents);
+      expect(l.netCents).toBe(l.billedCents - l.cogsCents);
+    }
   });
 });
 

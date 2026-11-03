@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
+import { formatCents, DISCOUNT_TIERS, MAX_DISCOUNT_PCT } from "@agile/shared";
 import { quoteOrder } from "@/app/portal/actions";
 import { useServerQuote } from "@/lib/use-server-quote";
 import { ProjectionBuilder } from "./ProjectionBuilder";
@@ -24,7 +24,7 @@ interface SizeOption {
  * weekly schedule just multiplies the per-application commission.
  */
 // Pre-loaded example: Membrane Wrap 4×6 at 40% over a 10-week schedule.
-const PRELOAD = { productCode: "Q4205", sku: "MW0406", tier: 40 as DiscountTier, weeks: 10 };
+const PRELOAD = { productCode: "Q4205", sku: "MW0406", tier: 40, weeks: 10 };
 
 export function EarningsCalculator({
   products,
@@ -39,7 +39,7 @@ export function EarningsCalculator({
 
   const [productCode, setProductCode] = useState(hasPreload ? PRELOAD.productCode : firstProduct);
   const [sku, setSku] = useState(hasPreload ? PRELOAD.sku : firstSku);
-  const [tier, setTier] = useState<DiscountTier>(PRELOAD.tier);
+  const [tier, setTier] = useState<number>(PRELOAD.tier);
   const [weeks, setWeeks] = useState(hasPreload ? PRELOAD.weeks : 4);
 
   function clear() {
@@ -120,23 +120,42 @@ export function EarningsCalculator({
           </select>
         </div>
         <div>
-          <label className="label-mono text-slate-500">Provider discount</label>
-          <div className="mt-1 flex gap-1.5">
-            {DISCOUNT_TIERS.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTier(t)}
-                className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                  tier === t
-                    ? "border-brand-blue bg-brand-blue text-white"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {t}%
-              </button>
-            ))}
+          <label className="label-mono text-slate-500" htmlFor="calc-discount">
+            Provider discount
+          </label>
+          <div className="mt-1 flex items-center gap-1.5">
+            <input
+              id="calc-discount"
+              type="number"
+              min={0}
+              max={MAX_DISCOUNT_PCT}
+              step={1}
+              value={tier}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                // Clamp rather than reject: the engine will not price past the
+                // ceiling, and a half-typed number should not blank the card.
+                if (Number.isFinite(n)) setTier(Math.min(Math.max(Math.round(n), 0), MAX_DISCOUNT_PCT));
+              }}
+              className="w-20 rounded-lg border border-slate-300 px-3 py-2 text-right text-sm"
+            />
+            <span className="text-sm text-slate-500">%</span>
+              {DISCOUNT_TIERS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTier(t)}
+                  className={`rounded-lg border px-2.5 py-2 text-xs font-semibold ${
+                    tier === t
+                      ? "border-brand-blue bg-brand-blue text-white"
+                      : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {t}%
+                </button>
+              ))}
           </div>
+          <p className="mt-1 text-xs text-slate-400">Anything up to {MAX_DISCOUNT_PCT}%. Higher needs an admin.</p>
         </div>
       </div>
 

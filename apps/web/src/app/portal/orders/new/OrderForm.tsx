@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { formatCents, DISCOUNT_TIERS, type DiscountTier } from "@agile/shared";
+import Link from "next/link";
+import { formatCents } from "@agile/shared";
 import { createOrder, editOrder, createInventoryPull, quoteOrder, type QuoteItemInput } from "@/app/portal/actions";
 import { useServerQuote } from "@/lib/use-server-quote";
 
@@ -14,6 +15,8 @@ interface PrepurchaseInfo {
 interface ProviderOption {
   id: string;
   practice_name: string;
+  /** The provider's agreed discount; what this order will be priced at. */
+  discount_pct: number;
 }
 
 interface ProductOption {
@@ -43,7 +46,6 @@ export function OrderForm({
   sizes,
   initialProviderId,
   editOrderId,
-  initialTier,
   initialPatient,
   initialDateApplied,
   initialItems,
@@ -54,7 +56,6 @@ export function OrderForm({
   sizes: SizeOption[];
   initialProviderId?: string;
   editOrderId?: string;
-  initialTier?: DiscountTier;
   initialPatient?: string;
   initialDateApplied?: string;
   initialItems?: ItemRow[];
@@ -69,7 +70,10 @@ export function OrderForm({
       ? initialProviderId
       : providers[0]?.id ?? "",
   );
-  const [tier, setTier] = useState<DiscountTier>(initialTier ?? 40);
+  // Pricing is the provider's agreed discount, not a per-order choice. The
+  // server reads it from the provider record too, so this is display only and
+  // cannot be used to price an order differently.
+  const tier = providers.find((p) => p.id === providerId)?.discount_pct ?? null;
   const [patient, setPatient] = useState(initialPatient ?? "");
   const [dateApplied, setDateApplied] = useState(initialDateApplied ?? "");
   const [items, setItems] = useState<ItemRow[]>(
@@ -115,6 +119,7 @@ export function OrderForm({
         sku,
         qty,
       }));
+      if (tier === null) return null;
       return quoteOrder(payload, tier);
     },
     [JSON.stringify(items), tier],
@@ -140,8 +145,8 @@ export function OrderForm({
       const result = isDraw
         ? await createInventoryPull(providerId, lines, patient, dateApplied)
         : isEdit
-          ? await editOrder(editOrderId!, tier, lines, patient, dateApplied)
-          : await createOrder(providerId, tier, lines, patient, dateApplied);
+          ? await editOrder(editOrderId!, lines, patient, dateApplied)
+          : await createOrder(providerId, lines, patient, dateApplied);
       // Both redirect on success; a return value is always an error.
       if (result && !result.ok) setError(result.error ?? "Save failed");
     });
@@ -216,22 +221,26 @@ export function OrderForm({
         )}
         {!isDraw && (
           <div className="sm:col-span-2">
-            <label className="label-mono text-slate-500">Discount tier</label>
-            <div className="mt-1 flex gap-2">
-              {DISCOUNT_TIERS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTier(t)}
-                  className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-semibold ${
-                    tier === t
-                      ? "border-brand-blue bg-blue-50 text-brand-blue"
-                      : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                  }`}
+            <label className="label-mono text-slate-500">Pricing</label>
+            <div className="mt-1 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <span className="text-sm text-slate-700">
+                {tier === null ? (
+                  <span className="text-amber-700">No agreed pricing for this provider yet.</span>
+                ) : (
+                  <>
+                    <span className="text-lg font-bold text-navy-900">{tier}%</span> off Agile list
+                    price &mdash; this provider&rsquo;s agreed rate.
+                  </>
+                )}
+              </span>
+              {providerId && (
+                <Link
+                  href={`/portal/providers/${providerId}`}
+                  className="ml-auto text-sm font-medium text-brand-blue hover:underline"
                 >
-                  {t}%
-                </button>
-              ))}
+                  {tier === null ? "Set pricing" : "Change pricing"} &rarr;
+                </Link>
+              )}
             </div>
           </div>
         )}
