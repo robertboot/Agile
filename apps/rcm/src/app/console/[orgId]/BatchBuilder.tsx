@@ -25,7 +25,14 @@ export function BatchBuilder({
   organizationId: string;
   locations: { id: string; label: string }[];
   groups: { id: string; name: string }[];
-  enrollments: { id: string; label: string; who: string; location: string }[];
+  enrollments: {
+    id: string;
+    label: string;
+    who: string;
+    location: string;
+    /** Open blocking punch-list items. Non-zero means it cannot be filed yet. */
+    blocking: number;
+  }[];
 }) {
   const router = useRouter();
   const [state, action, pending] = useActionState(
@@ -44,7 +51,9 @@ export function BatchBuilder({
 
   return (
     <section className="mt-8 rounded-lg border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-semibold text-credence-navy">Submit a batch</h2>
+      <h2 className="text-lg font-semibold text-credence-navy">
+        Submit a batch
+      </h2>
       <p className="mt-1 text-sm text-slate-600">
         One submission to one payer. Outcomes come back per product, so the
         decision is recorded against each enrollment rather than the batch as a
@@ -111,15 +120,31 @@ export function BatchBuilder({
 
         <fieldset>
           <legend className={LABEL}>Include</legend>
+          <p className="mt-1 text-xs text-slate-500">
+            An enrollment with an outstanding blocking item cannot be filed —
+            clear it under &ldquo;Before filing&rdquo; first.
+          </p>
           <div className="mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 p-2">
             {enrollments.map((e) => (
               <label
                 key={e.id}
-                className="flex items-baseline gap-2 px-1 py-1 text-sm"
+                className={`flex items-baseline gap-2 px-1 py-1 text-sm ${
+                  e.blocking > 0 ? "opacity-60" : ""
+                }`}
               >
-                <input type="checkbox" name="enrollment_id" value={e.id} />
+                <input
+                  type="checkbox"
+                  name="enrollment_id"
+                  value={e.id}
+                  disabled={e.blocking > 0}
+                />
                 <span className="text-credence-navy">{e.label}</span>
                 <span className="text-slate-400">{e.who}</span>
+                {e.blocking > 0 ? (
+                  <span className="rounded bg-orange-50 px-1.5 py-0.5 text-xs font-semibold text-orange-800">
+                    {e.blocking} item{e.blocking === 1 ? "" : "s"} outstanding
+                  </span>
+                ) : null}
                 <span className="ml-auto text-xs text-slate-400">
                   {e.location}
                 </span>

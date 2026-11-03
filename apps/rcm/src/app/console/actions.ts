@@ -22,6 +22,7 @@ const trim = (f: FormData, k: string) =>
   (f.get(k) as string | null)?.trim() || null;
 
 const NPI = /^\d{10}$/;
+const EIN = /^\d{2}-?\d{7}$/;
 
 // ---------------------------------------------------------------------------
 // Organization and location
@@ -40,6 +41,15 @@ export async function createOrganization(
   const legalName = trim(formData, "legal_name");
   if (!legalName) return reject(formData, "Legal name is required");
 
+  // The EIN is on the same CP-575 letter as the legal name, and every payer
+  // application asks for it — Railroad Medicare will not even run its PTAN
+  // request without the last five digits. An account without one cannot be
+  // worked, so it is required here and NOT NULL in the database.
+  const ein = trim(formData, "ein");
+  if (!ein) return reject(formData, "EIN is required");
+  if (!EIN.test(ein))
+    return reject(formData, "EIN must be nine digits, as 12-3456789");
+
   const npi = trim(formData, "primary_organizational_npi");
   if (npi && !NPI.test(npi))
     return reject(formData, "Organization NPI must be 10 digits");
@@ -49,7 +59,7 @@ export async function createOrganization(
     .insert({
       legal_name: legalName,
       dba_name: trim(formData, "dba_name"),
-      ein: trim(formData, "ein"),
+      ein,
       primary_organizational_npi: npi,
       created_by: user.id,
     });
@@ -423,5 +433,117 @@ export async function declineEnrollment(
   if (error) return reject(formData, error.message);
 
   revalidatePath("/console");
+  return { ok: true };
+}
+
+/**
+ * Resolves one punch-list item on an enrollment.
+ *
+ * Three ways out, and only one of them is "we have it". `not_applicable` and
+ * `waived` both need a reason in writing — the database enforces that — because
+ * a blocking item that can be cleared silently is not a blocking item. Clearing
+ * the last blocking item moves the enrollment out of completeness_hold on its
+ * own; nothing here has to remember to.
+ */
+export async function resolveRequirement(
+  _prev: CredFormState | null,
+  formData: FormData,
+): Promise<CredFormState> {
+  const user = await requireStaff();
+  const requirementId = trim(formData, "requirement_id");
+  const status = trim(formData, "status");
+  const note = trim(formData, "note");
+  const suppliedValue = trim(formData, "supplied_value");
+
+  if (!requirementId) return reject(formData, "Requirement is required");
+  if (!status) return reject(formData, "An outcome is required");
+  if (!["satisfied", "not_applicable", "waived"].includes(status))
+    return reject(formData, "Unknown outcome");
+  if (status !== "satisfied" && !note)
+    return reject(
+      formData,
+      status === "waived"
+        ? "A waiver needs a reason"
+        : "Say why it does not apply",
+    );
+
+  const { error } = await cred()
+    .from("enrollment_requirement")
+    .update({
+      status,
+      supplied_value: suppliedValue,
+      note,
+      resolved_on: new Date().toISOString().slice(0, 10),
+      resolved_by: user.id,
+    })
+    .eq("id", requirementId);
+  if (error) return reject(formData, error.message);
+
+  revalidatePath("/console");
+  return { ok: true };
+}
+
+/** Puts a resolved item back on the list, for when the answer turns out wrong. */
+export async function reopenRequirement(
+  _prev: CredFormState | null,
+  formData: FormData,
+): Promise<CredFormState> {
+  await requireStaff();
+  const requirementId = trim(formData, "requirement_id");
+  if (!requirementId) return reject(formData, "Requirement is required");
+
+  const { error } = await cred()
+    .from("enrollment_requirement")
+    .update({
+      status: "outstanding",
+      resolved_on: null,
+      resolved_by: null,
+    })
+    .eq("id", requirementId);
+  if (error) return reject(formData, error.message);
+
+  revalidatePath("/console");
+  return { ok: true };
+}
+
+/**
+ * Adds a contact at the practice.
+ *
+ * `enrollment_requestor` is the one that matters operationally: some payers
+ * will only take a request from the provider or someone the provider employs.
+ * Railroad Medicare is one — a billing agency cannot request the PTAN — so
+ * knowing who that person is at each practice is part of being able to file.
+ */
+export async function addOrganizationContact(
+  _prev: CredFormState | null,
+  formData: FormData,
+): Promise<CredFormState> {
+  const user = await requireStaff();
+  const organizationId = trim(formData, "organization_id");
+  const fullName = trim(formData, "full_name");
+  const email = trim(formData, "email");
+  const phone = trim(formData, "phone");
+  const role = trim(formData, "role") ?? "other";
+
+  if (!organizationId) return reject(formData, "Organization is required");
+  if (!fullName) return reject(formData, "A name is required");
+  if (!email && !phone)
+    return reject(formData, "An email or a phone number is required");
+
+  const { error } = await cred()
+    .from("organization_contact")
+    .insert({
+      organization_id: organizationId,
+      full_name: fullName,
+      email,
+      phone,
+      role,
+      title: trim(formData, "title"),
+      note: trim(formData, "note"),
+      created_by: user.id,
+    });
+  if (error) return reject(formData, error.message);
+
+  revalidatePath(`/console/${organizationId}`);
   return { ok: true };
 }
