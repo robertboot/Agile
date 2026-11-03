@@ -13,7 +13,7 @@ interface Msg {
 
 const GREETING: Msg = {
   from: "stitch",
-  text: "Hi, I'm Stitch — your Agile helper. Pick a tutorial below or ask me anything. If I'm stumped, I'll loop in the team.",
+  text: "Hi, I'm Avery — office manager and sales support at Agile. Pick a tutorial below or ask me anything. Anything I can't answer straight away goes to the team, and I usually reply within 3–5 minutes.",
 };
 
 export function StitchWidget() {
@@ -130,7 +130,7 @@ export function StitchWidget() {
           }}
           className="fixed bottom-24 right-5 z-30 max-w-[15rem] animate-[stitch-fade_.3s_ease-out] rounded-2xl rounded-br-sm border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-xl"
         >
-          <span className="font-semibold text-navy-900">Hi, I&apos;m Stitch 👋</span>
+          <span className="font-semibold text-navy-900">Hi, I&apos;m Avery 👋</span>
           <br />
           Need a hand? Ask me anything or pick a quick tutorial.
         </button>
@@ -140,7 +140,11 @@ export function StitchWidget() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label={unseen > 0 ? `Open Stitch helper — ${unseen} new answer${unseen > 1 ? "s" : ""}` : "Open Stitch helper"}
+        aria-label={
+          unseen > 0
+            ? `Open Avery, Agile support — ${unseen} new answer${unseen > 1 ? "s" : ""}`
+            : "Open Avery, Agile support"
+        }
         className={`fixed bottom-5 right-5 z-30 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-lg ring-2 ring-brand-blue/20 transition hover:scale-105 ${
           intro && !open ? "animate-[stitch-bounce_1s_ease-in-out_3]" : ""
         }`}
@@ -149,7 +153,7 @@ export function StitchWidget() {
           <span className="text-2xl text-navy-900">✕</span>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/stitch.png" alt="Stitch helper" className="h-full w-full object-cover" />
+          <img src="/avery.jpg" alt="Avery Lang, Agile support" className="h-full w-full object-cover" />
         )}
         {!open && unseen > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-xs font-bold text-white">
@@ -167,10 +171,12 @@ export function StitchWidget() {
         <div className="fixed bottom-24 right-5 z-30 flex h-[32rem] w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center gap-2 border-b border-slate-200 bg-navy-900 px-4 py-3 text-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/stitch.png" alt="" className="h-7 w-7 rounded-full" />
+            <img src="/avery.jpg" alt="" className="h-7 w-7 rounded-full object-cover" />
             <div>
-              <div className="text-sm font-semibold">Stitch</div>
-              <div className="text-[11px] text-slate-300">Agile rep helper</div>
+              <div className="text-sm font-semibold">Avery Lang</div>
+              <div className="text-[11px] text-slate-300">
+                Office Manager &amp; Sales Support &middot; usually replies in 3&ndash;5 min
+              </div>
             </div>
           </div>
 
@@ -179,7 +185,7 @@ export function StitchWidget() {
               <div key={i} className={`flex items-end gap-2 ${m.from === "rep" ? "justify-end" : ""}`}>
                 {m.from === "stitch" && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src="/stitch.png" alt="Stitch" className="h-7 w-7 shrink-0 rounded-full" />
+                  <img src="/avery.jpg" alt="Avery" className="h-7 w-7 shrink-0 rounded-full object-cover" />
                 )}
                 <div
                   className={`inline-block max-w-[80%] rounded-2xl px-3 py-2 text-left text-sm ${
@@ -202,7 +208,7 @@ export function StitchWidget() {
                 </div>
               </div>
             ))}
-            {pending && <div className="text-xs text-slate-400">Stitch is thinking…</div>}
+            {pending && <div className="text-xs text-slate-400">Avery is typing…</div>}
           </div>
 
           {/* Persistent tutorial bar — always reachable, no scrolling needed */}
@@ -236,7 +242,7 @@ export function StitchWidget() {
                   }
                 }}
                 rows={1}
-                placeholder="Ask Stitch…"
+                placeholder="Ask Avery…"
                 className="max-h-24 flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-blue"
               />
               <button

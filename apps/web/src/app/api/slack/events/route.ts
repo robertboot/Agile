@@ -74,7 +74,7 @@ export async function POST(req: Request) {
       // Append every human reply as a message — admins can send several.
       await db.from("stitch_messages").insert({ question_id: q.id, body: e.text.trim() });
       await db.from("rep_questions").update({ status: "answered" }).eq("id", q.id);
-      await postToThread("✅ Sent to the rep in Stitch.", e.thread_ts);
+      await postToThread("✅ Sent to the rep as Avery.", e.thread_ts);
     }
   }
 
