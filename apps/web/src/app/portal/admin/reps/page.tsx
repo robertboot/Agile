@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatCents } from "@agile/shared";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ONBOARDING_TOTAL } from "@/lib/rep-onboarding";
 import { InviteRep } from "./InviteRep";
 import { PayoutForm } from "./PayoutForm";
 import { PendingInvites, type PendingInvite } from "./PendingInvites";
@@ -25,8 +26,6 @@ interface RepRow {
   onboardingDone: number;
 }
 
-/** The five ticked steps plus "has logged on", which is read from the account. */
-const ONBOARDING_TOTAL = 6;
 
 /** Rep statuses the filter offers. "all" is the escape hatch, not a status. */
 const STATUS_FILTERS = ["active", "suspended", "all"] as const;

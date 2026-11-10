@@ -2,13 +2,12 @@
 
 import { useActionState, useState, useTransition } from "react";
 import {
-  ONBOARDING_STEPS,
   saveRepMailingAddress,
   setRepOnboardingStep,
   uploadRepBusinessCard,
   repBusinessCardUrl,
-  type OnboardingStep,
 } from "@/app/portal/admin/actions";
+import { ONBOARDING_STEPS, type OnboardingStep } from "@/lib/rep-onboarding";
 import type { ActionResult } from "@/app/portal/actions";
 import { formatDate } from "@/lib/format";
 

@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { priceOrder } from "@agile/shared";
 import { requireAdmin, requirePortalUser } from "@/lib/auth";
+import { ONBOARDING_STEPS, type OnboardingStep } from "@/lib/rep-onboarding";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/app/portal/actions";
@@ -780,17 +781,6 @@ export async function saveContract(
 // ---------------------------------------------------------------------------
 // Rep onboarding checklist
 // ---------------------------------------------------------------------------
-
-/** The steps an admin ticks. Each maps to a timestamp column on rep_details. */
-export const ONBOARDING_STEPS = [
-  { key: "slack_invited_at", label: "Invited to Slack" },
-  { key: "slack_accepted_at", label: "Accepted Slack invite" },
-  { key: "email_setup_at", label: "Email set up" },
-  { key: "business_cards_ordered_at", label: "Business cards ordered" },
-  { key: "training_completed_at", label: "Training received" },
-] as const;
-
-export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]["key"];
 
 /**
  * Tick or untick one onboarding step. Ticking stamps now; unticking clears it,
