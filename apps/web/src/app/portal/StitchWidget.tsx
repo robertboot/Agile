@@ -145,21 +145,35 @@ export function StitchWidget() {
             ? `Open Avery, Agile support — ${unseen} new answer${unseen > 1 ? "s" : ""}`
             : "Open Avery, Agile support"
         }
-        className={`fixed bottom-5 right-5 z-30 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-lg ring-2 ring-brand-blue/20 transition hover:scale-105 ${
-          intro && !open ? "animate-[stitch-bounce_1s_ease-in-out_3]" : ""
-        }`}
+        className={`fixed bottom-5 right-5 z-30 flex items-center rounded-full bg-white shadow-lg ring-2 ring-brand-blue/20 transition hover:scale-105 ${
+          open ? "h-14 w-14 justify-center" : "gap-2.5 py-2 pl-2 pr-4"
+        } ${intro && !open ? "animate-[stitch-bounce_1s_ease-in-out_3]" : ""}`}
       >
         {open ? (
           <span className="text-2xl text-navy-900">✕</span>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
           <>
-            <img
-              src="/avery.jpg"
-              alt="Avery Lang, Agile support"
-              className="h-full w-full object-cover"
-            />
-            <span className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
+            {/* The photo is clipped to a circle on its own span. Putting the
+                dot inside that clip is what cut it in half. */}
+            <span className="relative shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/avery.jpg"
+                alt="Avery Lang, Agile support"
+                className="h-12 w-12 rounded-full object-cover"
+              />
+              <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
+            </span>
+            <span className="text-left">
+              <span className="block text-sm font-semibold leading-tight text-navy-900">
+                Ask Avery
+              </span>
+              <span className="block text-[11px] leading-tight text-emerald-600">
+                {unseen > 0
+                  ? `${unseen} new repl${unseen > 1 ? "ies" : "y"}`
+                  : "Available now"}
+              </span>
+            </span>
           </>
         )}
         {!open && unseen > 0 && (
