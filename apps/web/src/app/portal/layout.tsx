@@ -98,7 +98,7 @@ export default async function PortalLayout({ children }: { children: React.React
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
 
-      {/* Stitch helper — available to reps and admins */}
+      {/* Avery helper widget — available to reps and admins */}
       <StitchWidget />
     </div>
   );

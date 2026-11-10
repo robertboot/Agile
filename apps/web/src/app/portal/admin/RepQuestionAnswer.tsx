@@ -21,7 +21,7 @@ export function RepQuestionAnswer({ questionId }: { questionId: string }) {
         name="answer"
         rows={2}
         required
-        placeholder="Reply — the rep sees it live in Stitch. Send as many as you need."
+        placeholder="Reply — the rep sees it live from Avery. Send as many as you need."
         className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-blue"
       />
       <button

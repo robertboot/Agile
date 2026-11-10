@@ -1,4 +1,4 @@
-// Stitch's knowledge base: guided tutorial topics + a keyword-matched FAQ.
+// Knowledge base behind the Avery helper: guided tutorials + keyword-matched FAQ.
 // Shared by the client widget (tutorial rendering) and the server answerer
 // (FAQ match + LLM context). Claim-safe, rep-appropriate — no cost/COGS/margin.
 

@@ -351,13 +351,13 @@ export default async function AdminPage({
             const pending = (repQuestions ?? []).filter((q) => q.status === "pending").length;
             return (
               <h2 className="label-mono mb-3 flex items-center gap-2 text-amber-600">
-                <span>🧵</span> Stitch — rep questions{pending > 0 ? ` (${pending} new)` : ""}
+                <span>🧵</span> Avery — rep questions{pending > 0 ? ` (${pending} new)` : ""}
               </h2>
             );
           })()}
           <p className="mb-3 text-xs text-slate-400">
             Reply here or in the agile-admins Slack thread — send as many messages as you like; the
-            rep sees them live in Stitch.
+            rep sees them live in the Avery widget.
           </p>
           <div className="space-y-3">
             {(repQuestions ?? []).map((qn) => {
