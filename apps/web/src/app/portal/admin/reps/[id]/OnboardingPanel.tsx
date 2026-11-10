@@ -87,7 +87,7 @@ export function OnboardingPanel({
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5">
+    <section id="onboarding" className="scroll-mt-20 rounded-lg border border-slate-200 bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-semibold text-navy-900">Onboarding</h2>
         <span

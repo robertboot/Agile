@@ -2,7 +2,7 @@ import Link from "next/link";
 import { formatCents } from "@agile/shared";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ONBOARDING_TOTAL } from "@/lib/rep-onboarding";
+import { ONBOARDING_LIGHT_LABELS, ONBOARDING_TOTAL } from "@/lib/rep-onboarding";
 import { InviteRep } from "./InviteRep";
 import { PayoutForm } from "./PayoutForm";
 import { PendingInvites, type PendingInvite } from "./PendingInvites";
@@ -22,8 +22,8 @@ interface RepRow {
   commissionCents: number;
   paidOutCents: number;
   owedCents: number;
-  /** Onboarding steps ticked, out of ONBOARDING_TOTAL. */
-  onboardingDone: number;
+  /** One flag per onboarding step, in ONBOARDING_LIGHT_LABELS order. */
+  onboarding: boolean[];
 }
 
 
@@ -112,14 +112,14 @@ export default async function RepsCenterPage({
       commissionCents: Number(bal?.commission_net_cents ?? 0),
       paidOutCents: Number(bal?.paid_out_cents ?? 0),
       owedCents: Number(bal?.owed_cents ?? 0),
-      onboardingDone:
-        [
-          d?.slack_invited_at,
-          d?.slack_accepted_at,
-          d?.email_setup_at,
-          d?.business_cards_ordered_at,
-          d?.training_completed_at,
-        ].filter(Boolean).length + (signedInByRep.has(rep.id) ? 1 : 0),
+      onboarding: [
+        Boolean(d?.slack_invited_at),
+        Boolean(d?.slack_accepted_at),
+        Boolean(d?.email_setup_at),
+        Boolean(d?.business_cards_ordered_at),
+        Boolean(d?.training_completed_at),
+        signedInByRep.has(rep.id),
+      ],
     };
   });
 
@@ -255,19 +255,31 @@ export default async function RepsCenterPage({
                     {r.gusto}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-center">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      r.onboardingDone === ONBOARDING_TOTAL
-                        ? "bg-emerald-100 text-emerald-800"
-                        : r.onboardingDone === 0
-                          ? "bg-slate-100 text-slate-500"
-                          : "bg-amber-100 text-amber-800"
-                    }`}
-                    title="Onboarding steps complete"
+                <td className="px-4 py-3">
+                  {/* One light per step. The whole cell is the link, so a
+                      half-finished rep is one click from being finished. */}
+                  <Link
+                    href={`/portal/admin/reps/${r.id}#onboarding`}
+                    className="flex items-center gap-1.5"
+                    aria-label={`Onboarding ${r.onboarding.filter(Boolean).length} of ${ONBOARDING_TOTAL} for ${r.name}`}
                   >
-                    {r.onboardingDone}/{ONBOARDING_TOTAL}
-                  </span>
+                    {r.onboarding.map((done, i) => (
+                      <span
+                        key={ONBOARDING_LIGHT_LABELS[i]}
+                        title={`${ONBOARDING_LIGHT_LABELS[i]} — ${done ? "done" : "outstanding"}`}
+                        className={`h-2.5 w-2.5 rounded-full ring-1 ${
+                          done ? "bg-emerald-500 ring-emerald-600/20" : "bg-red-400 ring-red-500/20"
+                        }`}
+                      />
+                    ))}
+                    <span
+                      className={`ml-1 text-xs tabular-nums ${
+                        r.onboarding.every(Boolean) ? "text-emerald-600" : "text-slate-400"
+                      }`}
+                    >
+                      {r.onboarding.filter(Boolean).length}/{ONBOARDING_TOTAL}
+                    </span>
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-right">{r.providerCount}</td>
                 <td className="px-4 py-3 text-right">
