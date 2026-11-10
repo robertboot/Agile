@@ -18,3 +18,13 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]["key"];
 
 /** The ticked steps plus "has logged on", which is read from the account. */
 export const ONBOARDING_TOTAL = ONBOARDING_STEPS.length + 1;
+
+/**
+ * Labels for the status lights, in order: the ticked steps, then the one the
+ * system knows on its own. Kept here so the Reps Center row and the rep's own
+ * panel cannot drift apart.
+ */
+export const ONBOARDING_LIGHT_LABELS: readonly string[] = [
+  ...ONBOARDING_STEPS.map((s) => s.label),
+  "Has logged on",
+];
