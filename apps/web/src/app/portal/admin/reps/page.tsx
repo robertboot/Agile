@@ -21,7 +21,12 @@ interface RepRow {
   commissionCents: number;
   paidOutCents: number;
   owedCents: number;
+  /** Onboarding steps ticked, out of ONBOARDING_TOTAL. */
+  onboardingDone: number;
 }
+
+/** The five ticked steps plus "has logged on", which is read from the account. */
+const ONBOARDING_TOTAL = 6;
 
 /** Rep statuses the filter offers. "all" is the escape hatch, not a status. */
 const STATUS_FILTERS = ["active", "suspended", "all"] as const;
@@ -56,7 +61,11 @@ export default async function RepsCenterPage({
       .eq("role", "rep")
       .is("deleted_at", null)
       .order("display_name"),
-    db.from("rep_details").select("profile_id, territory, gusto_payee_status"),
+    db
+      .from("rep_details")
+      .select(
+        "profile_id, territory, gusto_payee_status, slack_invited_at, slack_accepted_at, email_setup_at, business_cards_ordered_at, training_completed_at",
+      ),
     db.from("providers").select("id, rep_id").is("deleted_at", null),
     db.from("rep_balances").select("rep_id, commission_net_cents, paid_out_cents, owed_cents"),
     db.from("rep_production").select("rep_id, order_count, open_order_count, billed_cents, collected_cents"),
@@ -74,6 +83,16 @@ export default async function RepsCenterPage({
   const providerCountByRep = new Map<string, number>();
   for (const p of providers ?? [])
     providerCountByRep.set(p.rep_id, (providerCountByRep.get(p.rep_id) ?? 0) + 1);
+
+  // Who has actually signed in. Read from auth rather than kept as a tickbox,
+  // so it cannot drift from the truth. Paged, because listUsers caps a page.
+  const signedInByRep = new Set<string>();
+  for (let page = 1; page <= 20; page++) {
+    const { data: batch } = await db.auth.admin.listUsers({ page, perPage: 200 });
+    const users = batch?.users ?? [];
+    for (const u of users) if (u.last_sign_in_at) signedInByRep.add(u.id);
+    if (users.length < 200) break;
+  }
 
   const rows: RepRow[] = (reps ?? []).map((rep) => {
     const d = detailByRep.get(rep.id);
@@ -94,6 +113,14 @@ export default async function RepsCenterPage({
       commissionCents: Number(bal?.commission_net_cents ?? 0),
       paidOutCents: Number(bal?.paid_out_cents ?? 0),
       owedCents: Number(bal?.owed_cents ?? 0),
+      onboardingDone:
+        [
+          d?.slack_invited_at,
+          d?.slack_accepted_at,
+          d?.email_setup_at,
+          d?.business_cards_ordered_at,
+          d?.training_completed_at,
+        ].filter(Boolean).length + (signedInByRep.has(rep.id) ? 1 : 0),
     };
   });
 
@@ -229,6 +256,20 @@ export default async function RepsCenterPage({
                     {r.gusto}
                   </span>
                 </td>
+                <td className="px-4 py-3 text-center">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      r.onboardingDone === ONBOARDING_TOTAL
+                        ? "bg-emerald-100 text-emerald-800"
+                        : r.onboardingDone === 0
+                          ? "bg-slate-100 text-slate-500"
+                          : "bg-amber-100 text-amber-800"
+                    }`}
+                    title="Onboarding steps complete"
+                  >
+                    {r.onboardingDone}/{ONBOARDING_TOTAL}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-right">{r.providerCount}</td>
                 <td className="px-4 py-3 text-right">
                   {r.orderCount}
@@ -250,7 +291,7 @@ export default async function RepsCenterPage({
             ))}
             {visibleRows.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-400">
                   {rows.length === 0 ? "No reps yet." : `No ${statusFilter} reps.`}
                 </td>
               </tr>

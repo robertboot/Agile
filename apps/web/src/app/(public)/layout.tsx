@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { AveryWidget } from "./AveryWidget";
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -76,6 +77,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           </p>
         </div>
       </footer>
-    </div>
+          <AveryWidget />
+</div>
   );
 }

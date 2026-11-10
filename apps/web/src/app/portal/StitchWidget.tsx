@@ -13,7 +13,7 @@ interface Msg {
 
 const GREETING: Msg = {
   from: "stitch",
-  text: "Hi, I'm Avery — office manager and sales support at Agile. Pick a tutorial below or ask me anything. Anything I can't answer straight away goes to the team, and I usually reply within 3–5 minutes.",
+  text: "Hi, I'm Avery — office manager and sales support at Agile. Ask me anything and it comes straight to me; I usually reply within 3–5 minutes during business hours. The tutorials below are there any time you'd rather just look something up.",
 };
 
 export function StitchWidget() {
@@ -132,7 +132,7 @@ export function StitchWidget() {
         >
           <span className="font-semibold text-navy-900">Hi, I&apos;m Avery 👋</span>
           <br />
-          Need a hand? Ask me anything or pick a quick tutorial.
+          Need a hand? Send me a message — I&apos;m around and usually reply in a few minutes.
         </button>
       )}
 
@@ -153,7 +153,14 @@ export function StitchWidget() {
           <span className="text-2xl text-navy-900">✕</span>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/avery.jpg" alt="Avery Lang, Agile support" className="h-full w-full object-cover" />
+          <>
+            <img
+              src="/avery.jpg"
+              alt="Avery Lang, Agile support"
+              className="h-full w-full object-cover"
+            />
+            <span className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
+          </>
         )}
         {!open && unseen > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-xs font-bold text-white">
@@ -174,8 +181,10 @@ export function StitchWidget() {
             <img src="/avery.jpg" alt="" className="h-7 w-7 rounded-full object-cover" />
             <div>
               <div className="text-sm font-semibold">Avery Lang</div>
-              <div className="text-[11px] text-slate-300">
-                Office Manager &amp; Sales Support &middot; usually replies in 3&ndash;5 min
+              <div className="text-[11px] text-slate-300">Office Manager &amp; Sales Support</div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Available &middot; usually replies in 3&ndash;5 min
               </div>
             </div>
           </div>
@@ -203,12 +212,12 @@ export function StitchWidget() {
                     </ol>
                   )}
                   {m.escalated && (
-                    <div className="mt-1.5 text-xs text-amber-600">📨 Sent to the Agile team.</div>
+                    <div className="mt-1.5 text-xs text-amber-600">📨 Sent to Avery.</div>
                   )}
                 </div>
               </div>
             ))}
-            {pending && <div className="text-xs text-slate-400">Avery is typing…</div>}
+            {pending && <div className="text-xs text-slate-400">Sending to Avery…</div>}
           </div>
 
           {/* Persistent tutorial bar — always reachable, no scrolling needed */}

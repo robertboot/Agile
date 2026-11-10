@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin, requirePortalUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { answerQuestion } from "@/lib/stitch/answer";
 import { sendSlackMessage } from "@/lib/integrations/slack";
 import { rateLimit } from "@/lib/rate-limit";
 import type { ActionResult } from "@/app/portal/actions";
@@ -25,7 +24,12 @@ function isSmallTalk(q: string): boolean {
   ].includes(t);
 }
 
-/** Rep asks Stitch a question. Answer from the KB, else log it + ping admins. */
+/**
+ * A rep's question goes to Avery. Nothing answers it automatically: it is
+ * logged, posted to Slack, and whatever she replies in that thread comes back
+ * into the widget. The only thing handled here is a bare pleasantry, which
+ * should not put a message in front of her.
+ */
 export async function askStitch(question: string): Promise<StitchReply> {
   const user = await requirePortalUser();
   const q = question.trim();
@@ -35,17 +39,14 @@ export async function askStitch(question: string): Promise<StitchReply> {
     return { ok: false, error: "Slow down a moment — try again shortly." };
   }
 
-  // Pleasantries shouldn't escalate to admins.
+  // A bare "thanks" or "hi" does not need her attention.
   if (isSmallTalk(q)) {
-    return { ok: true, answer: "Anytime! Ask me whenever you need a hand. 🤖" };
+    return { ok: true, answer: "Anytime \u2014 just send over whatever you need." };
   }
 
-  const resolved = await answerQuestion(q);
-  if (resolved.answer) return { ok: true, answer: resolved.answer };
-
-  // Couldn't answer — log for admins (rep's own RLS insert) and ping Slack.
-  // Await the Slack post: on serverless a fire-and-forget fetch is killed when
-  // the action returns, so the message never sends.
+  // Log it (the rep's own RLS insert), then ping Slack. Await the post: on
+  // serverless a fire-and-forget fetch is killed when the action returns, so
+  // the message would never send.
   const supabase = await createClient();
   const { data: inserted } = await supabase
     .from("rep_questions")
@@ -54,7 +55,7 @@ export async function askStitch(question: string): Promise<StitchReply> {
     .single();
 
   const posted = await sendSlackMessage(
-    `❓ *${user.displayName} asked Stitch:* “${q}”\n_Reply in this thread to answer them, or use Admin › rep questions._`,
+    `❓ *${user.displayName} asked:* \u201c${q}\u201d\n_Reply in this thread and it goes straight back to them in the portal._`,
   );
   // Remember the Slack message so an in-thread reply maps back to this question.
   if (posted.ok && posted.ts && inserted?.id) {
@@ -65,11 +66,19 @@ export async function askStitch(question: string): Promise<StitchReply> {
       .eq("id", inserted.id);
   }
 
+  if (!posted.ok) {
+    return {
+      ok: true,
+      escalated: false,
+      answer:
+        "I couldn\u2019t get that through just now \u2014 email avery@agilemedgroup.com and she\u2019ll pick it up.",
+    };
+  }
+
   return {
     ok: true,
     escalated: true,
-    answer:
-      "I don't have a solid answer for that one, so I've passed it to the Agile team — they'll follow up. Meanwhile, try one of the tutorial topics below.",
+    answer: "Got it \u2014 that\u2019s with Avery now. She usually replies within 3\u20135 minutes.",
   };
 }
 

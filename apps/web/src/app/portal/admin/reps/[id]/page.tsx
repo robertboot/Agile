@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 import { EditRepForm, type RepRecord } from "./EditRepForm";
+import { OnboardingPanel, type OnboardingState } from "./OnboardingPanel";
 
 export default async function RepDetailPage({
   params,
@@ -29,7 +30,7 @@ export default async function RepDetailPage({
       db
         .from("rep_details")
         .select(
-          "territory, gusto_payee_status, contract_accepted_at, contract_signatory, signed_contract_body, signed_contract_version_at",
+          "territory, gusto_payee_status, contract_accepted_at, contract_signatory, signed_contract_body, signed_contract_version_at, slack_invited_at, slack_accepted_at, email_setup_at, business_cards_ordered_at, training_completed_at, mailing_address_line1, mailing_address_line2, mailing_city, mailing_state, mailing_zip, business_card_path",
         )
         .eq("profile_id", id)
         .maybeSingle(),
@@ -61,6 +62,11 @@ export default async function RepDetailPage({
     status: rep.status,
     territory: detail?.territory ?? "",
   };
+
+  // Whether they have ever logged on is a fact about the account, so read it
+  // from auth rather than keeping a tickbox that can drift out of date.
+  const { data: authUser } = await db.auth.admin.getUserById(id);
+  const lastSignInAt = authUser?.user?.last_sign_in_at ?? null;
 
   const contractSigned = detail?.contract_accepted_at;
 
@@ -103,6 +109,24 @@ export default async function RepDetailPage({
       </div>
 
       {/* Contract + payout */}
+      <OnboardingPanel
+        repId={rep.id}
+        lastSignInAt={lastSignInAt}
+        state={{
+          slack_invited_at: detail?.slack_invited_at ?? null,
+          slack_accepted_at: detail?.slack_accepted_at ?? null,
+          email_setup_at: detail?.email_setup_at ?? null,
+          business_cards_ordered_at: detail?.business_cards_ordered_at ?? null,
+          training_completed_at: detail?.training_completed_at ?? null,
+          mailing_address_line1: detail?.mailing_address_line1 ?? null,
+          mailing_address_line2: detail?.mailing_address_line2 ?? null,
+          mailing_city: detail?.mailing_city ?? null,
+          mailing_state: detail?.mailing_state ?? null,
+          mailing_zip: detail?.mailing_zip ?? null,
+          hasBusinessCard: Boolean(detail?.business_card_path),
+        }}
+      />
+
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <h2 className="mb-3 font-semibold text-navy-900">Contract &amp; payout</h2>
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">

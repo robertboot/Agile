@@ -776,3 +776,113 @@ export async function saveContract(
   revalidatePath("/portal/admin/contract");
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Rep onboarding checklist
+// ---------------------------------------------------------------------------
+
+/** The steps an admin ticks. Each maps to a timestamp column on rep_details. */
+export const ONBOARDING_STEPS = [
+  { key: "slack_invited_at", label: "Invited to Slack" },
+  { key: "slack_accepted_at", label: "Accepted Slack invite" },
+  { key: "email_setup_at", label: "Email set up" },
+  { key: "business_cards_ordered_at", label: "Business cards ordered" },
+  { key: "training_completed_at", label: "Training received" },
+] as const;
+
+export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]["key"];
+
+/**
+ * Tick or untick one onboarding step. Ticking stamps now; unticking clears it,
+ * so the record always says when something happened rather than only that it
+ * did. "Logged on" is not here — auth.users.last_sign_in_at already knows.
+ */
+export async function setRepOnboardingStep(
+  repId: string,
+  step: OnboardingStep,
+  done: boolean,
+): Promise<ActionResult> {
+  await requireAdmin();
+  if (!ONBOARDING_STEPS.some((s) => s.key === step)) {
+    return { ok: false, error: "Unknown onboarding step" };
+  }
+  const db = createAdminClient();
+  const { error } = await db
+    .from("rep_details")
+    .upsert(
+      { profile_id: repId, [step]: done ? new Date().toISOString() : null },
+      { onConflict: "profile_id" },
+    );
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/admin/reps/${repId}`);
+  revalidatePath("/portal/admin/reps");
+  return { ok: true };
+}
+
+/** Save the rep's mailing address — where business cards and kit get sent. */
+export async function saveRepMailingAddress(
+  repId: string,
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const f = (k: string) => (formData.get(k) as string | null)?.trim() || null;
+  const db = createAdminClient();
+  const { error } = await db.from("rep_details").upsert(
+    {
+      profile_id: repId,
+      mailing_address_line1: f("mailing_address_line1"),
+      mailing_address_line2: f("mailing_address_line2"),
+      mailing_city: f("mailing_city"),
+      mailing_state: f("mailing_state"),
+      mailing_zip: f("mailing_zip"),
+    },
+    { onConflict: "profile_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/admin/reps/${repId}`);
+  return { ok: true };
+}
+
+/** Upload a business card into the private bucket and attach it to the rep. */
+export async function uploadRepBusinessCard(
+  repId: string,
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const file = formData.get("card");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose a file first" };
+  if (file.size > 10 * 1024 * 1024) return { ok: false, error: "File is too large (max 10 MB)" };
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "pdf";
+  const path = `${repId}/${crypto.randomUUID()}.${ext}`;
+  const db = createAdminClient();
+  const { error: uploadError } = await db.storage
+    .from("business-cards")
+    .upload(path, file, { contentType: file.type || "application/octet-stream" });
+  if (uploadError) return { ok: false, error: `Upload failed: ${uploadError.message}` };
+
+  const { error } = await db
+    .from("rep_details")
+    .upsert({ profile_id: repId, business_card_path: path }, { onConflict: "profile_id" });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/portal/admin/reps/${repId}`);
+  return { ok: true };
+}
+
+/** Short-lived signed URL for a stored business card (the bucket is private). */
+export async function repBusinessCardUrl(repId: string): Promise<string | null> {
+  await requireAdmin();
+  const db = createAdminClient();
+  const { data } = await db
+    .from("rep_details")
+    .select("business_card_path")
+    .eq("profile_id", repId)
+    .maybeSingle();
+  if (!data?.business_card_path) return null;
+  const { data: signed } = await db.storage
+    .from("business-cards")
+    .createSignedUrl(data.business_card_path, 120);
+  return signed?.signedUrl ?? null;
+}
