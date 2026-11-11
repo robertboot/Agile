@@ -4,11 +4,13 @@ import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DeclineEnrollment,
+  NewContact,
   NewLocation,
   NewProvider,
   OpenEnrollments,
 } from "../forms";
 import { BatchBuilder } from "./BatchBuilder";
+import { Requirements, type RequirementRow } from "./Requirements";
 import { embedded } from "../embedded";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,14 @@ const STATUS_LABEL: Record<string, string> = {
   denied_by_payer: "Denied",
   superseded: "Superseded",
   withdrawn: "Withdrawn",
+};
+
+const CONTACT_ROLE_LABEL: Record<string, string> = {
+  enrollment_requestor: "Payer requests",
+  credentialing: "Credentialing",
+  billing: "Billing",
+  clinical: "Clinical",
+  other: "Contact",
 };
 
 export default async function OrganizationPage({
@@ -52,6 +62,14 @@ export default async function OrganizationPage({
     .eq("organization_id", orgId)
     .is("deleted_at", null)
     .order("name");
+
+  const { data: contacts } = await db
+    .from("organization_contact")
+    .select("id, full_name, email, phone, role, title, note, is_primary")
+    .eq("organization_id", orgId)
+    .is("deleted_at", null)
+    .order("is_primary", { ascending: false })
+    .order("full_name");
 
   const locationIds = (locations ?? []).map((l) => l.id as string);
 
@@ -115,8 +133,66 @@ export default async function OrganizationPage({
   }));
 
   const openRows = (enrollments ?? []).filter(
-    (e) => e.status === "in_preparation" || e.status === "draft",
+    (e) =>
+      e.status === "in_preparation" ||
+      e.status === "draft" ||
+      e.status === "completeness_hold",
   );
+
+  // The punch list for every enrollment on this organization. Fetched after
+  // the enrollments because it is keyed on them, and skipped entirely when
+  // there are none.
+  const enrollmentIds = (enrollments ?? []).map((e) => e.id as string);
+  const { data: requirements } = enrollmentIds.length
+    ? await db
+        .from("enrollment_requirement")
+        .select(
+          "id, enrollment_id, code, position, requirement, authority, guidance, owner, is_blocking, status, supplied_value, note, resolved_on",
+        )
+        .in("enrollment_id", enrollmentIds)
+        .order("position")
+    : { data: [] as Record<string, unknown>[] };
+
+  const enrollmentById = new Map(
+    (enrollments ?? []).map((e) => [e.id as string, e]),
+  );
+
+  const requirementRows: RequirementRow[] = (requirements ?? []).flatMap(
+    (r) => {
+      const e = enrollmentById.get(r.enrollment_id as string);
+      if (!e) return [];
+      return [
+        {
+          id: r.id as string,
+          enrollmentId: r.enrollment_id as string,
+          enrollmentLabel: `${e.payer_group as string} · ${e.payer_product as string}`,
+          who: `${e.provider as string} · ${e.location as string}`,
+          code: r.code as string,
+          requirement: r.requirement as string,
+          authority: r.authority as string | null,
+          guidance: r.guidance as string | null,
+          owner: r.owner as string,
+          isBlocking: r.is_blocking as boolean,
+          status: r.status as string,
+          suppliedValue: r.supplied_value as string | null,
+          note: r.note as string | null,
+          resolvedOn: r.resolved_on as string | null,
+        },
+      ];
+    },
+  );
+
+  // An enrollment with an open blocking item cannot be submitted — the
+  // database refuses it. The builder says so up front rather than letting
+  // someone tick it and read an error.
+  const blockedCounts = new Map<string, number>();
+  for (const r of requirementRows) {
+    if (r.status !== "outstanding" || !r.isBlocking) continue;
+    blockedCounts.set(
+      r.enrollmentId,
+      (blockedCounts.get(r.enrollmentId) ?? 0) + 1,
+    );
+  }
 
   return (
     <div>
@@ -142,6 +218,51 @@ export default async function OrganizationPage({
         </div>
         <NewLocation organizationId={orgId} />
       </header>
+
+      <section className="mt-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold text-credence-navy">Contacts</h2>
+          <NewContact organizationId={orgId} />
+        </div>
+        <p className="mt-1 text-sm text-slate-600">
+          Who to ask at the practice. Some payers take a request only from the
+          provider or someone they employ — Railroad Medicare is one — so the
+          requestor is part of being able to file.
+        </p>
+        {(contacts ?? []).length === 0 ? (
+          <p className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+            None recorded.
+          </p>
+        ) : (
+          <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            {(contacts ?? []).map((c) => (
+              <li key={c.id as string} className="px-4 py-3">
+                <div className="flex flex-wrap items-baseline gap-x-3">
+                  <span className="font-medium text-credence-navy">
+                    {c.full_name as string}
+                  </span>
+                  {c.title ? (
+                    <span className="text-sm text-slate-500">
+                      {c.title as string}
+                    </span>
+                  ) : null}
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-600">
+                    {CONTACT_ROLE_LABEL[c.role as string] ?? (c.role as string)}
+                  </span>
+                  <span className="ml-auto text-sm text-slate-500">
+                    {(c.email as string | null) ?? (c.phone as string | null)}
+                  </span>
+                </div>
+                {c.note ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {c.note as string}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-credence-navy">Locations</h2>
@@ -224,6 +345,8 @@ export default async function OrganizationPage({
         </div>
       )}
 
+      <Requirements rows={requirementRows} />
+
       {openRows.length > 0 && (
         <BatchBuilder
           organizationId={orgId}
@@ -237,12 +360,15 @@ export default async function OrganizationPage({
             label: `${e.payer_group} · ${e.payer_product}`,
             who: e.provider as string,
             location: e.location as string,
+            blocking: blockedCounts.get(e.id as string) ?? 0,
           }))}
         />
       )}
 
       <section className="mt-10">
-        <h2 className="text-lg font-semibold text-credence-navy">Enrollments</h2>
+        <h2 className="text-lg font-semibold text-credence-navy">
+          Enrollments
+        </h2>
         {(enrollments ?? []).length === 0 ? (
           <p className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
             None yet.

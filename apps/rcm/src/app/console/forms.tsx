@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import type { CredFormState } from "./state";
 import {
+  addOrganizationContact,
   createLocation,
   createOrganization,
   createProviderAndEngagement,
@@ -94,8 +95,13 @@ export function NewOrganization() {
                 name="ein"
                 placeholder="12-3456789"
                 className={INPUT}
+                required
                 defaultValue={state?.values?.ein ?? ""}
               />
+              <p className="mt-1 text-xs text-slate-500">
+                From the CP-575 or 147C letter. Every payer application asks for
+                it.
+              </p>
             </div>
           </div>
           <div>
@@ -507,5 +513,100 @@ export function DeclineEnrollment({ enrollmentId }: { enrollmentId: string }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * A person at the practice.
+ *
+ * Kept to a name, a way to reach them, and what they are for. The role that
+ * earns its place is `enrollment_requestor`: Railroad Medicare and payers like
+ * it will only accept a request from the provider or one of their employees,
+ * so filing depends on knowing who that is.
+ */
+export function NewContact({ organizationId }: { organizationId: string }) {
+  const [state, action, pending] = useActionState(addOrganizationContact, null);
+
+  return (
+    <Panel label="+ Add contact">
+      {() => (
+        <form action={action} className="grid w-[30rem] max-w-full gap-3">
+          <input type="hidden" name="organization_id" value={organizationId} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={LABEL} htmlFor="contact_name">
+                Name
+              </label>
+              <input
+                id="contact_name"
+                name="full_name"
+                className={INPUT}
+                required
+                defaultValue={state?.values?.full_name ?? ""}
+              />
+            </div>
+            <div>
+              <label className={LABEL} htmlFor="contact_role">
+                Contact for
+              </label>
+              <select
+                id="contact_role"
+                name="role"
+                className={INPUT}
+                defaultValue="enrollment_requestor"
+              >
+                <option value="enrollment_requestor">
+                  Payer requests (may file for the practice)
+                </option>
+                <option value="credentialing">Credentialing</option>
+                <option value="billing">Billing</option>
+                <option value="clinical">Clinical</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={LABEL} htmlFor="contact_email">
+                Email
+              </label>
+              <input
+                id="contact_email"
+                name="email"
+                type="email"
+                className={INPUT}
+                defaultValue={state?.values?.email ?? ""}
+              />
+            </div>
+            <div>
+              <label className={LABEL} htmlFor="contact_phone">
+                Phone
+              </label>
+              <input
+                id="contact_phone"
+                name="phone"
+                className={INPUT}
+                defaultValue={state?.values?.phone ?? ""}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={LABEL} htmlFor="contact_title">
+              Title (optional)
+            </label>
+            <input
+              id="contact_title"
+              name="title"
+              className={INPUT}
+              defaultValue={state?.values?.title ?? ""}
+            />
+          </div>
+          <Err state={state} />
+          <button className={BTN} disabled={pending}>
+            {pending ? "Saving…" : "Add contact"}
+          </button>
+        </form>
+      )}
+    </Panel>
   );
 }

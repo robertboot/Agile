@@ -265,6 +265,7 @@ Three tiers of confidence:
 | DMBA | DMBA | commercial | **authoritative (1.4)** |
 | PEHP | PEHP | commercial | inferred — Utah public employees; appears only as declined (Q1) |
 | Medicare | Medicare Part B | medicare | structural |
+| Medicare | Railroad Medicare | medicare | **added 21 Oct 2026** — see §8.1 |
 | CHAMPVA | CHAMPVA | va_champva · **subject = service_location** | **authoritative (§4)** |
 | Direct Care Administrators | DCA | *class unconfirmed* · **route = delegated → Health Utah** | route **authoritative (§4)**; class inferred |
 
@@ -273,6 +274,38 @@ Three tiers of confidence:
 > elimination, and the family becomes seedable in one pass. Note that Select Care Plus and Select
 > Med Plus were the two products observed as panel-closed (§4 of the corrections); that is an
 > enrollment outcome, not a classification, and does not affect their commercial classification.
+
+### 8.1 Railroad Medicare
+
+Added 21 October 2026 at Robert's request, so Utah providers can be enrolled with it. It is a
+**product of the `Medicare` group**, a sibling of `Medicare Part B`: the same Part B
+fee-for-service program, for beneficiaries of the Railroad Retirement Board, but a separate
+application with its own PTAN — and enrollment is per product, so a separate application needs a
+separate product.
+
+| Field | Value | Why |
+|---|---|---|
+| `classification` | `medicare` | Traditional Part B, not Part C |
+| `filing_route` | `direct` | Goes to Palmetto GBA, the national Railroad Specialty MAC. That is a contractor, not a credentialing delegate — `Medicare Part B` is `direct` too, though Utah's Part B MAC is Noridian. §6's `delegated` is for a payer handing credentialing to a third party (DCA → Health Utah); the MAC that receives paperwork is not modelled. |
+| `operating_states` | `NULL` | One Railroad MAC serves every state, so it is national, and NULL means "not yet scoped", not "everywhere". Not `{UT}` — it does not operate only in Utah, and nothing filters enrollment targets by state, so NULL does not stop a Utah provider enrolling. |
+
+Two facts that change how this enrollment is worked, from Palmetto GBA's provider enrollment pages
+(checked 21 Oct 2026):
+
+- **No CMS-855 forms.** The packet assembly rule in §7 is about the local Part B MAC and does not
+  apply here. The Railroad PTAN is requested through Palmetto GBA's online PTAN Lookup and Request
+  Tool, by the provider or someone the provider employs — a billing agency or clearinghouse cannot
+  request it. The tool asks for exactly three things: the Part B PTAN the local MAC assigned, the
+  individual NPI, and the last five digits of the TIN.
+- **Part B first.** Palmetto GBA builds the Railroad record from what is already on file with the
+  provider's local Part B MAC, so `Medicare Part B` has to be approved before this can be
+  requested, and a newly issued Part B PTAN needs 14 business days before the lookup will match.
+
+These are no longer prose-only. Both are seeded as blocking punch-list items on the product
+(`payer_product_requirement`), so every Railroad enrollment opens with them outstanding and cannot
+reach `submitted` until each is satisfied, marked not applicable, or waived with a reason — see
+`08-completeness-punch-list.md`. The prerequisite itself is still not modelled as one product
+gating another; what is modelled is the work it creates.
 
 ### Credentialing not required — explicit exclusions
 

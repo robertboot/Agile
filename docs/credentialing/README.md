@@ -12,9 +12,10 @@ Read in this order.
 | `05-submission-routes.md` | Where each payer's application actually goes, and what must be in hand first | desk research, 30 Sep 2026 — confirm on first use |
 | `06-medicare-appeals.md` | The five appeal levels, deadlines, forms, filing routes, esMD/HIH economics, what a portal would do | desk research, 6 Oct 2026 |
 | `07-skin-substitute-documentation.md` | Why skin substitute claims get denied, and the pre-submission check that prevents it | desk research, 6 Oct 2026 |
+| `08-completeness-punch-list.md` | §7 — the per-enrollment punch list, who owns each item, and what blocks a submission | resolved |
 | `OPEN-QUESTIONS.md` | Everything still open — Q1–Q15, with evidence and audience | **start here to unblock work** |
 
-Sections 5–7 of `DESIGN-CORRECTIONS.md` are settled context and need no resolution document.
+Sections 5 and 6 of `DESIGN-CORRECTIONS.md` are settled context and need no resolution document.
 Section 8 is a naming note: the product surface should expand "RCM" on first contact rather than
 assume recognition. These documents use "credentialing platform" and avoid the acronym.
 
@@ -22,7 +23,7 @@ assume recognition. These documents use "credentialing platform" and avoid the a
 
 - **Question ids are flat and global.** `Q1`–`Q15`, defined once in `OPEN-QUESTIONS.md`. The tables
   at the end of each design document are local indexes pointing back to it.
-- **Numbered documents map to correction sections.** `01`–`04` resolve §1–§4.
+- **Numbered documents map to correction sections.** `01`–`04` resolve §1–§4 and `08` resolves §7.
   `OPEN-QUESTIONS.md` is cross-cutting and carries no section number. `05`–`07` are research
   rather than design resolution: they record what the outside world requires, not what we decided.
 - **Claims are tiered.** *authoritative* = stated in the corrections; *evidenced* = tracker evidence
